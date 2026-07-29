@@ -1,8 +1,11 @@
 # Workbench Bridge — contrato
 
-> Estado: **contrato documentado**. Solo la proyección de config está
-> implementada hoy (`nexus/scripts/import-environments.mjs`). El resto es
-> backlog deliberado (ver ADR-0002): no se abstrae lo que aún no se usa.
+> Estado: **implementado parcialmente**. La proyección de config vive en
+> `nexus/scripts/import-environments.mjs` y el contrato RPC está implementado
+> como **servidor MCP** en `nexus/mcp/` (ver [MCP.md](MCP.md)): openTerminal,
+> runCommand (con gobernanza), openRemoteFile, getTerminalContext
+> (get_terminal_output/list_blocks). createWorkspace/restoreWorkspace/
+> getActiveEnvironment siguen como backlog.
 
 ## Interfaz objetivo
 

@@ -40,6 +40,8 @@ jobs:
               run: npx vitest run
             - name: build frontend
               run: npx electron-vite build --mode development
+            - name: vet + build MCP server
+              run: cd nexus/mcp && go vet ./... && CGO_ENABLED=0 go build ./...
             - name: secret scan (basic)
               run: |
                   ! git grep -nIiE '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|ghp_[A-Za-z0-9]{36}|AKIA[0-9A-Z]{16})' -- ':!node_modules' ':!*.lock'
