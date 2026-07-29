@@ -279,7 +279,7 @@ electronApp.on("before-quit", (e) => {
             type: "question",
             buttons: ["Cancel", "Quit"],
             title: "Confirm Quit",
-            message: "Are you sure you want to quit Wave Terminal?",
+            message: "Are you sure you want to quit Nexus Workbench?",
             defaultId: 0,
             cancelId: 0,
         });

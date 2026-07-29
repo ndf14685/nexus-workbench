@@ -28,11 +28,11 @@ const AboutModalV = ({ versionString, updaterChannel, onClose }: AboutModalVProp
             <div className="flex flex-col gap-[26px] w-full relative z-10">
                 <div className="flex flex-col items-center justify-center gap-4 self-stretch w-full text-center">
                     <Logo />
-                    <div className="text-[25px]">Wave Terminal</div>
+                    <div className="text-[25px]">Nexus Workbench</div>
                     <div className="leading-5">
-                        Open-Source AI-Integrated Terminal
+                        Personal Operations IDE
                         <br />
-                        Built for Seamless Workflows
+                        Based on Wave Terminal (Apache-2.0)
                     </div>
                 </div>
                 <div className="items-center gap-4 self-stretch w-full text-center">
@@ -75,7 +75,7 @@ const AboutModalV = ({ versionString, updaterChannel, onClose }: AboutModalVProp
                     </a>
                 </div>
                 <div className="items-center gap-4 self-stretch w-full text-center">
-                    &copy; {currentDate.getFullYear()} Command Line Inc.
+                    Wave Terminal &copy; {currentDate.getFullYear()} Command Line Inc.
                 </div>
             </div>
         </Modal>
