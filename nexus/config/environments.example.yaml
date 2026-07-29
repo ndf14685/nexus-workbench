@@ -70,3 +70,19 @@ environments:
       class: work
       criticality: high
       notes: sin credenciales; acceso vía bastion definido en ~/.ssh/config
+
+# Agentes de IA por suscripción: cada uno es un botón de la barra lateral que
+# lanza el CLI en un bloque terminal. El login OAuth (Claude Pro/Max, Codex)
+# lo maneja el CLI mismo — acá no va ninguna credencial.
+# Campos: id, name, command (obligatorios); icon, color, environment (opcional,
+# id de un ambiente ssh/wsl para correr el CLI en ese host).
+agents:
+    - id: claude
+      name: Claude Code
+      command: claude
+      icon: robot
+
+    - id: codex
+      name: Codex
+      command: codex
+      icon: microchip

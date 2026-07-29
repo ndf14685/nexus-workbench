@@ -1,4 +1,21 @@
-# Nexus Workbench — Wave AI con proveedores propios
+# Nexus Workbench — IA con suscripciones propias
+
+## Suscripciones OAuth (Claude Pro/Max, Codex) — la vía principal
+
+El panel "Wave AI" **no** soporta OAuth de suscripciones (sus backends
+autentican por token). La forma soportada de usar las suscripciones es correr
+los **CLIs oficiales dentro de la app**: `claude` (Claude Code) y `codex`
+hacen su propio login OAuth con la suscripción.
+
+El importador genera botones "Claude Code" y "Codex" en la barra lateral
+(sección `agents:` del catálogo `environments.yaml`/`.json`): un click lanza
+el CLI en un bloque terminal, local o en un ambiente remoto (campo
+`environment`). Con el MCP (`nexus/docs/MCP.md`) registrado en esos CLIs
+(`claude mcp add nexus-workbench -- <exe> --environments <catálogo>`), el
+agente con tu suscripción **controla la app**: ambientes, terminales,
+archivos, con la gobernanza ADR-0004.
+
+## Panel Wave AI con proveedores propios (requiere API key u Ollama)
 
 > Verificado en el código del baseline: `pkg/aiusechat/` tiene backends nativos
 > `anthropic-messages`, `openai-responses`, `openai-chat` y `google-gemini`

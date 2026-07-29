@@ -161,7 +161,7 @@ const KindIcons = { local: "desktop", wsl: "layer-group", ssh: "server" };
 const widgetsPath = path.join(configDir, "widgets.json");
 const widgets = readJson(widgetsPath);
 for (const key of Object.keys(widgets)) {
-    if (key.startsWith("nexus-env-")) {
+    if (key.startsWith("nexus-env-") || key.startsWith("nexus-agent-")) {
         delete widgets[key];
     }
 }
@@ -184,6 +184,36 @@ for (const env of catalog.environments) {
         blockdef: { meta },
     };
     widgetCount++;
+}
+
+// Agentes de IA por suscripción (Claude Code, Codex, etc.): widgets que lanzan
+// el CLI en un bloque terminal. El OAuth/login lo maneja el propio CLI.
+let agentCount = 0;
+for (const agent of catalog.agents ?? []) {
+    if (!agent.id || !agent.command) {
+        console.warn(`agente omitido (requiere id y command): ${JSON.stringify(agent)}`);
+        continue;
+    }
+    const meta = {
+        view: "term",
+        controller: "cmd",
+        cmd: agent.command,
+        "cmd:shell": true,
+        "cmd:runonstart": true,
+    };
+    const envRef = agent.environment ? catalog.environments.find((e) => e.id === agent.environment) : null;
+    if (envRef && (envRef.kind === "ssh" || envRef.kind === "wsl")) {
+        meta.connection = envRef.kind === "wsl" ? `wsl://${envRef.distro}` : envRef.host;
+    }
+    widgets[`nexus-agent-${agent.id}`] = {
+        "display:order": 200 + agentCount,
+        icon: agent.icon ?? "robot",
+        color: agent.color ?? "#d2a8ff",
+        label: agent.name ?? agent.id,
+        description: `${agent.command}${meta.connection ? " @ " + meta.connection : ""}`,
+        blockdef: { meta },
+    };
+    agentCount++;
 }
 
 console.log(`catálogo: ${yamlPath} (${catalog.environments.length} ambientes, ${connChanges} conexiones, ${widgetCount} widgets)`);
