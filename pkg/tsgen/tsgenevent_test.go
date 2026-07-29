@@ -16,7 +16,8 @@ func TestGenerateWaveEventTypes(t *testing.T) {
 	tsTypesMap := make(map[reflect.Type]string)
 	waveEventTypeDecl := GenerateWaveEventTypes(tsTypesMap)
 
-	if !strings.Contains(waveEventTypeDecl, `type WaveEventName = "blockclose"`) {
+	// upstream emits the union multi-line since v0.14.5; assert presence, not layout
+	if !strings.Contains(waveEventTypeDecl, `type WaveEventName =`) || !strings.Contains(waveEventTypeDecl, `"blockclose"`) {
 		t.Fatalf("expected WaveEventName declaration, got:\n%s", waveEventTypeDecl)
 	}
 	if !strings.Contains(waveEventTypeDecl, `{ event: "block:jobstatus"; data?: BlockJobStatusData; }`) {

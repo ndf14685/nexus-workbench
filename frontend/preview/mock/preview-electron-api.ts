@@ -7,6 +7,7 @@ const previewElectronApi: ElectronApi = {
     getCursorPoint: () => ({ x: 0, y: 0 }) as Electron.Point,
     getPlatform: () => "darwin",
     getEnv: (_varName: string) => "",
+    getPathForFile: (_file: File) => "",
     getUserName: () => "",
     getHostName: () => "",
     getDataDir: () => "",
