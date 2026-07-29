@@ -4,6 +4,7 @@ set -uo pipefail
 cd "$(dirname "$0")/../.."
 [ -x "$HOME/.local/nexus-toolchain/go/bin/go" ] && export PATH="$HOME/.local/nexus-toolchain/go/bin:$PATH"
 [ -x "$HOME/.local/nexus-toolchain/taskbin/task" ] && export PATH="$HOME/.local/nexus-toolchain/taskbin:$PATH"
+[ -x "$HOME/.local/nexus-toolchain/zig/zig" ] && export PATH="$HOME/.local/nexus-toolchain/zig:$PATH"
 
 echo "== Nexus Workbench envcheck =="
 echo "repo:      $(pwd)"
@@ -25,7 +26,7 @@ for tool in node npm go task zig git; do
         echo "OK    $tool $v"
     else
         extra=""
-        [ "$tool" = "zig" ] && extra="  (solo necesario para empaquetar con cgo cross-link)"
+        [ "$tool" = "zig" ] && extra="  (requerido como CC para task build:server/package)"
         echo "FALTA $tool$extra"
     fi
 done

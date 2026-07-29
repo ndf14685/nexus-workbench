@@ -5,9 +5,10 @@
 - Node 22+ y npm 10+
 - Go 1.25+ (`go.mod` exige 1.25.6)
 - [Task](https://taskfile.dev) 3.x
-- Zig (solo para empaquetar: cross-link de cgo/sqlite)
+- Zig (el Taskfile lo usa como compilador C para `wavesrv` — cgo/sqlite —
+  incluso en builds nativos Linux/Windows)
 - En esta máquina Linux el toolchain está en `~/.local/nexus-toolchain/`
-  (`go/bin` y `taskbin`); `nexus/scripts/*.sh` lo agregan al PATH solos.
+  (`go/bin`, `taskbin` y `zig`); `nexus/scripts/*.sh` lo agregan al PATH solos.
 
 ## Setup y ejecución
 

@@ -20,6 +20,11 @@ if ! command -v go >/dev/null; then
     fi
 fi
 
+if ! command -v zig >/dev/null && [ -x "$HOME/.local/nexus-toolchain/zig/zig" ]; then
+    export PATH="$HOME/.local/nexus-toolchain/zig:$PATH"
+fi
+command -v zig >/dev/null || { echo "FALTA: zig (CC para build:server) — https://ziglang.org/download"; exit 1; }
+
 if ! command -v task >/dev/null; then
     if [ -x "$HOME/.local/nexus-toolchain/taskbin/task" ]; then
         export PATH="$HOME/.local/nexus-toolchain/taskbin:$PATH"
