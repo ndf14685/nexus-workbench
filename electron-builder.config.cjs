@@ -13,7 +13,7 @@ const config = {
     appId: pkg.build.appId,
     productName: pkg.productName,
     executableName: pkg.productName,
-    artifactName: "${productName}-${platform}-${arch}-${version}.${ext}",
+    artifactName: "NexusWorkbench-${platform}-${arch}-${version}.${ext}",
     generateUpdatesFilesForAllChannels: true,
     npmRebuild: false,
     nodeGypRebuild: false,
@@ -118,8 +118,11 @@ const config = {
         fpm: ["--rpm-rpmbuild-define", "_build_id_links none"],
     },
     publish: {
+        // Nexus Workbench: deliberately points at a non-resolvable host so the packaged
+        // auto-updater can never pull Wave Terminal's official releases over this fork.
+        // Replace with a real Nexus release feed when one exists (see nexus/docs/UPSTREAM_SYNC.md).
         provider: "generic",
-        url: "https://dl.waveterm.dev/releases-w2",
+        url: "https://updates.nexus-workbench.invalid/releases",
     },
     afterPack: (context) => {
         // This is a workaround to restore file permissions to the wavesrv binaries on macOS after packaging the universal binary.

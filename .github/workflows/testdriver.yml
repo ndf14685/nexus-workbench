@@ -16,6 +16,8 @@ permissions:
 
 jobs:
     context:
+        # Nexus Workbench fork: upstream-only
+        if: github.repository_owner == 'wavetermdev'
         runs-on: ubuntu-22.04
         steps:
             - name: Dump GitHub context
@@ -45,7 +47,7 @@ jobs:
     run_testdriver:
         name: Run TestDriver.ai
         runs-on: windows-latest
-        if: github.event.workflow_run.conclusion == 'success'
+        if: github.repository_owner == 'wavetermdev' && github.event.workflow_run.conclusion == 'success'
         steps:
             - uses: testdriverai/action@main
               id: testdriver

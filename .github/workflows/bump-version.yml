@@ -26,6 +26,8 @@ env:
     NODE_VERSION: 22
 jobs:
     bump-version:
+        # Nexus Workbench fork: upstream-only (needs Wave's GitHub App credentials)
+        if: github.repository_owner == 'wavetermdev'
         runs-on: ubuntu-latest
         steps:
             - name: Get App Token
