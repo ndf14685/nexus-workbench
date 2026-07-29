@@ -41,8 +41,9 @@ const isDev = args.includes("--dev");
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const defaultYaml = path.join(scriptDir, "..", "config", "environments.yaml");
 const defaultJson = path.join(scriptDir, "..", "config", "environments.json");
+// preferimos .json: no requiere dependencias (el .yaml necesita el paquete "yaml")
 const yamlPath =
-    args.find((a) => !a.startsWith("--")) ?? (fs.existsSync(defaultYaml) ? defaultYaml : defaultJson);
+    args.find((a) => !a.startsWith("--")) ?? (fs.existsSync(defaultJson) ? defaultJson : defaultYaml);
 
 const ClassThemes = {
     lab: "dracula",

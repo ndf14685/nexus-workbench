@@ -11,6 +11,7 @@
     "app:disablectrlshiftarrows": false,
     "app:disablectrlshiftdisplay": false,
     "app:focusfollowscursor": "off",
+    "app:hideaibutton": true,
     "autoupdate:enabled": false,
     "autoupdate:installonquit": true,
     "autoupdate:intervalms": 3600000,
