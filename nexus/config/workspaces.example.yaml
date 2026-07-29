@@ -1,0 +1,32 @@
+# Nexus Workbench — definiciones de workspace (ejemplo versionable)
+#
+# HOY: formato de diseño, sin importador (los workspaces de Wave viven en su
+# SQLite y se crean por UI). Backlog: `import-workspaces.mjs` que los cree vía
+# wshrpc (ver nexus/docs/BRIDGE.md → createWorkspace/restoreWorkspace).
+version: 1
+
+workspaces:
+    - id: ops-nexusos
+      name: Ops NexusOS
+      icon: server
+      color: green
+      environments: [nexusos]
+      layout:
+          - view: term
+            environment: nexusos
+          - view: term
+            environment: nexusos
+          - view: preview
+            path: "~"
+            environment: nexusos
+
+    - id: home-lab
+      name: Home Lab
+      icon: flask
+      color: blue
+      environments: [raspi-media, rig3060, wsl-ubuntu]
+      layout:
+          - view: term
+            environment: raspi-media
+          - view: term
+            environment: rig3060

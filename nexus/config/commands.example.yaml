@@ -1,0 +1,44 @@
+# Nexus Workbench — comandos favoritos / runbooks (ejemplo versionable)
+#
+# HOY: formato de diseño + catálogo personal. Sin ejecución automática:
+# los comandos se pegan/ejecutan manualmente en la terminal.
+# Backlog: superficie de ejecución vía Bridge.runCommand con confirmación
+# obligatoria cuando destructive=true o el ambiente es class=prod/work.
+version: 1
+
+commands:
+    - id: docker-ps
+      name: Docker - contenedores
+      command: docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+      tags: [docker]
+
+    - id: docker-logs
+      name: Docker - logs de un servicio
+      command: docker logs -f --tail 200 <container>
+      tags: [docker, logs]
+
+    - id: k8s-pods
+      name: K8s - pods del namespace
+      command: kubectl get pods -o wide
+      tags: [kubernetes]
+
+    - id: systemd-status
+      name: systemd - estado de servicio
+      command: systemctl status <service>
+      tags: [systemd]
+
+    - id: journal-follow
+      name: journald - seguir logs
+      command: journalctl -u <service> -f -n 200
+      tags: [systemd, logs]
+
+    - id: git-sync-check
+      name: Git - estado vs remoto
+      command: git fetch --all --prune && git status -sb
+      tags: [git]
+
+    - id: systemd-restart
+      name: systemd - reiniciar servicio
+      command: systemctl restart <service>
+      tags: [systemd]
+      destructive: true   # requiere confirmación explícita, nunca automático

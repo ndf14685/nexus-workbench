@@ -44,3 +44,9 @@ docsite/
 .superpowers
 docs/superpowers
 .claude
+
+# Nexus Workbench: la config real del usuario nunca se versiona (solo *.example.yaml)
+nexus/config/environments.yaml
+nexus/config/workspaces.yaml
+nexus/config/commands.yaml
+nexus/reports/*.local.md

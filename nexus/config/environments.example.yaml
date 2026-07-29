@@ -1,0 +1,67 @@
+# Nexus Workbench — catálogo de ambientes (ejemplo versionable)
+#
+# Copiá este archivo a `environments.yaml` (gitignored) y ajustalo.
+# Importalo a la config de Wave con:
+#   node nexus/scripts/import-environments.mjs [--dev] [--dry-run]
+#
+# REGLAS DE SEGURIDAD:
+# - NUNCA credenciales, claves, passphrases ni tokens acá.
+# - Los hosts SSH referencian alias de ~/.ssh/config; la autenticación la
+#   resuelven ssh-agent / claves del sistema (ver nexus/docs/SECURITY.md).
+#
+# Campos:
+#   id            identificador estable (kebab-case)
+#   name          nombre humano
+#   kind          local | wsl | ssh
+#   host          (ssh) alias de ~/.ssh/config o user@host
+#   distro        (wsl) nombre de la distro (wsl -l)
+#   class         lab | personal | work | prod   → define tema/color por defecto
+#   criticality   low | medium | high            → informativo; high ⇒ confirmar
+#   theme         (opcional) override de term:theme de Wave
+#   notes         texto libre
+version: 1
+
+environments:
+    - id: local-windows
+      name: Local Windows
+      kind: local
+      class: personal
+      criticality: low
+      notes: PowerShell 7 por defecto (term:localshellpath en settings.json si hace falta)
+
+    - id: wsl-ubuntu
+      name: WSL Ubuntu
+      kind: wsl
+      distro: Ubuntu
+      class: personal
+      criticality: low
+
+    - id: nexusos
+      name: NexusOS
+      kind: ssh
+      host: nexusos
+      class: lab
+      criticality: medium
+      notes: alias definido en ~/.ssh/config
+
+    - id: raspi-media
+      name: Raspberry Media Center
+      kind: ssh
+      host: raspi-media
+      class: personal
+      criticality: low
+
+    - id: rig3060
+      name: rig3060
+      kind: ssh
+      host: rig3060
+      class: lab
+      criticality: medium
+
+    - id: work-example
+      name: Trabajo (ejemplo)
+      kind: ssh
+      host: work-bastion
+      class: work
+      criticality: high
+      notes: sin credenciales; acceso vía bastion definido en ~/.ssh/config
