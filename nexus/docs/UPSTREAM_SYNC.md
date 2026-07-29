@@ -55,10 +55,29 @@ Checklist adicional del informe (usar
 Todo lo demás propio está en `nexus/` y `.github/workflows/nexus-*.yml`
 (sin equivalente upstream ⇒ merge limpio).
 
-## Canales
+## Canales y "Check for Updates"
+
+El updater de la app (electron-updater) apunta a **las GitHub Releases de
+`ndf14685/nexus-workbench`** (provider `github` en `electron-builder.config.cjs`),
+nunca a los servers de Wave. electron-updater **ignora releases en borrador**,
+lo que da la compuerta manual:
 
 | Canal | Qué es | Cómo se produce |
 |---|---|---|
 | dev | `task dev` local | siempre disponible |
-| candidate | artifact de `nexus-windows-package.yml` | manual / tag `nexus-v*` |
-| stable | candidate aprobado a mano, tag en `main` | decisión humana, nunca automática |
+| candidate | draft release con instalador + `latest.yml` | push de tag `vX.Y.Z` → `nexus-windows-package.yml` |
+| stable | la draft release **publicada a mano** | recién ahí "Check for Updates" la ofrece a la app instalada |
+
+Flujo de release propio:
+
+```bash
+task version -- patch        # bumpea package.json (p.ej. 0.14.6)
+git commit -am "release: v0.14.6" && git push
+git tag v0.14.6 && git push origin v0.14.6   # CI: build + draft release
+# probar el instalador del draft → GitHub → Releases → publicar = stable
+```
+
+Novedades de Wave siempre entran por `upstream-sync/<tag>` → filtro/merge →
+release propia; el usuario final solo ve lo que publicamos nosotros.
+(`build-helper.yml` de upstream quedó guardado con `repository_owner`, así que
+nuestros tags `v*` no lo disparan.)

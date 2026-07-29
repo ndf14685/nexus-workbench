@@ -46,10 +46,16 @@ task electron:winquickdev   # build wavesrv nativo + app dev con HMR
 
 ## Actualizaciones
 
-El autoupdate quedó neutralizado (`publish.url` → host `.invalid`, default
-`autoupdate:enabled=false`). Actualizar = instalar el nuevo `.exe` encima
-(NSIS actualiza in-place; la config y los workspaces se conservan porque
-viven en `%HOME%\.config\waveterm` y en la data dir, no en Program Files).
+"Check for Updates" (menú de la app) consulta **las GitHub Releases de
+`ndf14685/nexus-workbench`** — nunca los servers de Wave. Solo ve releases
+publicadas (los drafts que crea CI son el canal candidate). El chequeo
+automático periódico sigue apagado por default (`autoupdate:enabled=false`);
+el manual funciona siempre. Flujo completo en UPSTREAM_SYNC.md § Canales.
+
+Nota: los builds anteriores a v0.14.6 se empaquetaron con un feed inválido a
+propósito; para engancharse al canal de updates hay que instalar v0.14.6+.
+La config y los workspaces se conservan al actualizar (viven en
+`~/.config/waveterm` y la data dir, no en Program Files).
 
 ## Datos de la app en Windows
 

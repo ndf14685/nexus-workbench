@@ -118,11 +118,13 @@ const config = {
         fpm: ["--rpm-rpmbuild-define", "_build_id_links none"],
     },
     publish: {
-        // Nexus Workbench: deliberately points at a non-resolvable host so the packaged
-        // auto-updater can never pull Wave Terminal's official releases over this fork.
-        // Replace with a real Nexus release feed when one exists (see nexus/docs/UPSTREAM_SYNC.md).
-        provider: "generic",
-        url: "https://updates.nexus-workbench.invalid/releases",
+        // Nexus Workbench: the update feed is OUR GitHub Releases, never Wave's servers.
+        // electron-updater only sees published (non-draft) releases, so the gate is:
+        // tag v* -> CI builds a DRAFT release (candidate) -> manual publish = stable.
+        // See nexus/docs/UPSTREAM_SYNC.md.
+        provider: "github",
+        owner: "ndf14685",
+        repo: "nexus-workbench",
     },
     afterPack: (context) => {
         // This is a workaround to restore file permissions to the wavesrv binaries on macOS after packaging the universal binary.

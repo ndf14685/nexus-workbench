@@ -1,20 +1,23 @@
-# Nexus Workbench: genera el instalador Windows (sin firma) bajo demanda.
-# Artefactos: make/NexusWorkbench-win-x64-<version>.{exe,msi,zip} + latest.yml.
-# Canal "candidate": el artefacto se descarga del run y se promueve a mano.
+# Nexus Workbench: genera el instalador Windows (sin firma).
+# - workflow_dispatch: build suelto, artefactos solo en el run (canal dev/candidate).
+# - push de tag vX.Y.Z: además crea una GitHub Release en BORRADOR con el
+#   instalador + latest.yml. El "Check for Updates" de la app (electron-updater,
+#   provider github) solo ve releases PUBLICADAS: publicar el borrador a mano
+#   es la promoción candidate -> stable (ver nexus/docs/UPSTREAM_SYNC.md).
 name: Nexus Windows Package
 
 on:
     workflow_dispatch: null
     push:
         tags:
-            - "nexus-v[0-9]+.[0-9]+.[0-9]+*"
+            - "v[0-9]+.[0-9]+.[0-9]+*"
 
 env:
     GO_VERSION: "1.25.6"
     NODE_VERSION: 22
 
 permissions:
-    contents: read
+    contents: write
 
 jobs:
     package-windows:
@@ -59,3 +62,17 @@ jobs:
                       make/*.zip
                       make/latest.yml
                   retention-days: 30
+            - name: Create draft release (candidate)
+              if: startsWith(github.ref, 'refs/tags/v')
+              uses: softprops/action-gh-release@v2
+              with:
+                  draft: true
+                  name: Nexus Workbench ${{ github.ref_name }} (candidate)
+                  files: |
+                      make/*.exe
+                      make/*.msi
+                      make/*.zip
+                      make/latest.yml
+                  body: |
+                      Candidato sin publicar. Probarlo y, si está OK, publicar esta release
+                      para promoverla a **stable**: recién entonces "Check for Updates" la ofrece.

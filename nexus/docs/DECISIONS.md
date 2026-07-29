@@ -16,3 +16,6 @@
 | D-010 | 2026-07-28 | Toolchain local en `~/.local/nexus-toolchain/` (Go 1.25.12, Task 3.52) | la máquina no tenía Go/Task; instalación sin sudo, reproducible por bootstrap.sh |
 | D-011 | 2026-07-28 | Baseline con 1 fallo de test Go y 12 errores tsc documentados y corregidos | honestidad del baseline: los fallos eran de upstream, no del fork |
 | D-012 | 2026-07-28 | Versión de la app se mantiene = upstream (0.14.5) hasta la primera release propia | simplifica el primer sync; el canal nexus-v* independiza el versionado cuando haga falta |
+| D-013 | 2026-07-29 | Feed de updates = GitHub Releases del fork (provider `github`); draft=candidate, publicada=stable | reemplaza el placeholder `.invalid` de D-004; electron-updater ignora drafts ⇒ compuerta manual sin infra propia |
+| D-014 | 2026-07-29 | Tags de release del fork pasan a `v*` (reemplaza D-009); `build-helper.yml` guardado con repository_owner | el provider github de electron-updater espera tags `v<semver>`; la guarda elimina el riesgo que motivaba nexus-v* |
+| D-015 | 2026-07-29 | AI: modos propios en `waveai.json` con keys en el secret store (`wsh secret` + `ai:apitokensecretname`); nunca tokens en config/repo | backends nativos anthropic/openai/gemini/ollama verificados en `pkg/aiusechat`; secret store cifrado vía safeStorage |

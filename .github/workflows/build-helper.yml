@@ -15,6 +15,9 @@ env:
     NODE_OPTIONS: --max-old-space-size=4096
 jobs:
     build-app:
+        # Nexus Workbench fork: upstream-only (firma/S3 de Command Line Inc).
+        # Los tags v* del fork usan nexus-windows-package.yml.
+        if: github.repository_owner == 'wavetermdev'
         outputs:
             version: ${{ steps.set-version.outputs.WAVETERM_VERSION }}
         strategy:

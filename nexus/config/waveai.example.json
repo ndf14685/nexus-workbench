@@ -1,0 +1,35 @@
+{
+    "waveai@claude": {
+        "display:name": "Claude (API propia)",
+        "display:order": 1,
+        "display:icon": "robot",
+        "display:description": "Anthropic directo con tu API key (secret ANTHROPIC_KEY)",
+        "ai:provider": "custom",
+        "ai:apitype": "anthropic-messages",
+        "ai:model": "claude-sonnet-5",
+        "ai:apitokensecretname": "ANTHROPIC_KEY",
+        "ai:capabilities": ["tools", "images", "pdfs"]
+    },
+    "waveai@openai": {
+        "display:name": "OpenAI (API propia)",
+        "display:order": 2,
+        "display:icon": "brain",
+        "display:description": "OpenAI directo con tu API key (secret OPENAI_KEY)",
+        "ai:provider": "openai",
+        "ai:apitype": "openai-responses",
+        "ai:model": "gpt-5.1",
+        "ai:apitokensecretname": "OPENAI_KEY",
+        "ai:capabilities": ["tools", "images", "pdfs"]
+    },
+    "waveai@ollama-local": {
+        "display:name": "Ollama local",
+        "display:order": 3,
+        "display:icon": "server",
+        "display:description": "Modelo local vía Ollama (privado, sin API key)",
+        "ai:provider": "custom",
+        "ai:apitype": "openai-chat",
+        "ai:endpoint": "http://127.0.0.1:11434/v1",
+        "ai:model": "qwen2.5-coder:14b",
+        "ai:capabilities": ["tools"]
+    }
+}
