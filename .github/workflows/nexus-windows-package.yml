@@ -1,0 +1,61 @@
+# Nexus Workbench: genera el instalador Windows (sin firma) bajo demanda.
+# Artefactos: make/NexusWorkbench-win-x64-<version>.{exe,msi,zip} + latest.yml.
+# Canal "candidate": el artefacto se descarga del run y se promueve a mano.
+name: Nexus Windows Package
+
+on:
+    workflow_dispatch: null
+    push:
+        tags:
+            - "nexus-v[0-9]+.[0-9]+.[0-9]+*"
+
+env:
+    GO_VERSION: "1.25.6"
+    NODE_VERSION: 22
+
+permissions:
+    contents: read
+
+jobs:
+    package-windows:
+        name: Package Nexus Workbench (Windows, unsigned)
+        runs-on: windows-latest
+        steps:
+            - uses: actions/checkout@v6
+            - uses: actions/setup-go@v6
+              with:
+                  go-version: ${{env.GO_VERSION}}
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: ${{env.NODE_VERSION}}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+            - uses: nick-fields/retry@v4
+              name: npm ci
+              with:
+                  command: npm ci --no-audit --no-fund
+                  retry_on: error
+                  max_attempts: 3
+                  timeout_minutes: 5
+            - name: Install Task
+              uses: arduino/setup-task@v2
+              with:
+                  version: 3.x
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+            - name: Install Zig
+              uses: mlugg/setup-zig@v2
+            - name: Package
+              run: task package
+              env:
+                  CSC_IDENTITY_AUTO_DISCOVERY: false
+              shell: powershell
+            - name: Upload installer artifacts
+              uses: actions/upload-artifact@v5
+              with:
+                  name: nexus-workbench-windows
+                  path: |
+                      make/*.exe
+                      make/*.msi
+                      make/*.zip
+                      make/latest.yml
+                  retention-days: 30

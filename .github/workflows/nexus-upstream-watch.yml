@@ -1,0 +1,64 @@
+# Nexus Workbench: chequeo semanal de releases nuevas de WaveTerm.
+# Abre/actualiza un issue cuando hay un tag estable más nuevo que el baseline.
+# Nunca integra ni publica nada automáticamente (ver ADR-0003).
+name: Nexus Upstream Watch
+
+on:
+    schedule:
+        - cron: "0 9 * * 1"
+    workflow_dispatch: null
+
+permissions:
+    contents: read
+    issues: write
+
+jobs:
+    check-upstream:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  fetch-depth: 0
+            - name: Compare baseline vs upstream
+              id: check
+              run: |
+                  git remote add upstream https://github.com/wavetermdev/waveterm.git
+                  git fetch upstream --tags --quiet
+                  BASELINE=$(git tag -l 'wave-baseline/*' | sort -V | tail -1 | sed 's|wave-baseline/||')
+                  LATEST=$(git tag -l 'v*' | grep -vE 'beta' | sort -V | tail -1)
+                  echo "baseline=$BASELINE" >> "$GITHUB_OUTPUT"
+                  echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+                  if [ -n "$LATEST" ] && [ "$LATEST" != "${BASELINE%%-*}" ]; then
+                      echo "newer=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "newer=false" >> "$GITHUB_OUTPUT"
+                  fi
+            - name: Open issue if newer release exists
+              if: steps.check.outputs.newer == 'true'
+              uses: actions/github-script@v8
+              with:
+                  script: |
+                      const latest = '${{ steps.check.outputs.latest }}';
+                      const baseline = '${{ steps.check.outputs.baseline }}';
+                      const title = `Upstream sync disponible: WaveTerm ${latest}`;
+                      const issues = await github.rest.issues.listForRepo({
+                          owner: context.repo.owner, repo: context.repo.repo,
+                          state: 'open', labels: 'upstream-sync',
+                      });
+                      if (issues.data.some(i => i.title === title)) return;
+                      await github.rest.issues.create({
+                          owner: context.repo.owner, repo: context.repo.repo,
+                          title,
+                          labels: ['upstream-sync'],
+                          body: [
+                              `Baseline actual: \`${baseline}\` — nueva release estable: \`${latest}\`.`,
+                              '',
+                              'Proceso (ver `nexus/docs/UPSTREAM_SYNC.md`):',
+                              '```',
+                              `nexus/scripts/upstream-check.sh --start ${latest}`,
+                              `git merge ${latest}`,
+                              'nexus/scripts/verify.sh',
+                              '```',
+                              'Completar el informe con `nexus/docs/templates/upstream-sync-report.md`.',
+                          ].join('\n'),
+                      });

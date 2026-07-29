@@ -1,0 +1,45 @@
+# Nexus Workbench: CI de build + tests (upstream no tiene CI de tests).
+name: Nexus CI
+
+on:
+    push:
+        branches: [main, develop, "upstream-sync/**", "release/**"]
+    pull_request:
+        branches: [main, develop]
+
+env:
+    GO_VERSION: "1.25.6"
+    NODE_VERSION: 22
+
+permissions:
+    contents: read
+
+jobs:
+    verify:
+        name: Build + tests (Linux)
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - uses: actions/setup-go@v6
+              with:
+                  go-version: ${{env.GO_VERSION}}
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: ${{env.NODE_VERSION}}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+            - name: npm ci
+              run: npm ci --no-audit --no-fund
+            - name: go vet
+              run: go vet ./...
+            - name: go test
+              run: go test ./...
+            - name: typecheck
+              run: npx tsc --noEmit
+            - name: vitest
+              run: npx vitest run
+            - name: build frontend
+              run: npx electron-vite build --mode development
+            - name: secret scan (basic)
+              run: |
+                  ! git grep -nIiE '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|ghp_[A-Za-z0-9]{36}|AKIA[0-9A-Z]{16})' -- ':!node_modules' ':!*.lock'
