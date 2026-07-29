@@ -18,7 +18,12 @@
 #   class         lab | personal | work | prod   → define tema/color por defecto
 #   criticality   low | medium | high            → informativo; high ⇒ confirmar
 #   theme         (opcional) override de term:theme de Wave
+#   icon          (opcional) icono FontAwesome del widget (default por kind)
 #   notes         texto libre
+#
+# El importador genera además un widget por ambiente en la barra lateral
+# (equivalente a la lista de conexiones guardadas de WinSSHterm): click en el
+# widget = terminal nueva en esa conexión, coloreado por clase.
 version: 1
 
 environments:

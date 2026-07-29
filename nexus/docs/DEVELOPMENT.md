@@ -40,11 +40,17 @@ node nexus/scripts/import-environments.mjs --dry-run
 node nexus/scripts/import-environments.mjs        # (--dev para la config de desarrollo)
 ```
 
-Resultado: los ambientes ssh/wsl aparecen en el selector de conexiones
-(botón de conexión del bloque terminal o `Ctrl/Cmd-G`), cada uno con tema de
-terminal según su clase (prod=warmyellow, work=campbell, lab=dracula,
-personal=default-dark), y quedan presets de fondo `Nexus: <clase>` en el menú
-contextual del tab → Backgrounds para marcar tabs por ambiente.
+Resultado:
+
+- **Barra lateral de widgets**: un botón por ambiente (label + icono + color
+  por clase) — click = terminal nueva en esa conexión. Es el equivalente a la
+  lista de conexiones guardadas de WinSSHterm. Solo se gestionan las claves
+  `nexus-env-*` de `widgets.json`; los widgets propios se preservan.
+- **Selector de conexiones** (`Ctrl/Cmd-G`): los ambientes ssh/wsl con tema de
+  terminal según su clase (prod=warmyellow, work=campbell, lab=dracula,
+  personal=default-dark).
+- **Fondos de tab** `Nexus: <clase>` en el menú contextual del tab →
+  Backgrounds, para marcar tabs por ambiente.
 
 SSH: Wave lee `~/.ssh/config` directamente; los `host:` del catálogo deben
 ser alias definidos allí. La autenticación es de ssh-agent/claves nativas.

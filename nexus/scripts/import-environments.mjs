@@ -128,10 +128,51 @@ for (const [cls, bg] of Object.entries(ClassBackgrounds)) {
     };
 }
 
-console.log(`catálogo: ${yamlPath} (${catalog.environments.length} ambientes, ${connChanges} conexiones)`);
+// Barra de widgets: un botón por ambiente (estilo lista de conexiones de
+// WinSSHterm). Click => abre una terminal en esa conexión. Se gestionan solo
+// las claves con prefijo nexus-env-; el resto de widgets.json se preserva.
+const ClassColors = {
+    lab: "#a371f7",
+    personal: "#3fb950",
+    work: "#58a6ff",
+    prod: "#f85149",
+};
+const KindIcons = { local: "desktop", wsl: "layer-group", ssh: "server" };
+
+const widgetsPath = path.join(configDir, "widgets.json");
+const widgets = readJson(widgetsPath);
+for (const key of Object.keys(widgets)) {
+    if (key.startsWith("nexus-env-")) {
+        delete widgets[key];
+    }
+}
+let widgetCount = 0;
+for (const env of catalog.environments) {
+    const meta = { view: "term", controller: "shell" };
+    if (env.kind === "ssh" || env.kind === "wsl") {
+        const conn = env.kind === "wsl" ? `wsl://${env.distro}` : env.host;
+        if (!conn) {
+            continue;
+        }
+        meta.connection = conn;
+    }
+    widgets[`nexus-env-${env.id}`] = {
+        "display:order": 100 + widgetCount,
+        icon: env.icon ?? KindIcons[env.kind] ?? "server",
+        color: ClassColors[env.class] ?? "#8b949e",
+        label: env.name ?? env.id,
+        description: `${env.kind}${meta.connection ? " " + meta.connection : ""} (${env.class ?? "?"})`,
+        blockdef: { meta },
+    };
+    widgetCount++;
+}
+
+console.log(`catálogo: ${yamlPath} (${catalog.environments.length} ambientes, ${connChanges} conexiones, ${widgetCount} widgets)`);
 console.log(`config dir: ${configDir}`);
 backupAndWrite(connPath, connections);
 backupAndWrite(presetsPath, presets);
-console.log("Listo. Los ambientes ssh/wsl aparecen en el selector de conexiones de Wave");
-console.log("con tema de terminal por clase; los fondos 'Nexus: <clase>' quedan disponibles");
-console.log("en el menú contextual del tab (Backgrounds) para marcar tabs por ambiente.");
+backupAndWrite(widgetsPath, widgets);
+console.log("Listo:");
+console.log("- Barra lateral de widgets: un botón por ambiente (click = terminal en esa conexión).");
+console.log("- Selector de conexiones: ambientes ssh/wsl con tema de terminal por clase.");
+console.log("- Fondos 'Nexus: <clase>' en el menú contextual del tab (Backgrounds).");
