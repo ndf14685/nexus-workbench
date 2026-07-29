@@ -13,16 +13,36 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 
-const require = createRequire(new URL("../../package.json", import.meta.url));
-const YAML = require("yaml");
+// El catálogo puede ser .json (sin dependencias) o .yaml (requiere el paquete
+// "yaml": npm install yaml --no-save --ignore-scripts --workspaces=false).
+function parseCatalogFile(p) {
+    const raw = fs.readFileSync(p, "utf8");
+    if (p.endsWith(".json")) {
+        return { raw, parsed: JSON.parse(raw) };
+    }
+    let YAML;
+    try {
+        const require = createRequire(new URL("../../package.json", import.meta.url));
+        YAML = require("yaml");
+    } catch {
+        console.error("Falta el paquete 'yaml'. Opciones:");
+        console.error("  npm install yaml --no-save --ignore-scripts --workspaces=false");
+        console.error("  ...o usá un catálogo .json (environments.json) que no necesita nada.");
+        process.exit(1);
+    }
+    return { raw, parsed: YAML.parse(raw) };
+}
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
 const isDev = args.includes("--dev");
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const defaultYaml = path.join(scriptDir, "..", "config", "environments.yaml");
+const defaultJson = path.join(scriptDir, "..", "config", "environments.json");
 const yamlPath =
-    args.find((a) => !a.startsWith("--")) ??
-    path.join(path.dirname(new URL(import.meta.url).pathname), "..", "config", "environments.yaml");
+    args.find((a) => !a.startsWith("--")) ?? (fs.existsSync(defaultYaml) ? defaultYaml : defaultJson);
 
 const ClassThemes = {
     lab: "dracula",
@@ -73,23 +93,22 @@ function backupAndWrite(p, data) {
 
 if (!fs.existsSync(yamlPath)) {
     console.error(`No existe ${yamlPath}.`);
-    console.error("Copiá nexus/config/environments.example.yaml a nexus/config/environments.yaml y editalo.");
+    console.error("Copiá nexus/config/environments.example.yaml a nexus/config/environments.yaml (o .json) y editalo.");
     process.exit(1);
 }
 
-const catalog = YAML.parse(fs.readFileSync(yamlPath, "utf8"));
+const { raw, parsed: catalog } = parseCatalogFile(yamlPath);
 if (catalog?.version !== 1 || !Array.isArray(catalog.environments)) {
     console.error("Formato inválido: se espera { version: 1, environments: [...] }");
     process.exit(1);
 }
 
 const forbidden = /password|passphrase|token|secret|private[_-]?key|BEGIN (RSA|OPENSSH)/i;
-const yamlSansComments = fs
-    .readFileSync(yamlPath, "utf8")
+const rawSansComments = raw
     .split("\n")
     .map((l) => l.replace(/(^|\s)#.*$/, ""))
     .join("\n");
-if (forbidden.test(yamlSansComments)) {
+if (forbidden.test(rawSansComments)) {
     console.error("ABORTADO: el catálogo parece contener material sensible (password/token/clave).");
     process.exit(2);
 }

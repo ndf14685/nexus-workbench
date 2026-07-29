@@ -47,6 +47,7 @@ docs/superpowers
 
 # Nexus Workbench: la config real del usuario nunca se versiona (solo *.example.*)
 nexus/config/environments.yaml
+nexus/config/environments.json
 nexus/config/workspaces.yaml
 nexus/config/commands.yaml
 nexus/config/waveai.json

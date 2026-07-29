@@ -1,0 +1,11 @@
+{
+    "version": 1,
+    "environments": [
+        { "id": "local-windows", "name": "Local Windows", "kind": "local", "class": "personal", "criticality": "low" },
+        { "id": "wsl-ubuntu", "name": "WSL Ubuntu", "kind": "wsl", "distro": "Ubuntu", "class": "personal", "criticality": "low" },
+        { "id": "nexusos", "name": "NexusOS", "kind": "ssh", "host": "nexusos", "class": "lab", "criticality": "medium" },
+        { "id": "raspi-media", "name": "Raspberry Media Center", "kind": "ssh", "host": "raspi-media", "class": "personal", "criticality": "low" },
+        { "id": "rig3060", "name": "rig3060", "kind": "ssh", "host": "rig3060", "class": "lab", "criticality": "medium" },
+        { "id": "work-example", "name": "Trabajo (ejemplo)", "kind": "ssh", "host": "work-bastion", "class": "work", "criticality": "high" }
+    ]
+}
