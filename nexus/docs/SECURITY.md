@@ -55,6 +55,13 @@ GitHub → Security → Code scanning. Clases y racional:
 | `go/stack-trace-exposure` (pkg/web) | 1 medium | won't fix | server HTTP local con authkey obligatorio; el único cliente es el propio frontend |
 | `go/allocation-size-overflow` (`make(x, len(y)+1)`) | 4 high | false positive | `len()` de slices Go está acotado por la memoria direccionable; `len+1`/`len+count` no puede desbordar int64 |
 
+**Hallazgo real derivado del triage (2026-07-30):** revisando a mano los 40
+sitios apareció el bug genuino que CodeQL no reportó como tal: 5 handlers de
+`pkg/web/web.go` escribían el error HTTP pero seguían ejecutando por falta de
+`return` (el peor: `handleService` ejecutaba el service call con datos vacíos
+tras rechazar el body por inválido). Corregido en el fork y aportado a
+upstream: https://github.com/wavetermdev/waveterm/pull/3455.
+
 **Regla operativa:** las alertas nuevas de CodeQL NO se descartan en bloque.
 Toda alerta en código propio (`nexus/`, extensiones en el árbol de Wave) se
 arregla o se justifica individualmente aquí. Las de código upstream se evalúan
