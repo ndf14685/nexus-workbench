@@ -162,7 +162,7 @@ const KindIcons = { local: "desktop", wsl: "layer-group", ssh: "server" };
 const widgetsPath = path.join(configDir, "widgets.json");
 const widgets = readJson(widgetsPath);
 for (const key of Object.keys(widgets)) {
-    if (key.startsWith("nexus-env-") || key.startsWith("nexus-agent-")) {
+    if (key.startsWith("nexus-env-") || key.startsWith("nexus-agent-") || key.startsWith("nexus-cmd-")) {
         delete widgets[key];
     }
 }
@@ -215,6 +215,54 @@ for (const agent of catalog.agents ?? []) {
         blockdef: { meta },
     };
     agentCount++;
+}
+
+// Comandos favoritos (nexus/config/commands.yaml|.json, opcional): widgets que
+// abren una terminal y corren el comando. Solo comandos seguros: los que tienen
+// placeholders <...> o destructive=true NO se auto-ejecutan (quedan para la
+// superficie Bridge.runCommand con confirmación — ver commands.example.yaml).
+const cmdJson = path.join(scriptDir, "..", "config", "commands.json");
+const cmdYaml = path.join(scriptDir, "..", "config", "commands.yaml");
+const cmdPath = fs.existsSync(cmdJson) ? cmdJson : fs.existsSync(cmdYaml) ? cmdYaml : null;
+let cmdCount = 0;
+let cmdSkipped = 0;
+if (cmdPath) {
+    const { parsed: cmdCatalog } = parseCatalogFile(cmdPath);
+    if (cmdCatalog?.version !== 1 || !Array.isArray(cmdCatalog.commands)) {
+        console.error(`Formato inválido en ${cmdPath}: se espera { version: 1, commands: [...] }`);
+        process.exit(1);
+    }
+    for (const cmd of cmdCatalog.commands) {
+        if (!cmd.id || !cmd.command) {
+            console.warn(`comando omitido (requiere id y command): ${JSON.stringify(cmd)}`);
+            continue;
+        }
+        if (cmd.destructive || /<[^>]+>/.test(cmd.command)) {
+            cmdSkipped++;
+            continue;
+        }
+        const meta = {
+            view: "term",
+            controller: "cmd",
+            cmd: cmd.command,
+            "cmd:shell": true,
+            "cmd:runonstart": true,
+        };
+        const envRef = cmd.environment ? catalog.environments.find((e) => e.id === cmd.environment) : null;
+        if (envRef && (envRef.kind === "ssh" || envRef.kind === "wsl")) {
+            meta.connection = envRef.kind === "wsl" ? `wsl://${envRef.distro}` : envRef.host;
+        }
+        widgets[`nexus-cmd-${cmd.id}`] = {
+            "display:order": 300 + cmdCount,
+            icon: cmd.icon ?? "terminal",
+            color: cmd.color ?? "#79c0ff",
+            label: cmd.name ?? cmd.id,
+            description: `${cmd.command}${meta.connection ? " @ " + meta.connection : ""}`,
+            blockdef: { meta },
+        };
+        cmdCount++;
+    }
+    console.log(`comandos: ${cmdPath} (${cmdCount} widgets, ${cmdSkipped} omitidos por destructive/placeholder)`);
 }
 
 // Catálogo para el frontend (indicador de ambiente en la tab bar): se proyecta

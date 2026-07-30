@@ -18,8 +18,10 @@ neutralizado, catálogo de ambientes + importador, CI propio, validación local.
 - ~~Indicador de ambiente en tab bar~~ (hecho 2026-07-29: `NexusEnvIndicator`
   en `frontend/app/nexus/envindicator.tsx`, catálogo vía setting
   `nexus:environments` proyectado por el importador — D-016).
-- Widgets declarativos para comandos favoritos (`widgets.json` generados
-  desde `commands.yaml` — sin código nuevo).
+- ~~Widgets declarativos para comandos favoritos~~ (hecho 2026-07-29: el
+  importador genera `nexus-cmd-*` desde `commands.yaml`; solo comandos sin
+  placeholders y no destructivos — el resto espera Bridge.runCommand con
+  confirmación).
 - Importador de workspaces declarativos (`workspaces.yaml` → wshrpc).
 - Bridge: implementar `openTerminal`/`openConnection`/`getActiveEnvironment`.
 - Iconos/assets propios de Nexus Workbench.
