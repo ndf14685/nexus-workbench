@@ -4,8 +4,11 @@
 > `nexus/scripts/import-environments.mjs` y el contrato RPC está implementado
 > como **servidor MCP** en `nexus/mcp/` (ver [MCP.md](MCP.md)): openTerminal,
 > runCommand (con gobernanza), openRemoteFile, getTerminalContext
-> (get_terminal_output/list_blocks). createWorkspace/restoreWorkspace/
-> getActiveEnvironment siguen como backlog.
+> (get_terminal_output/list_blocks). createWorkspace: hecho vía RPC
+> `WorkspaceCreateCommand` + `wsh workspace create` (importador declarativo
+> `nexus/scripts/import-workspaces.mjs`). restoreWorkspace/getActiveEnvironment
+> siguen como backlog (getActiveEnvironment tiene su mitad frontend en el
+> indicador de la tab bar, D-016).
 
 ## Interfaz objetivo
 

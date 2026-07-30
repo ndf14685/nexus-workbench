@@ -22,7 +22,9 @@ neutralizado, catálogo de ambientes + importador, CI propio, validación local.
   importador genera `nexus-cmd-*` desde `commands.yaml`; solo comandos sin
   placeholders y no destructivos — el resto espera Bridge.runCommand con
   confirmación).
-- Importador de workspaces declarativos (`workspaces.yaml` → wshrpc).
+- ~~Importador de workspaces declarativos~~ (hecho 2026-07-30: RPC
+  `WorkspaceCreateCommand` + `wsh workspace create` +
+  `import-workspaces.mjs`; test Go contra DB temporal — D-018).
 - Bridge: implementar `openTerminal`/`openConnection`/`getActiveEnvironment`.
 - Iconos/assets propios de Nexus Workbench.
 

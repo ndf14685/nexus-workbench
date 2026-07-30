@@ -146,6 +146,7 @@ type WshRpcInterface interface {
 	GetSecretsLinuxStorageBackendCommand(ctx context.Context) (string, error)
 
 	WorkspaceListCommand(ctx context.Context) ([]WorkspaceInfoData, error)
+	WorkspaceCreateCommand(ctx context.Context, data CommandWorkspaceCreateData) (string, error)
 	GetUpdateChannelCommand(ctx context.Context) (string, error)
 
 	// terminal
@@ -480,6 +481,17 @@ type WaveInfoData struct {
 type WorkspaceInfoData struct {
 	WindowId      string             `json:"windowid"`
 	WorkspaceData *waveobj.Workspace `json:"workspacedata"`
+}
+
+// CommandWorkspaceCreateData is a Nexus Workbench extension (declarative
+// workspace import). Blocks lays out the initial tab as a flat row; richer
+// layouts can be added later without breaking the wire format.
+type CommandWorkspaceCreateData struct {
+	Name    string             `json:"name"`
+	Icon    string             `json:"icon,omitempty"`
+	Color   string             `json:"color,omitempty"`
+	TabName string             `json:"tabname,omitempty"`
+	Blocks  []*waveobj.BlockDef `json:"blocks,omitempty"`
 }
 
 type BlocksListRequest struct {

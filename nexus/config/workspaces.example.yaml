@@ -1,8 +1,10 @@
 # Nexus Workbench — definiciones de workspace (ejemplo versionable)
 #
-# HOY: formato de diseño, sin importador (los workspaces de Wave viven en su
-# SQLite y se crean por UI). Backlog: `import-workspaces.mjs` que los cree vía
-# wshrpc (ver nexus/docs/BRIDGE.md → createWorkspace/restoreWorkspace).
+# Importar con: node nexus/scripts/import-workspaces.mjs (DENTRO de una
+# terminal de Nexus Workbench — usa `wsh workspace create`). Idempotente por
+# nombre; los ambientes se resuelven contra environments.yaml|.json.
+# Campos por bloque: view (term|preview|web), environment, path (preview),
+# url (web), y por workspace: id, name, icon, color, tabname.
 version: 1
 
 workspaces:

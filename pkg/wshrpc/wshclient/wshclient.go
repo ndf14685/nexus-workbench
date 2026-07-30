@@ -1018,6 +1018,12 @@ func WebSelectorCommand(w *wshutil.WshRpc, data wshrpc.CommandWebSelectorData, o
 	return resp, err
 }
 
+// command "workspacecreate", wshserver.WorkspaceCreateCommand
+func WorkspaceCreateCommand(w *wshutil.WshRpc, data wshrpc.CommandWorkspaceCreateData, opts *wshrpc.RpcOpts) (string, error) {
+	resp, err := sendRpcRequestCallHelper[string](w, "workspacecreate", data, opts)
+	return resp, err
+}
+
 // command "workspacelist", wshserver.WorkspaceListCommand
 func WorkspaceListCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]wshrpc.WorkspaceInfoData, error) {
 	resp, err := sendRpcRequestCallHelper[[]wshrpc.WorkspaceInfoData](w, "workspacelist", nil, opts)

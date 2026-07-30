@@ -769,6 +769,15 @@ declare global {
         opts?: WebSelectorOpts;
     };
 
+    // wshrpc.CommandWorkspaceCreateData
+    type CommandWorkspaceCreateData = {
+        name: string;
+        icon?: string;
+        color?: string;
+        tabname?: string;
+        blocks?: BlockDef[];
+    };
+
     // wshrpc.CommandWriteAppFileData
     type CommandWriteAppFileData = {
         appid: string;

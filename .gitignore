@@ -49,6 +49,8 @@ docs/superpowers
 nexus/config/environments.yaml
 nexus/config/environments.json
 nexus/config/workspaces.yaml
+nexus/config/workspaces.json
 nexus/config/commands.yaml
+nexus/config/commands.json
 nexus/config/waveai.json
 nexus/reports/*.local.md

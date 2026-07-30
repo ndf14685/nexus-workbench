@@ -963,6 +963,47 @@ func (ws *WshServer) WorkspaceListCommand(ctx context.Context) ([]wshrpc.Workspa
 	return rtn, nil
 }
 
+func (ws *WshServer) WorkspaceCreateCommand(ctx context.Context, data wshrpc.CommandWorkspaceCreateData) (string, error) {
+	if data.Name == "" {
+		return "", fmt.Errorf("name is required")
+	}
+	wsObj, err := wcore.CreateWorkspace(ctx, data.Name, data.Icon, data.Color, false, false)
+	if err != nil {
+		return "", fmt.Errorf("error creating workspace: %w", err)
+	}
+	if data.TabName != "" {
+		err = wstore.UpdateTabName(ctx, wsObj.ActiveTabId, data.TabName)
+		if err != nil {
+			return "", fmt.Errorf("error naming tab: %w", err)
+		}
+	}
+	if len(data.Blocks) > 0 {
+		// CreateTab already applied the default new-tab layout; drop those
+		// blocks so the declarative layout fully replaces it (ClearTree only
+		// clears the layout tree, not the tab's block list).
+		tab, err := wstore.DBMustGet[*waveobj.Tab](ctx, wsObj.ActiveTabId)
+		if err != nil {
+			return "", fmt.Errorf("error getting tab: %w", err)
+		}
+		for _, blockId := range tab.BlockIds {
+			if err := wcore.DeleteBlock(ctx, blockId, false); err != nil {
+				return "", fmt.Errorf("error clearing default block: %w", err)
+			}
+		}
+		layout := make(wcore.PortableLayout, len(data.Blocks))
+		for i, blockDef := range data.Blocks {
+			layout[i].IndexArr = []int{i}
+			layout[i].BlockDef = blockDef
+			layout[i].Focused = i == 0
+		}
+		err = wcore.ApplyPortableLayout(ctx, wsObj.ActiveTabId, layout, false)
+		if err != nil {
+			return "", fmt.Errorf("error applying layout: %w", err)
+		}
+	}
+	return wsObj.OID, nil
+}
+
 func (ws *WshServer) ListAllAppsCommand(ctx context.Context) ([]wshrpc.AppInfo, error) {
 	return waveappstore.ListAllApps()
 }
