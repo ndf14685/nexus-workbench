@@ -3,6 +3,33 @@
   "$id": "https://github.com/wavetermdev/waveterm/pkg/wconfig/settings-type",
   "$ref": "#/$defs/SettingsType",
   "$defs": {
+    "NexusEnvType": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "class": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "conn": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id"
+      ]
+    },
     "SettingsType": {
       "properties": {
         "app:*": {
@@ -351,6 +378,12 @@
         },
         "tsunami:gopath": {
           "type": "string"
+        },
+        "nexus:environments": {
+          "items": {
+            "$ref": "#/$defs/NexusEnvType"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,

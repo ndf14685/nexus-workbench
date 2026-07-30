@@ -217,12 +217,29 @@ for (const agent of catalog.agents ?? []) {
     agentCount++;
 }
 
+// Catálogo para el frontend (indicador de ambiente en la tab bar): se proyecta
+// como clave gestionada nexus:environments en settings.json. conn = clave de
+// conexión de Wave (host ssh, wsl://distro, o "" para local).
+const settingsPath = path.join(configDir, "settings.json");
+const settings = readJson(settingsPath);
+settings["nexus:environments"] = catalog.environments.map((env) => {
+    const conn = env.kind === "wsl" ? `wsl://${env.distro ?? ""}` : env.kind === "ssh" ? (env.host ?? "") : "";
+    const entry = { id: env.id, conn };
+    if (env.name) entry.name = env.name;
+    if (env.class) entry.class = env.class;
+    if (env.kind) entry.kind = env.kind;
+    if (env.color) entry.color = env.color;
+    return entry;
+});
+
 console.log(`catálogo: ${yamlPath} (${catalog.environments.length} ambientes, ${connChanges} conexiones, ${widgetCount} widgets)`);
 console.log(`config dir: ${configDir}`);
 backupAndWrite(connPath, connections);
 backupAndWrite(presetsPath, presets);
 backupAndWrite(widgetsPath, widgets);
+backupAndWrite(settingsPath, settings);
 console.log("Listo:");
+console.log("- Indicador de ambiente en la tab bar (bloque enfocado → ambiente del catálogo).");
 console.log("- Barra lateral de widgets: un botón por ambiente (click = terminal en esa conexión).");
 console.log("- Selector de conexiones: ambientes ssh/wsl con tema de terminal por clase.");
 console.log("- Fondos 'Nexus: <clase>' en el menú contextual del tab (Backgrounds).");

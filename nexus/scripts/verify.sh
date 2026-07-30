@@ -40,7 +40,9 @@ git ls-files --error-unmatch nexus/config/environments.yaml >/dev/null 2>&1 && c
 
 step "branding"
 grep -q '"productName": "Nexus Workbench"' package.json ; check "productName" $?
-grep -q 'nexus-workbench.invalid' electron-builder.config.cjs ; check "autoupdate neutralizado" $?
+# D-013: el feed de updates es GitHub Releases del fork (reemplazó al placeholder .invalid de D-004)
+grep -q 'owner: "ndf14685"' electron-builder.config.cjs && ! grep -q 'waveterm\.dev' electron-builder.config.cjs
+check "feed de updates propio (no Wave)" $?
 grep -q '"autoupdate:enabled": false' pkg/wconfig/defaultconfig/settings.json ; check "autoupdate default off" $?
 grep -q '"telemetry:enabled": false' pkg/wconfig/defaultconfig/settings.json ; check "telemetry default off" $?
 

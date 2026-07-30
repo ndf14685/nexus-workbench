@@ -1225,6 +1225,16 @@ declare global {
         color: string;
     };
 
+    // wconfig.NexusEnvType
+    type NexusEnvType = {
+        id: string;
+        name?: string;
+        class?: string;
+        kind?: string;
+        conn?: string;
+        color?: string;
+    };
+
     // waveobj.ORef
     type ORef = string;
 
@@ -1484,6 +1494,7 @@ declare global {
         "tsunami:sdkreplacepath"?: string;
         "tsunami:sdkversion"?: string;
         "tsunami:gopath"?: string;
+        "nexus:environments"?: NexusEnvType[];
     };
 
     // waveobj.StickerClickOptsType
