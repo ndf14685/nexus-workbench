@@ -146,7 +146,10 @@ class WorkspaceLayoutModel {
             const savedVisible = globalStore.get(this.getPanelOpenAtom());
             const savedAIWidth = globalStore.get(this.getPanelWidthAtom());
             const savedVTabWidth = globalStore.get(this.getVTabBarWidthAtom());
-            if (savedVisible != null) {
+            // Nexus: while Wave AI is hidden (app:hideaibutton), never restore an
+            // open panel from a previous session — the app must start without AI.
+            const aiHidden = globalStore.get(getSettingsKeyAtom("app:hideaibutton")) ?? false;
+            if (savedVisible != null && !aiHidden) {
                 this.aiPanelVisible = savedVisible;
                 globalStore.set(this.panelVisibleAtom, savedVisible);
             }

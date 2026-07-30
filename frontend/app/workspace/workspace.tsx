@@ -45,6 +45,7 @@ const WorkspaceElem = memo(() => {
     const tabId = useAtomValue(atoms.staticTabId);
     const ws = useAtomValue(atoms.workspace);
     const tabBarPosition = useAtomValue(getSettingsKeyAtom("app:tabbar")) ?? "top";
+    const hideAiButton = useAtomValue(getSettingsKeyAtom("app:hideaibutton")) ?? false;
     const showLeftTabBar = tabBarPosition === "left";
     const aiPanelVisible = useAtomValue(workspaceLayoutModel.panelVisibleAtom);
     const widgetsSidebarVisible = useAtomValue(workspaceLayoutModel.widgetsSidebarVisibleAtom);
@@ -149,7 +150,9 @@ const WorkspaceElem = memo(() => {
                                         ref={aiPanelWrapperRef}
                                         className={`w-full h-full pr-0.5 ${aiPanelVisible ? "" : "opacity-0"}`}
                                     >
-                                        {tabId !== "" && <AIPanel roundTopLeft={showLeftTabBar} />}
+                                        {/* Nexus: with Wave AI hidden the panel must stay unmounted, not just
+                                            transparent — its mount effects hit Wave's cloud (rate limit). */}
+                                        {tabId !== "" && !hideAiButton && <AIPanel roundTopLeft={showLeftTabBar} />}
                                     </div>
                                 </Panel>
                             </PanelGroup>

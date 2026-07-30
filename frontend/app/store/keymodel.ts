@@ -742,6 +742,11 @@ function registerGlobalKeys() {
     });
     globalKeyMap.set("Cmd:Shift:a", () => {
         const currentVisible = WorkspaceLayoutModel.getInstance().getAIPanelVisible();
+        // Nexus: with Wave AI hidden the shortcut may close a stray panel but never open one
+        const aiHidden = globalStore.get(getSettingsKeyAtom("app:hideaibutton")) ?? false;
+        if (aiHidden && !currentVisible) {
+            return false;
+        }
         WorkspaceLayoutModel.getInstance().setAIPanelVisible(!currentVisible);
         return true;
     });

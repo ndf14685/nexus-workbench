@@ -86,3 +86,18 @@ agents:
       name: Codex
       command: codex
       icon: microchip
+
+    # Más adaptadores CLI (descomentá los que uses — ver docs/AI_PROVIDERS.md):
+    # - id: gemini
+    #   name: Gemini
+    #   command: gemini
+    #   icon: gem
+    # - id: ollama-llama
+    #   name: Llama (local)
+    #   command: ollama run llama3.2
+    #   icon: brain
+    # - id: ollama-rig
+    #   name: Llama (rig3060)
+    #   command: ollama run llama3.2
+    #   environment: rig3060
+    #   icon: brain
