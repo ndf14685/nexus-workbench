@@ -39,6 +39,27 @@
 | Dependencias vulnerables | `npm audit` en verify (informativo); `govulncheck` en checklist de sync; Dependabot de upstream sigue activo |
 | Instalador sin firma (SmartScreen) | riesgo aceptado para uso personal; verificar hash del artifact de CI |
 
+## CodeQL — triage de alertas en código upstream (D-019, 2026-07-30)
+
+`codeql.yml` (heredado de upstream) corre en el fork y mantiene cobertura de
+todo el árbol, incluido el código Go propio (`nexus/mcp`, extensiones RPC).
+
+Las 40 alertas iniciales (2 critical, 37 high, 1 medium) estaban **todas en
+código upstream de Wave** y se descartaron con justificación individual en
+GitHub → Security → Code scanning. Clases y racional:
+
+| Clase (regla) | Cantidad | Resolución | Racional |
+|---|---|---|---|
+| `go/command-injection` (builder Tsunami) | 2 critical | won't fix | ejecuta el binario que el builder acaba de compilar del código del propio usuario, como el mismo usuario local — equivalente a `go run`; no hay límite de privilegio que cruzar |
+| `go/path-injection` (wshremote_file, web, wavebase, waveappstore, fileutil, buildercontroller, tsunami) | 33 high | won't fix | acceder a rutas arbitrarias **es la funcionalidad** de un terminal/administrador de archivos; las rutas las provee el usuario local autenticado (authkey/JWT) y el proceso corre con sus privilegios |
+| `go/stack-trace-exposure` (pkg/web) | 1 medium | won't fix | server HTTP local con authkey obligatorio; el único cliente es el propio frontend |
+| `go/allocation-size-overflow` (`make(x, len(y)+1)`) | 4 high | false positive | `len()` de slices Go está acotado por la memoria direccionable; `len+1`/`len+count` no puede desbordar int64 |
+
+**Regla operativa:** las alertas nuevas de CodeQL NO se descartan en bloque.
+Toda alerta en código propio (`nexus/`, extensiones en el árbol de Wave) se
+arregla o se justifica individualmente aquí. Las de código upstream se evalúan
+contra este modelo de amenaza; si upstream las arregla, el fix entra por sync.
+
 ## SBOM / dependencias
 
 - `npm audit --omit=dev` corre en `verify.sh` (informativo, no bloquea).
