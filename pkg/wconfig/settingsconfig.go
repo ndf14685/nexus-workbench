@@ -182,6 +182,21 @@ type SettingsType struct {
 	TsunamiSdkReplacePath string `json:"tsunami:sdkreplacepath,omitempty"`
 	TsunamiSdkVersion     string `json:"tsunami:sdkversion,omitempty"`
 	TsunamiGoPath         string `json:"tsunami:gopath,omitempty"`
+
+	NexusEnvironments []NexusEnvType `json:"nexus:environments,omitempty"`
+}
+
+// NexusEnvType is a Nexus Workbench extension: one entry of the environment
+// catalog projected into settings.json by nexus/scripts/import-environments.mjs.
+// Conn is the Wave connection key ("host" for ssh, "wsl://distro" for wsl,
+// empty for local).
+type NexusEnvType struct {
+	Id    string `json:"id"`
+	Name  string `json:"name,omitempty"`
+	Class string `json:"class,omitempty"`
+	Kind  string `json:"kind,omitempty"`
+	Conn  string `json:"conn,omitempty"`
+	Color string `json:"color,omitempty"`
 }
 
 func (s *SettingsType) GetAiSettings() *AiSettingsType {

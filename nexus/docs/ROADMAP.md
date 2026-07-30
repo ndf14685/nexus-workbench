@@ -15,8 +15,9 @@ neutralizado, catálogo de ambientes + importador, CI propio, validación local.
 
 ## Fase 2 — Workbench Core operativo (semanas)
 
-- Indicador de ambiente en tab bar (punto de inserción ya identificado:
-  `frontend/app/tab/tabbar.tsx` junto a UpdateStatusBanner).
+- ~~Indicador de ambiente en tab bar~~ (hecho 2026-07-29: `NexusEnvIndicator`
+  en `frontend/app/nexus/envindicator.tsx`, catálogo vía setting
+  `nexus:environments` proyectado por el importador — D-016).
 - Widgets declarativos para comandos favoritos (`widgets.json` generados
   desde `commands.yaml` — sin código nuevo).
 - Importador de workspaces declarativos (`workspaces.yaml` → wshrpc).
