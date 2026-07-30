@@ -277,6 +277,7 @@ settings["nexus:environments"] = catalog.environments.map((env) => {
     if (env.class) entry.class = env.class;
     if (env.kind) entry.kind = env.kind;
     if (env.color) entry.color = env.color;
+    if (env.icon) entry.icon = env.icon;
     return entry;
 });
 

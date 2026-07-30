@@ -378,9 +378,18 @@ const Widgets = memo(() => {
     const measurementRef = useRef<HTMLDivElement>(null);
 
     const featureWaveAppBuilder = fullConfig?.settings?.["feature:waveappbuilder"] ?? false;
+    // Nexus: when the env sidebar owns environment navigation, the importer's
+    // nexus-env-* widgets are redundant here (agents/commands stay).
+    const envSidebarActive =
+        (fullConfig?.settings?.["nexus:sidebarvisible"] ?? true) &&
+        (fullConfig?.settings?.["nexus:environments"]?.length ?? 0) > 0;
     const widgetsMap = fullConfig?.widgets ?? {};
     const filteredWidgets = Object.fromEntries(
-        Object.entries(widgetsMap).filter(([_key, widget]) => shouldIncludeWidgetForWorkspace(widget, workspaceId))
+        Object.entries(widgetsMap).filter(
+            ([key, widget]) =>
+                shouldIncludeWidgetForWorkspace(widget, workspaceId) &&
+                !(envSidebarActive && key.startsWith("nexus-env-"))
+        )
     );
     const widgets = sortByDisplayOrder(filteredWidgets);
 

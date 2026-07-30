@@ -183,7 +183,12 @@ type SettingsType struct {
 	TsunamiSdkVersion     string `json:"tsunami:sdkversion,omitempty"`
 	TsunamiGoPath         string `json:"tsunami:gopath,omitempty"`
 
-	NexusEnvironments []NexusEnvType `json:"nexus:environments,omitempty"`
+	NexusEnvironments           []NexusEnvType `json:"nexus:environments,omitempty"`
+	NexusSidebarVisible         *bool          `json:"nexus:sidebarvisible,omitempty"`
+	NexusSidebarCollapsed       bool           `json:"nexus:sidebarcollapsed,omitempty"`
+	NexusSidebarWidth           float64        `json:"nexus:sidebarwidth,omitempty"`
+	NexusSidebarCollapsedGroups []string       `json:"nexus:sidebarcollapsedgroups,omitempty"`
+	NexusLastSelectedEnv        string         `json:"nexus:lastselectedenv,omitempty"`
 }
 
 // NexusEnvType is a Nexus Workbench extension: one entry of the environment
@@ -197,6 +202,7 @@ type NexusEnvType struct {
 	Kind  string `json:"kind,omitempty"`
 	Conn  string `json:"conn,omitempty"`
 	Color string `json:"color,omitempty"`
+	Icon  string `json:"icon,omitempty"`
 }
 
 func (s *SettingsType) GetAiSettings() *AiSettingsType {

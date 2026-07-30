@@ -22,6 +22,9 @@
         },
         "color": {
           "type": "string"
+        },
+        "icon": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -384,6 +387,24 @@
             "$ref": "#/$defs/NexusEnvType"
           },
           "type": "array"
+        },
+        "nexus:sidebarvisible": {
+          "type": "boolean"
+        },
+        "nexus:sidebarcollapsed": {
+          "type": "boolean"
+        },
+        "nexus:sidebarwidth": {
+          "type": "number"
+        },
+        "nexus:sidebarcollapsedgroups": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "nexus:lastselectedenv": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

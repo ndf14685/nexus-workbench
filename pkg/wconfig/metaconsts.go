@@ -133,5 +133,10 @@ const (
 	ConfigKey_TsunamiGoPath                  = "tsunami:gopath"
 
 	ConfigKey_NexusEnvironments              = "nexus:environments"
+	ConfigKey_NexusSidebarVisible            = "nexus:sidebarvisible"
+	ConfigKey_NexusSidebarCollapsed          = "nexus:sidebarcollapsed"
+	ConfigKey_NexusSidebarWidth              = "nexus:sidebarwidth"
+	ConfigKey_NexusSidebarCollapsedGroups    = "nexus:sidebarcollapsedgroups"
+	ConfigKey_NexusLastSelectedEnv           = "nexus:lastselectedenv"
 )
 

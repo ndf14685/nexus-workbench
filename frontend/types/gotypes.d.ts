@@ -1242,6 +1242,7 @@ declare global {
         kind?: string;
         conn?: string;
         color?: string;
+        icon?: string;
     };
 
     // waveobj.ORef
@@ -1504,6 +1505,11 @@ declare global {
         "tsunami:sdkversion"?: string;
         "tsunami:gopath"?: string;
         "nexus:environments"?: NexusEnvType[];
+        "nexus:sidebarvisible"?: boolean;
+        "nexus:sidebarcollapsed"?: boolean;
+        "nexus:sidebarwidth"?: number;
+        "nexus:sidebarcollapsedgroups"?: string[];
+        "nexus:lastselectedenv"?: string;
     };
 
     // waveobj.StickerClickOptsType

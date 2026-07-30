@@ -7,13 +7,7 @@ import { Tooltip } from "@/element/tooltip";
 import { atom, useAtomValue } from "jotai";
 import { memo } from "react";
 
-const ClassColors: Record<string, string> = {
-    lab: "#a371f7",
-    personal: "#3fb950",
-    work: "#58a6ff",
-    prod: "#f85149",
-};
-const UnknownColor = "#8b949e";
+import { colorForEnv, findEnvByConn } from "./envsidebar-util";
 
 const focusedConnAtom = atom((get) => {
     const blockId = get(FocusManager.getInstance().blockFocusAtom);
@@ -34,12 +28,12 @@ const NexusEnvIndicatorComponent = () => {
     if (conn == null) {
         return null;
     }
-    const env = envs?.find((e) => (e.conn ?? "") === conn);
+    const env = findEnvByConn(envs, conn);
     if (env == null && conn === "") {
         return null;
     }
     const label = env?.name ?? env?.id ?? conn;
-    const color = env?.color ?? ClassColors[env?.class] ?? UnknownColor;
+    const color = env != null ? colorForEnv(env) : "#8b949e";
     const tooltip = env
         ? `${env.kind ?? "?"}${env.conn ? " " + env.conn : ""} (${env.class ?? "?"})`
         : `${conn} (fuera del catálogo Nexus)`;
