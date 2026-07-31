@@ -1559,6 +1559,16 @@ declare global {
         "nexus:lastselectedenv"?: string;
     };
 
+    // spatial.SpatialEventData
+    type SpatialEventData = {
+        type: string;
+        workspaceid: string;
+        moduleid?: string;
+        surfaceid?: string;
+        monitorid?: string;
+        payload?: string;
+    };
+
     // waveobj.SpatialPlacement
     type SpatialPlacement = {
         x: number;
