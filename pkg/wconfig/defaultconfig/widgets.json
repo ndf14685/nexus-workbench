@@ -31,6 +31,16 @@
             }
         }
     },
+    "defwidget@jarvis": {
+        "display:order": -2.5,
+        "icon": "robot",
+        "label": "jarvis",
+        "blockdef": {
+            "meta": {
+                "view": "jarvis"
+            }
+        }
+    },
     "defwidget@sysinfo": {
         "display:order": -2,
         "icon": "chart-line",
