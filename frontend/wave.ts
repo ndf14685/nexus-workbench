@@ -14,7 +14,9 @@ import {
 } from "@/app/store/keymodel";
 import { modalsModel } from "@/app/store/modalmodel";
 import { RpcApi } from "@/app/store/wshclientapi";
-import { makeBuilderRouteId, makeTabRouteId } from "@/app/store/wshrouter";
+import { SpatialModel } from "@/app/nexus/spatial/spatial-model"; // nexus:
+import { SurfaceApp } from "@/app/nexus/spatial/surfaceapp"; // nexus:
+import { makeBuilderRouteId, makeSurfaceRouteId, makeTabRouteId } from "@/app/store/wshrouter"; // nexus: makeSurfaceRouteId
 import { initWshrpc, TabRpcClient } from "@/app/store/wshrpcutil";
 import { BuilderApp } from "@/builder/builder-app";
 import { getLayoutModelForStaticTab } from "@/layout/index";
@@ -63,6 +65,7 @@ async function initBare() {
     document.body.classList.add("is-transparent");
     getApi().onWaveInit(initWaveWrap);
     getApi().onBuilderInit(initBuilderWrap);
+    getApi().onSpatialInit(initSurfaceWrap); // nexus:
     setKeyUtilPlatform(platform);
     loadFonts();
     updateZoomFactor(getApi().getZoomFactor());
@@ -208,6 +211,92 @@ async function initWave(initOpts: WaveInitOpts) {
     await firstRenderPromise;
     console.log("Wave First Render Done");
     getApi().setWindowInitStatus("wave-ready");
+}
+
+// nexus: bootstrap de ventana spatial desacoplada (CONTRACTS §5) — sin LayoutModel
+let savedSurfaceInitOpts: SpatialInitOpts = null;
+
+async function initSurfaceWrap(initOpts: SpatialInitOpts) {
+    try {
+        if (savedSurfaceInitOpts != null) {
+            return;
+        }
+        savedSurfaceInitOpts = initOpts;
+        await initSurface(initOpts);
+    } catch (e) {
+        getApi().sendLog("Error in initSurface " + e.message + "\n" + e.stack);
+        console.error("Error in initSurface", e);
+    } finally {
+        document.body.style.visibility = null;
+        document.body.style.opacity = null;
+        document.body.classList.remove("is-transparent");
+    }
+}
+
+async function initSurface(initOpts: SpatialInitOpts) {
+    getApi().sendLog("Init Surface " + JSON.stringify(initOpts));
+    const globalInitOpts: GlobalInitOptions = {
+        tabId: initOpts.tabId,
+        clientId: initOpts.clientId,
+        windowId: initOpts.windowId,
+        platform,
+        environment: "renderer",
+    };
+    console.log("Surface Init", globalInitOpts);
+    globalStore.set(activeTabIdAtom, initOpts.tabId);
+    await GlobalModel.getInstance().initialize(globalInitOpts);
+    initGlobal(globalInitOpts);
+    (window as any).globalAtoms = atoms;
+
+    const globalWS = initWshrpc(makeSurfaceRouteId(initOpts.surfaceId));
+    (window as any).globalWS = globalWS;
+    (window as any).TabRpcClient = TabRpcClient;
+
+    try {
+        await loadConnStatus();
+        initGlobalWaveEventSubs({
+            tabId: initOpts.tabId,
+            clientId: initOpts.clientId,
+            windowId: initOpts.windowId,
+            activate: false,
+        });
+        subscribeToConnEvents();
+        if (isMacOS()) {
+            const macOSVersion = await RpcApi.MacOSVersionCommand(TabRpcClient);
+            setMacOSVersion(macOSVersion);
+        }
+        // el windowId es sintético (sin waveobj window): solo se cargan
+        // client, tab del módulo y workspace
+        const [_client, surfaceTab] = await Promise.all([
+            WOS.loadAndPinWaveObject<Client>(WOS.makeORef("client", initOpts.clientId)),
+            WOS.loadAndPinWaveObject<Tab>(WOS.makeORef("tab", initOpts.tabId)),
+        ]);
+        await WOS.loadAndPinWaveObject<Workspace>(WOS.makeORef("workspace", initOpts.workspaceId));
+        WOS.wpsSubscribeToObject(WOS.makeORef("workspace", initOpts.workspaceId));
+        document.title = `Nexus Workbench - ${surfaceTab?.name ?? "Módulo"}`;
+    } catch (e) {
+        console.error("Failed surface initialization error", e);
+        getApi().sendLog("Error in initialization (wave.ts, initSurface) " + e.message + "\n" + e.stack);
+    }
+    SpatialModel.getInstance().start(initOpts.workspaceId);
+    registerElectronReinjectKeyHandler();
+    registerControlShiftStateUpdateHandler();
+    await loadMonaco();
+    const fullConfig = await RpcApi.GetFullConfigCommand(TabRpcClient);
+    globalStore.set(atoms.fullConfigAtom, fullConfig);
+    const waveaiModeConfig = await RpcApi.GetWaveAIModeConfigCommand(TabRpcClient);
+    globalStore.set(atoms.waveaiModeConfigAtom, waveaiModeConfig.configs);
+    console.log("Surface First Render");
+    let firstRenderResolveFn: () => void = null;
+    const firstRenderPromise = new Promise<void>((resolve) => {
+        firstRenderResolveFn = resolve;
+    });
+    const reactElem = createElement(SurfaceApp, { opts: initOpts, onFirstRender: firstRenderResolveFn }, null);
+    const elem = document.getElementById("main");
+    const root = createRoot(elem);
+    root.render(reactElem);
+    await firstRenderPromise;
+    console.log("Surface First Render Done");
 }
 
 async function initBuilderWrap(initOpts: BuilderInitOpts) {

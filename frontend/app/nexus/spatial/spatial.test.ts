@@ -4,6 +4,7 @@
 import { globalStore } from "@/app/store/jotaiStore";
 import { assert, beforeEach, test } from "vitest";
 import { getSpatialBus, resetSpatialBus, SpatialBus } from "./spatial-bus";
+import { makeSurfaceNodeModel } from "./surface-node-model";
 import { isDetachedModule, shouldPreserveBlockOnDelete, SpatialModel } from "./spatial-model";
 
 function makeUpdateEvent(data: { type: string } & Partial<SpatialEventData>): WaveEvent {
@@ -145,4 +146,24 @@ test("attach for unknown module is a safe no-op", () => {
     const model = SpatialModel.getInstance();
     model.handleWpsEvent(makeUpdateEvent({ type: "module.attached", moduleid: "ghost" }));
     assert.equal(globalStore.get(model.spatialStateAtom), null);
+});
+
+test("synthetic surface NodeModel satisfies the interface without a LayoutModel", () => {
+    const nm = makeSurfaceNodeModel("blk-1");
+    assert.equal(nm.blockId, "blk-1");
+    assert.equal(nm.nodeId, "blk-1");
+    assert.equal(globalStore.get(nm.isFocused), true);
+    assert.equal(globalStore.get(nm.isMagnified), false);
+    assert.equal(globalStore.get(nm.anyMagnified), false);
+    assert.equal(globalStore.get(nm.isEphemeral), false);
+    assert.equal(globalStore.get(nm.isResizing), false);
+    assert.equal(globalStore.get(nm.disablePointerEvents), false);
+    assert.equal(globalStore.get(nm.ready), true);
+    assert.equal(globalStore.get(nm.numLeafs), 1);
+    assert.equal(globalStore.get(nm.blockNum), 1);
+    assert.doesNotThrow(() => nm.focusNode());
+    assert.doesNotThrow(() => nm.toggleMagnify());
+    assert.doesNotThrow(() => nm.addEphemeralNodeToLayout());
+    assert.doesNotThrow(() => nm.onClose());
+    assert.notEqual(nm.displayContainerRef, null);
 });

@@ -28,6 +28,11 @@ function makeBuilderRouteId(builderId: string): string {
     return `builder:${builderId}`;
 }
 
+// nexus: ventana spatial desacoplada = renderer propio con route surface:<id> (ADR-0006)
+function makeSurfaceRouteId(surfaceId: string): string {
+    return `surface:${surfaceId}`;
+}
+
 class WshRouter {
     routeMap: Map<string, AbstractWshClient>; // routeid -> client
     upstreamClient: AbstractWshClient;
@@ -157,4 +162,4 @@ class WshRouter {
     }
 }
 
-export { makeBuilderRouteId, makeFeBlockRouteId, makeTabRouteId, WshRouter };
+export { makeBuilderRouteId, makeFeBlockRouteId, makeSurfaceRouteId, makeTabRouteId, WshRouter };
