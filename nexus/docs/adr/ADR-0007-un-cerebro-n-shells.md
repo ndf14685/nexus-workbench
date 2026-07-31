@@ -97,10 +97,50 @@ Este ADR ejecuta ese swap contra el cerebro real.
 - (−) Polling transicional a 2000 ms contra /poll y /llm/job hasta M2;
   además /poll es drenante: si otro cliente (HUD) polea a la vez, los
   insights proactivos se reparten entre clientes. Se acepta hasta que el
-  cerebro tenga push + inbox por cliente para insights.
+  cerebro tenga push + inbox por cliente para insights. — RESUELTO en M2
+  (ver addendum).
 - (−) El progreso de tareas LLM no existe en el cerebro: la vista
   muestra progreso 0 (honesto) en lugar de una barra inventada.
 - (−) El contexto rico del Workbench (`WorkbenchContext`) aún no viaja:
   /intent solo acepta identidad de sesión y project. El registro de
   capabilities/contexto es M2.
 - (−) Token en texto plano en settings hasta migrar al secret store.
+
+## Addendum M2 (2026-07-31) — polling eliminado, cliente del protocolo v1.1
+
+M2 cumplido del lado Workbench contra el Jarvis Protocol v1.1
+(`docs/architecture/jarvis-protocol-v1.md` en `jarvis-openclaw-desktop`,
+fuente de verdad del alambre):
+
+- **SSE en vez de polling.** `HttpJarvisRuntime` consume `GET /events`
+  implementado sobre fetch + ReadableStream (`jarvis-sse.ts`), porque
+  EventSource no puede mandar el header `Authorization`. Framing
+  `id:/event:/data:` con parser puro testeable, reconexión con backoff
+  1 s / 2 s / 5 s / 10 s (tope), replay con `?since=<último id>` contra el
+  ring de 1000 eventos del cerebro, y watchdog de inactividad a 45 s
+  (3 pings de ~15 s perdidos).
+- **Registro de cliente.** En cada (re)conexión: `POST /clients/register`
+  con `client_id` estable por sesión (`wb-*`), `client_type: "workbench"` y
+  las capabilities `workspace.*` de la fachada espacial (loadLayout,
+  saveLayout, focusModule, restoreModule, detachModule, attachModule,
+  moveModule reversible-write; listMonitors, listLayouts read). Un único
+  `GET /state` de snapshot por conexión (§6 del protocolo).
+- **Eventos → vista.** `task.update` (transiciones de jobs LLM propios),
+  `inbox.message` (respuesta ruteada completa la tarea, misma traducción que
+  hacía el poll), `state` con `activity: "insights"` (mensajes proactivos),
+  `mode.changed` (evento `mode.changed` en el bus de Jarvis),
+  `capability.invoke` (ejecuta contra `workspace.*` y responde SIEMPRE
+  `POST /capability/result`, ok o error), `ping` (liveness).
+- **Resolución de moduleid.** Las capabilities aceptan un blockId directo
+  (UUID) o un tipo de módulo amigable ("term", "jarvis", …) que se resuelve
+  al primer bloque de ese tipo del tab activo (los detached siguen en
+  `tab.blockids`, así que quedan cubiertos).
+- **Fallback legacy.** El polling transicional a 2000 ms NO se borró: queda
+  solo como fallback explícito ante cerebros pre-v1.1 (404/501 en
+  `/clients/register` o `/events`), marcado como legacy en el código.
+- **Dialecto de alambre.** Los campos del protocolo son `snake_case`
+  (convención del cerebro, Python); la regla lowercase-JSON del repo aplica
+  a los tipos de Wave, no a este contrato externo.
+- La gobernanza de cada invocación cerebro→cliente queda del lado del
+  cerebro (PEP sobre `client.workbench.<capability>`); el Workbench ejecuta
+  bajo su jurisdicción local y reporta resultado honesto.
