@@ -4,17 +4,34 @@
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { fireAndForget } from "@/util/util";
-import { isDetachedModule } from "./spatial-model";
+import { isDetachedModule, SpatialModel } from "./spatial-model";
+
+function monitorDisplayLabel(monitor: MonitorInfo): string {
+    const base = monitor.label || `Monitor ${monitor.displayid}`;
+    return monitor.primary ? `${base} (principal)` : base;
+}
+
+// Helper puro (testeable sin RPC): un ítem por monitor, marcador
+// "(principal)", el monitor actual del módulo deshabilitado.
+export function buildMonitorSubmenu(
+    monitors: MonitorInfo[],
+    currentMonitorId: string,
+    onSelect: (monitorId: string) => void
+): ContextMenuItem[] {
+    return (monitors ?? []).map((monitor) => ({
+        label: monitorDisplayLabel(monitor),
+        enabled: monitor.monitorid !== currentMonitorId,
+        click: () => onSelect(monitor.monitorid),
+    }));
+}
 
 // Ítems espaciales del menú del block header (CONTRACTS §7). Visibilidad:
 // Pop Out solo con el módulo acoplado; Pop In (que en el MVP también cubre
-// "Move to Main Window") solo detached. Focus / Move to Monitor / Minimize /
-// Maximize / Return llegan con Tasks 9-10 y se OMITEN en vez de mostrarse
-// deshabilitados (nada de UI muerta). Cerrar acoplado ya existe como
-// "Close Block" estándar; cerrar desde detached requiere soporte del engine
-// (orden serializado attach+delete) y queda para Tasks 9-10 — mientras tanto
-// cerrar la ventana = Pop In y nunca se pierde el módulo (R12).
-export function buildSpatialMenuItems(blockId: string): ContextMenuItem[] {
+// "Move to Main Window") solo detached; Mover a monitor solo detached y con
+// catálogo disponible (se OMITE en vez de mostrarse deshabilitado). Cerrar
+// módulo (detached) usa SpatialCloseModuleCommand — cerrar la ventana sigue
+// siendo Pop In (R12); cerrar acoplado ya existe como "Close Block" estándar.
+export function buildSpatialMenuItems(blockId: string, monitors?: MonitorInfo[]): ContextMenuItem[] {
     if (!isDetachedModule(blockId)) {
         return [
             {
@@ -26,7 +43,7 @@ export function buildSpatialMenuItems(blockId: string): ContextMenuItem[] {
             },
         ];
     }
-    return [
+    const items: ContextMenuItem[] = [
         {
             label: "Acoplar a ventana principal",
             click: () =>
@@ -35,6 +52,25 @@ export function buildSpatialMenuItems(blockId: string): ContextMenuItem[] {
                 }),
         },
     ];
+    if (monitors?.length > 0) {
+        items.push({
+            label: "Mover a monitor",
+            type: "submenu",
+            submenu: buildMonitorSubmenu(monitors, SpatialModel.getInstance().getModuleMonitorId(blockId), (monitorId) =>
+                fireAndForget(async () => {
+                    await RpcApi.SpatialMoveCommand(TabRpcClient, { moduleid: blockId, monitorid: monitorId });
+                })
+            ),
+        });
+    }
+    items.push({
+        label: "Cerrar módulo",
+        click: () =>
+            fireAndForget(async () => {
+                await RpcApi.SpatialCloseModuleCommand(TabRpcClient, { moduleid: blockId });
+            }),
+    });
+    return items;
 }
 
 // Acciones tab-céntricas del menú estándar que no aplican dentro de una
@@ -59,14 +95,28 @@ function pruneConsecutiveSeparators(menu: ContextMenuItem[]): ContextMenuItem[] 
 
 // Punto único de entrada para el hook del block header: agrega los ítems
 // espaciales y, si el módulo está detached, poda las acciones no aplicables.
-export function applySpatialMenu(menu: ContextMenuItem[], blockId: string): ContextMenuItem[] {
+export function applySpatialMenu(menu: ContextMenuItem[], blockId: string, monitors?: MonitorInfo[]): ContextMenuItem[] {
     let base = menu;
     if (isDetachedModule(blockId)) {
         base = base.filter((item) => !NonApplicableWhenDetached.has(item.label));
     }
-    const spatialItems = buildSpatialMenuItems(blockId);
+    const spatialItems = buildSpatialMenuItems(blockId, monitors);
     if (spatialItems.length === 0) {
         return pruneConsecutiveSeparators(base);
     }
     return pruneConsecutiveSeparators([...base, { type: "separator" }, ...spatialItems]);
+}
+
+// Variante para el hook real: el submenu de monitores necesita el catálogo
+// (RPC al cache del engine); si la RPC falla el menú sale sin submenu.
+export async function applySpatialMenuAsync(menu: ContextMenuItem[], blockId: string): Promise<ContextMenuItem[]> {
+    let monitors: MonitorInfo[] = null;
+    if (isDetachedModule(blockId)) {
+        try {
+            monitors = await RpcApi.SpatialListMonitorsCommand(TabRpcClient);
+        } catch (e) {
+            console.error("spatial-menu: listing monitors failed", e);
+        }
+    }
+    return applySpatialMenu(menu, blockId, monitors);
 }

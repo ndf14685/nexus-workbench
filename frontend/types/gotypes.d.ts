@@ -653,6 +653,11 @@ declare global {
         moduleid: string;
     };
 
+    // wshrpc.CommandSpatialCloseModuleData
+    type CommandSpatialCloseModuleData = {
+        moduleid: string;
+    };
+
     // wshrpc.CommandSpatialDetachData
     type CommandSpatialDetachData = {
         moduleid: string;
@@ -664,6 +669,13 @@ declare global {
     // wshrpc.CommandSpatialGetStateData
     type CommandSpatialGetStateData = {
         workspaceid: string;
+    };
+
+    // wshrpc.CommandSpatialMoveData
+    type CommandSpatialMoveData = {
+        moduleid: string;
+        monitorid?: string;
+        placement?: SpatialPlacement;
     };
 
     // wshrpc.CommandStartBuilderData
@@ -1288,6 +1300,18 @@ declare global {
         contextbinding?: {[key: string]: string};
         createdts: number;
         updatedts: number;
+    };
+
+    // waveobj.MonitorInfo
+    type MonitorInfo = {
+        monitorid: string;
+        displayid: number;
+        label: string;
+        bounds: SpatialPlacement;
+        workarea: SpatialPlacement;
+        scalefactor: number;
+        primary: boolean;
+        internal: boolean;
     };
 
     // waveobj.MonitorMap

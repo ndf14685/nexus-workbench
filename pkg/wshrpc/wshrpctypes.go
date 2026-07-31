@@ -155,6 +155,10 @@ type WshRpcInterface interface {
 	SpatialGetStateCommand(ctx context.Context, data CommandSpatialGetStateData) (*waveobj.SpatialState, error)
 	SpatialDetachCommand(ctx context.Context, data CommandSpatialDetachData) (string, error) // → surfaceId
 	SpatialAttachCommand(ctx context.Context, data CommandSpatialAttachData) error
+	SpatialMoveCommand(ctx context.Context, data CommandSpatialMoveData) error
+	SpatialCloseModuleCommand(ctx context.Context, data CommandSpatialCloseModuleData) error
+	SpatialListMonitorsCommand(ctx context.Context) ([]waveobj.MonitorInfo, error)
+	SpatialUpdateMonitorsCommand(ctx context.Context, monitors []waveobj.MonitorInfo) error
 
 	// terminal
 	VDomCreateContextCommand(ctx context.Context, data vdom.VDomCreateContext) (*waveobj.ORef, error)
@@ -514,6 +518,17 @@ type CommandSpatialDetachData struct {
 }
 
 type CommandSpatialAttachData struct {
+	ModuleId string `json:"moduleid"`
+}
+
+type CommandSpatialMoveData struct {
+	ModuleId  string                    `json:"moduleid"`
+	MonitorId string                    `json:"monitorid,omitempty"`
+	Placement *waveobj.SpatialPlacement `json:"placement,omitempty"`
+	// MonitorId sin Placement = mover conservando offset relativo (patrón moveWindowToDisplay)
+}
+
+type CommandSpatialCloseModuleData struct {
 	ModuleId string `json:"moduleid"`
 }
 

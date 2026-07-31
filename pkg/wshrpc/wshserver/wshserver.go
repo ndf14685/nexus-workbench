@@ -1043,6 +1043,40 @@ func (ws *WshServer) SpatialAttachCommand(ctx context.Context, data wshrpc.Comma
 	return nil
 }
 
+func (ws *WshServer) SpatialMoveCommand(ctx context.Context, data wshrpc.CommandSpatialMoveData) error {
+	ctx = waveobj.ContextWithUpdates(ctx)
+	if err := spatial.Move(ctx, data.ModuleId, data.MonitorId, data.Placement); err != nil {
+		return fmt.Errorf("error moving module: %w", err)
+	}
+	updates := waveobj.ContextGetUpdatesRtn(ctx)
+	wps.Broker.SendUpdateEvents(updates)
+	return nil
+}
+
+func (ws *WshServer) SpatialCloseModuleCommand(ctx context.Context, data wshrpc.CommandSpatialCloseModuleData) error {
+	ctx = waveobj.ContextWithUpdates(ctx)
+	if err := spatial.CloseModule(ctx, data.ModuleId); err != nil {
+		return fmt.Errorf("error closing module: %w", err)
+	}
+	updates := waveobj.ContextGetUpdatesRtn(ctx)
+	wps.Broker.SendUpdateEvents(updates)
+	return nil
+}
+
+func (ws *WshServer) SpatialListMonitorsCommand(ctx context.Context) ([]waveobj.MonitorInfo, error) {
+	return spatial.ListMonitors(), nil
+}
+
+func (ws *WshServer) SpatialUpdateMonitorsCommand(ctx context.Context, monitors []waveobj.MonitorInfo) error {
+	ctx = waveobj.ContextWithUpdates(ctx)
+	if err := spatial.UpdateMonitors(ctx, monitors); err != nil {
+		return fmt.Errorf("error updating monitors: %w", err)
+	}
+	updates := waveobj.ContextGetUpdatesRtn(ctx)
+	wps.Broker.SendUpdateEvents(updates)
+	return nil
+}
+
 func (ws *WshServer) ListAllAppsCommand(ctx context.Context) ([]wshrpc.AppInfo, error) {
 	return waveappstore.ListAllApps()
 }

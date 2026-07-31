@@ -4,7 +4,7 @@
 import { globalStore } from "@/app/store/jotaiStore";
 import { assert, beforeEach, test } from "vitest";
 import { getSpatialBus, resetSpatialBus, SpatialBus } from "./spatial-bus";
-import { applySpatialMenu, buildSpatialMenuItems } from "./spatial-menu";
+import { applySpatialMenu, buildMonitorSubmenu, buildSpatialMenuItems } from "./spatial-menu";
 import { makeSurfaceNodeModel } from "./surface-node-model";
 import { isDetachedModule, shouldPreserveBlockOnDelete, SpatialModel } from "./spatial-model";
 
@@ -168,13 +168,81 @@ test("spatial menu: docked shows Pop Out only", () => {
     );
 });
 
-test("spatial menu: detached shows Pop In only", () => {
+test("spatial menu: detached shows Pop In and Close", () => {
     detachModuleForTest("blk-1", "surf-1");
     const items = buildSpatialMenuItems("blk-1");
     assert.deepEqual(
         items.map((it) => it.label),
-        ["Acoplar a ventana principal"]
+        ["Acoplar a ventana principal", "Cerrar módulo"]
     );
+});
+
+function makeMonitor(monitorid: string, label: string, primary: boolean): MonitorInfo {
+    return {
+        monitorid,
+        displayid: 1,
+        label,
+        bounds: { x: 0, y: 0, width: 1920, height: 1080 },
+        workarea: { x: 0, y: 30, width: 1920, height: 1050 },
+        scalefactor: 1,
+        primary,
+        internal: false,
+    };
+}
+
+test("spatial menu: detached with monitor catalog shows Move to Monitor submenu", () => {
+    detachModuleForTest("blk-1", "surf-1");
+    const monitors = [makeMonitor("A|1920x1080@1", "A", true), makeMonitor("B|1920x1080@1", "B", false)];
+    const items = buildSpatialMenuItems("blk-1", monitors);
+    assert.deepEqual(
+        items.map((it) => it.label),
+        ["Acoplar a ventana principal", "Mover a monitor", "Cerrar módulo"]
+    );
+    const submenu = items.find((it) => it.label === "Mover a monitor");
+    assert.equal(submenu.type, "submenu");
+    assert.equal(submenu.submenu.length, 2);
+});
+
+test("buildMonitorSubmenu: labels, principal marker, current disabled, click selects", () => {
+    const monitors = [makeMonitor("A|1920x1080@1", "A", true), makeMonitor("B|1920x1080@1", "B", false), makeMonitor("77|1024x768@1", "", false)];
+    const selected: string[] = [];
+    const items = buildMonitorSubmenu(monitors, "B|1920x1080@1", (monitorId) => selected.push(monitorId));
+    assert.deepEqual(
+        items.map((it) => it.label),
+        ["A (principal)", "B", "Monitor 1"]
+    );
+    assert.deepEqual(
+        items.map((it) => it.enabled),
+        [true, false, true]
+    );
+    items[0].click();
+    items[2].click();
+    assert.deepEqual(selected, ["A|1920x1080@1", "77|1024x768@1"]);
+});
+
+test("buildMonitorSubmenu: empty catalog yields no items", () => {
+    assert.deepEqual(buildMonitorSubmenu([], "", () => {}), []);
+    assert.deepEqual(buildMonitorSubmenu(null, "", () => {}), []);
+});
+
+test("module.moved delta updates placement and monitor in state", () => {
+    const model = SpatialModel.getInstance();
+    detachModuleForTest("blk-1", "surf-1");
+    model.handleWpsEvent(
+        makeUpdateEvent({
+            type: "module.moved",
+            moduleid: "blk-1",
+            monitorid: "B|1920x1080@1",
+            payload: { x: 100, y: 200, width: 800, height: 600 } as any,
+        })
+    );
+    const st = globalStore.get(model.spatialStateAtom);
+    assert.equal(st.modules["blk-1"].monitorid, "B|1920x1080@1");
+    assert.equal(st.modules["blk-1"].placement.x, 100);
+    assert.equal(model.getModuleMonitorId("blk-1"), "B|1920x1080@1");
+    // moved de un módulo desconocido no crea entradas fantasma
+    model.handleWpsEvent(makeUpdateEvent({ type: "module.moved", moduleid: "ghost", payload: { x: 1, y: 1, width: 10, height: 10 } as any }));
+    assert.isUndefined(globalStore.get(model.spatialStateAtom).modules["ghost"]);
 });
 
 test("spatial menu: visibility flips after attach", () => {
@@ -212,7 +280,7 @@ test("applySpatialMenu prunes tab-centric actions when detached (R11)", () => {
     const menu = applySpatialMenu(base, "blk-1");
     assert.deepEqual(
         menu.map((it) => it.label ?? "|"),
-        ["Copy BlockId", "|", "Acoplar a ventana principal"]
+        ["Copy BlockId", "|", "Acoplar a ventana principal", "Cerrar módulo"]
     );
 });
 

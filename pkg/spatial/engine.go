@@ -159,14 +159,106 @@ func moveDetached(ctx context.Context, st *SpatialState, mi *ModuleInstance, opt
 	if err := SaveSpatialState(ctx, st); err != nil {
 		return "", fmt.Errorf("persisting spatial state: %w", err)
 	}
+	// Payload = solo lo pedido (nil en moves de monitor puro): emain distingue
+	// "aplicar bounds" de "mover al monitor conservando offset" (CONTRATOS §1)
+	// y el eco de un self-report de bounds queda idéntico a lo ya aplicado.
 	publishSpatialEvent(SpatialEventData{
 		Type:        SpatialEvent_ModuleMoved,
 		WorkspaceId: st.WorkspaceId,
 		ModuleId:    mi.Id,
 		SurfaceId:   mi.CurrentSurfaceId,
 		MonitorId:   mi.MonitorId,
-	}, mi.Placement)
+	}, opts.Placement)
 	return mi.CurrentSurfaceId, nil
+}
+
+// Move persiste placement y/o monitor de un módulo detached (CONTRACTS §1).
+// MonitorId sin Placement = conservar offset relativo: los bounds reales los
+// computa emain al materializar; el engine solo persiste lo que le dicen.
+func Move(ctx context.Context, moduleId string, monitorId string, placement *SpatialPlacement) error {
+	if moduleId == "" {
+		return fmt.Errorf("moduleid is required")
+	}
+	workspaceId, err := findWorkspaceForModule(ctx, moduleId)
+	if err != nil {
+		return err
+	}
+	lock := getWorkspaceLock(workspaceId)
+	lock.Lock()
+	defer lock.Unlock()
+	st, err := GetOrCreateSpatialState(ctx, workspaceId)
+	if err != nil {
+		return err
+	}
+	mi := st.Modules[moduleId]
+	if mi == nil || !mi.IsDetached {
+		return fmt.Errorf("module %s is not detached", moduleId)
+	}
+	_, err = moveDetached(ctx, st, mi, DetachOpts{MonitorId: monitorId, Placement: placement})
+	return err
+}
+
+// CloseModule cierra de verdad un módulo detached (a diferencia de cerrar la
+// ventana, que es Pop In por política R12): limpia el estado espacial,
+// publica surface.closed (emain cierra la ventana con engineClosing) y recién
+// entonces borra el bloque. recursive=false: cerrar un detached nunca debe
+// cascadear al cierre del tab/ventana principal.
+func CloseModule(ctx context.Context, moduleId string) error {
+	if moduleId == "" {
+		return fmt.Errorf("moduleid is required")
+	}
+	workspaceId, err := findWorkspaceForModule(ctx, moduleId)
+	if err != nil {
+		return err
+	}
+	lock := getWorkspaceLock(workspaceId)
+	lock.Lock()
+	defer lock.Unlock()
+	st, err := GetOrCreateSpatialState(ctx, workspaceId)
+	if err != nil {
+		return err
+	}
+	mi := st.Modules[moduleId]
+	if mi == nil || !mi.IsDetached {
+		return fmt.Errorf("module %s is not detached; use the standard block close", moduleId)
+	}
+	surfaceId := mi.CurrentSurfaceId
+	delete(st.Modules, moduleId)
+	delete(st.Surfaces, surfaceId)
+	delete(st.FocusSnapshots, moduleId)
+	if err := SaveSpatialState(ctx, st); err != nil {
+		return fmt.Errorf("persisting spatial state: %w", err)
+	}
+	publishSpatialEvent(SpatialEventData{
+		Type:        SpatialEvent_SurfaceClosed,
+		WorkspaceId: workspaceId,
+		ModuleId:    moduleId,
+		SurfaceId:   surfaceId,
+	}, nil)
+	publishSpatialEvent(SpatialEventData{
+		Type:        SpatialEvent_ModuleClosed,
+		WorkspaceId: workspaceId,
+		ModuleId:    moduleId,
+	}, nil)
+	if err := wcore.DeleteBlock(ctx, moduleId, false); err != nil {
+		return fmt.Errorf("deleting block %s: %w", moduleId, err)
+	}
+	return nil
+}
+
+func findWorkspaceForModule(ctx context.Context, moduleId string) (string, error) {
+	tabId, err := wstore.DBFindTabForBlockId(ctx, moduleId)
+	if err != nil {
+		return "", fmt.Errorf("finding tab for module %s: %w", moduleId, err)
+	}
+	workspaceId, err := wstore.DBFindWorkspaceForTabId(ctx, tabId)
+	if err != nil {
+		return "", fmt.Errorf("finding workspace for tab %s: %w", tabId, err)
+	}
+	if workspaceId == "" {
+		return "", fmt.Errorf("no workspace found for tab %s", tabId)
+	}
+	return workspaceId, nil
 }
 
 func Attach(ctx context.Context, moduleId string) error {

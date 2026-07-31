@@ -3,19 +3,6 @@
 
 import type { WorkbenchContext } from "@/app/nexus/jarvis/jarvis-types";
 
-// Matches spatial.MonitorInfo (Go json tags). Local until the RPC that
-// references it lands and tsgen emits the global type.
-export type MonitorInfo = {
-    monitorid: string;
-    displayid: number;
-    label: string;
-    bounds: SpatialPlacement;
-    workarea: SpatialPlacement;
-    scalefactor: number;
-    primary: boolean;
-    internal: boolean;
-};
-
 export interface SpatialEventMap {
     "module.created": { moduleId: string };
     "module.closed": { moduleId: string };

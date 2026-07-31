@@ -185,6 +185,9 @@ async function initWave(initOpts: WaveInitOpts) {
         ]);
         loadAllWorkspaceTabs(ws);
         WOS.wpsSubscribeToObject(WOS.makeORef("workspace", waveWindow.workspaceid));
+        // nexus: sin esto los guards R1 y el menú espacial de la ventana
+        // principal quedan ciegos (el modelo solo arrancaba en initSurface)
+        SpatialModel.getInstance().start(waveWindow.workspaceid);
         document.title = `Nexus Workbench - ${initialTab.name}`; // TODO update with tab name change
     } catch (e) {
         console.error("Failed initialization error", e);

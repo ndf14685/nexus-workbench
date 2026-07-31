@@ -72,6 +72,7 @@ type (
 	DockMemory       = waveobj.DockMemory
 	FocusSnapshot    = waveobj.FocusSnapshot
 	MonitorMap       = waveobj.MonitorMap
+	MonitorInfo      = waveobj.MonitorInfo
 )
 
 type SpatialEventData struct {
@@ -83,13 +84,3 @@ type SpatialEventData struct {
 	Payload     json.RawMessage `json:"payload,omitempty"`
 }
 
-type MonitorInfo struct {
-	MonitorId   string            `json:"monitorid"`
-	DisplayId   int               `json:"displayid"`
-	Label       string            `json:"label"`
-	Bounds      *SpatialPlacement `json:"bounds"`
-	WorkArea    *SpatialPlacement `json:"workarea"`
-	ScaleFactor float64           `json:"scalefactor"`
-	Primary     bool              `json:"primary"`
-	Internal    bool              `json:"internal"`
-}

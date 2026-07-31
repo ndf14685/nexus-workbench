@@ -884,6 +884,12 @@ func SpatialAttachCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialAttachDat
 	return err
 }
 
+// command "spatialclosemodule", wshserver.SpatialCloseModuleCommand
+func SpatialCloseModuleCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialCloseModuleData, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "spatialclosemodule", data, opts)
+	return err
+}
+
 // command "spatialdetach", wshserver.SpatialDetachCommand
 func SpatialDetachCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialDetachData, opts *wshrpc.RpcOpts) (string, error) {
 	resp, err := sendRpcRequestCallHelper[string](w, "spatialdetach", data, opts)
@@ -894,6 +900,24 @@ func SpatialDetachCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialDetachDat
 func SpatialGetStateCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialGetStateData, opts *wshrpc.RpcOpts) (*waveobj.SpatialState, error) {
 	resp, err := sendRpcRequestCallHelper[*waveobj.SpatialState](w, "spatialgetstate", data, opts)
 	return resp, err
+}
+
+// command "spatiallistmonitors", wshserver.SpatialListMonitorsCommand
+func SpatialListMonitorsCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]waveobj.MonitorInfo, error) {
+	resp, err := sendRpcRequestCallHelper[[]waveobj.MonitorInfo](w, "spatiallistmonitors", nil, opts)
+	return resp, err
+}
+
+// command "spatialmove", wshserver.SpatialMoveCommand
+func SpatialMoveCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialMoveData, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "spatialmove", data, opts)
+	return err
+}
+
+// command "spatialupdatemonitors", wshserver.SpatialUpdateMonitorsCommand
+func SpatialUpdateMonitorsCommand(w *wshutil.WshRpc, data []waveobj.MonitorInfo, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "spatialupdatemonitors", data, opts)
+	return err
 }
 
 // command "startbuilder", wshserver.StartBuilderCommand

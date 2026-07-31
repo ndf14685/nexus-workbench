@@ -39,6 +39,7 @@ import {
     unameArch,
     unamePlatform,
 } from "./emain-platform";
+import { initDisplays } from "./emain-displays"; // nexus:
 import { getAllSpatialWindows, initSpatialEventSubscription, reconcileSpatialWindows } from "./emain-spatial"; // nexus:
 import { ensureHotSpareTab, setMaxTabCacheSize } from "./emain-tabview";
 import { getIsWaveSrvDead, getWaveSrvProc, getWaveSrvReady, runWaveSrv } from "./emain-wavesrv";
@@ -414,6 +415,7 @@ async function appMain() {
         initElectronWshrpc(ElectronWshClient, { authKey: AuthKey });
         initMenuEventSubscriptions();
         initSpatialEventSubscription(); // nexus: reaccionar a detach/attach espacial
+        initDisplays(getAllSpatialWindows); // nexus: catálogo de monitores → engine (Task 9)
     } catch (e) {
         console.log("error initializing wshrpc", e);
     }

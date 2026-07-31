@@ -10,6 +10,7 @@ import { BrowserWindow, screen } from "electron";
 import path from "path";
 import { debounce } from "throttle-debounce";
 import { getGlobalIsQuitting, getGlobalIsRelaunching } from "./emain-activity";
+import { computeMonitorId, moveWindowToDisplayPreservingOffset, resolveMonitor } from "./emain-displays";
 import { getElectronAppBasePath, isDevVite, unamePlatform } from "./emain-platform";
 import { ensureBoundsAreVisible } from "./emain-util";
 import { getAllWaveWindows } from "./emain-window";
@@ -76,10 +77,9 @@ function computeSurfaceBounds(surface: Surface, module: ModuleInstance): Electro
     };
 }
 
-// The window's live bounds persist through the engine's move path. The
-// dedicated SpatialMoveCommand arrives with Task 9; until then we reuse the
-// documented idempotent semantics of Detach on an already-detached module
-// (= move, CONTRACTS §1) so bounds survive restarts without new RPCs.
+// Self-report de bounds de la ventana viva → SpatialMoveCommand (CONTRACTS
+// §1). Incluye el monitorId del display actual para que arrastrar la ventana
+// entre monitores mantenga ModuleInstance.MonitorId al día.
 function reportSurfaceBounds(win: SpatialWindowType) {
     if (win.isDestroyed() || win.engineClosing) {
         return;
@@ -87,8 +87,9 @@ function reportSurfaceBounds(win: SpatialWindowType) {
     const bounds = win.getBounds();
     fireAndForget(async () => {
         try {
-            await RpcApi.SpatialDetachCommand(ElectronWshClient, {
+            await RpcApi.SpatialMoveCommand(ElectronWshClient, {
                 moduleid: win.moduleId,
+                monitorid: computeMonitorId(screen.getDisplayMatching(bounds)),
                 placement: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
             });
         } catch (e) {
@@ -192,6 +193,58 @@ function closeSpatialWindowFromEngine(win: SpatialWindowType) {
     win.close();
 }
 
+// json.RawMessage llega inline como objeto por el bridge WPS, pero el tipo
+// generado dice string; se aceptan ambos (mismo criterio que spatial-model).
+function parseSpatialPayload(payload: unknown): any {
+    if (payload == null) {
+        return null;
+    }
+    if (typeof payload !== "string") {
+        return payload;
+    }
+    try {
+        return JSON.parse(payload);
+    } catch (e) {
+        console.log("spatial: invalid event payload", e);
+        return null;
+    }
+}
+
+// module.moved del engine → materializar en la ventana. Payload con placement
+// = aplicar bounds (validados con ensureBoundsAreVisible, R5: lo guardado no
+// se corrige, solo la materialización); sin placement pero con monitorid =
+// mover al monitor conservando offset. El guard de igualdad corta el eco del
+// self-report de bounds (el evento vuelve con lo que la ventana ya tiene).
+function applyModuleMove(data: SpatialEventData) {
+    const win = getSpatialWindowByModuleId(data.moduleid);
+    if (win == null || win.isDestroyed() || win.engineClosing) {
+        return;
+    }
+    const placement = parseSpatialPayload(data.payload) as SpatialPlacement;
+    if (placement != null && placement.width > 0 && placement.height > 0) {
+        const target = ensureBoundsAreVisible({
+            x: Math.round(placement.x),
+            y: Math.round(placement.y),
+            width: Math.round(placement.width),
+            height: Math.round(placement.height),
+        });
+        const cur = win.getBounds();
+        if (cur.x !== target.x || cur.y !== target.y || cur.width !== target.width || cur.height !== target.height) {
+            win.setBounds(target);
+        }
+        return;
+    }
+    if (!data.monitorid) {
+        return;
+    }
+    const targetDisplay = resolveMonitor(data.monitorid, win.getBounds());
+    if (targetDisplay == null) {
+        console.log("spatial: monitor not found for move", data.monitorid);
+        return;
+    }
+    moveWindowToDisplayPreservingOffset(win, targetDisplay);
+}
+
 async function handleModuleDetached(data: SpatialEventData) {
     const state = await RpcApi.SpatialGetStateCommand(ElectronWshClient, { workspaceid: data.workspaceid });
     const module = state?.modules?.[data.moduleid];
@@ -223,6 +276,9 @@ function handleSpatialEvent(event: WaveEvent) {
                 break;
             case "surface.closed":
                 closeSpatialWindowFromEngine(spatialWindows.get(data.surfaceid));
+                break;
+            case "module.moved":
+                applyModuleMove(data);
                 break;
         }
     });

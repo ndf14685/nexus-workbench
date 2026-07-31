@@ -131,6 +131,7 @@ declare global {
         onWaveInit: (callback: (initOpts: WaveInitOpts) => void) => void; // wave-init
         onBuilderInit: (callback: (initOpts: BuilderInitOpts) => void) => void; // builder-init
         onSpatialInit: (callback: (initOpts: SpatialInitOpts) => void) => void; // nexus: spatial-init
+        getDisplays: () => Promise<MonitorInfo[]>; // nexus: get-displays (spatial CONTRACTS §5)
         sendLog: (log: string) => void; // fe-log
         onQuicklook: (filePath: string) => void; // quicklook
         openNativePath(filePath: string): void; // open-native-path

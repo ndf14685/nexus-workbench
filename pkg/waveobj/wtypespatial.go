@@ -103,3 +103,16 @@ type MonitorMap struct {
 	Modules     map[string]*SpatialPlacement `json:"modules"` // placement original por moduleId
 	LostTs      int64                        `json:"lostts"`
 }
+
+// Vive en waveobj (no en pkg/spatial) porque las RPCs de wshrpctypes lo
+// referencian y pkg/spatial ciclaría vía spatial→wcore→wshrpc.
+type MonitorInfo struct {
+	MonitorId   string            `json:"monitorid"`
+	DisplayId   int               `json:"displayid"`
+	Label       string            `json:"label"`
+	Bounds      *SpatialPlacement `json:"bounds"`
+	WorkArea    *SpatialPlacement `json:"workarea"`
+	ScaleFactor float64           `json:"scalefactor"`
+	Primary     bool              `json:"primary"`
+	Internal    bool              `json:"internal"`
+}

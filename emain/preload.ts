@@ -58,6 +58,7 @@ contextBridge.exposeInMainWorld("api", {
     onBuilderInit: (callback) => ipcRenderer.on("builder-init", (_event, initOpts) => callback(initOpts)),
     // nexus: spatial detached windows (patrón builder-init)
     onSpatialInit: (callback) => ipcRenderer.on("spatial-init", (_event, initOpts) => callback(initOpts)),
+    getDisplays: () => ipcRenderer.invoke("get-displays"), // nexus: catálogo MonitorInfo (CONTRACTS §5)
     sendLog: (log) => ipcRenderer.send("fe-log", log),
     onQuicklook: (filePath: string) => ipcRenderer.send("quicklook", filePath),
     openNativePath: (filePath: string) => ipcRenderer.send("open-native-path", filePath),

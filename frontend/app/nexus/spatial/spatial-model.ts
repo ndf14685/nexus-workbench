@@ -4,8 +4,11 @@
 import type { WorkbenchContext } from "@/app/nexus/jarvis/jarvis-types";
 import { globalStore } from "@/app/store/jotaiStore";
 import { waveEventSubscribeSingle } from "@/app/store/wps";
+import { RpcApi } from "@/app/store/wshclientapi";
+import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { fireAndForget } from "@/util/util";
 import * as jotai from "jotai";
-import { getSpatialBus, MonitorInfo, SpatialBus, SpatialEventName } from "./spatial-bus";
+import { getSpatialBus, SpatialBus, SpatialEventName } from "./spatial-bus";
 
 function parsePayload(payload: unknown): any {
     if (payload == null) {
@@ -106,6 +109,24 @@ export class SpatialModel {
             scope: `workspace:${workspaceId}`,
             handler: (event) => this.handleWpsEvent(event),
         });
+        this.refreshState();
+    }
+
+    // Carga autoritativa del estado (tras un reinicio los deltas no alcanzan:
+    // los guards y la visibilidad del menú necesitan lo persistido). Un evento
+    // que llegue durante el vuelo puede pisarse; el próximo delta lo corrige.
+    refreshState(): void {
+        const workspaceId = this.workspaceId;
+        if (workspaceId == null) {
+            return;
+        }
+        fireAndForget(async () => {
+            const st = await RpcApi.SpatialGetStateCommand(TabRpcClient, { workspaceid: workspaceId });
+            if (this.workspaceId !== workspaceId || st == null) {
+                return;
+            }
+            globalStore.set(this.spatialStateAtom, st);
+        });
     }
 
     stop(): void {
@@ -144,7 +165,22 @@ export class SpatialModel {
             globalStore.set(this.spatialStateAtom, st);
             return;
         }
-        if (data.type === "module.attached") {
+        if (data.type === "module.moved") {
+            const cur = globalStore.get(this.spatialStateAtom);
+            if (cur?.modules?.[data.moduleid] == null) {
+                return;
+            }
+            const st = this.cloneState(data.workspaceid);
+            const placement = payload as SpatialPlacement;
+            st.modules[data.moduleid] = {
+                ...st.modules[data.moduleid],
+                ...(placement != null ? { placement } : {}),
+                monitorid: data.monitorid ?? "",
+            };
+            globalStore.set(this.spatialStateAtom, st);
+            return;
+        }
+        if (data.type === "module.attached" || data.type === "module.closed") {
             const cur = globalStore.get(this.spatialStateAtom);
             if (cur?.modules?.[data.moduleid] == null) {
                 return;
@@ -157,6 +193,11 @@ export class SpatialModel {
             }
             globalStore.set(this.spatialStateAtom, st);
         }
+    }
+
+    getModuleMonitorId(moduleId: string): string {
+        const st = globalStore.get(this.spatialStateAtom);
+        return st?.modules?.[moduleId]?.monitorid ?? "";
     }
 
     cloneState(workspaceId: string): SpatialState {

@@ -888,6 +888,12 @@ export class RpcApiType {
         return client.wshRpcCall("spatialattach", data, opts);
     }
 
+    // command "spatialclosemodule" [call]
+    SpatialCloseModuleCommand(client: WshClient, data: CommandSpatialCloseModuleData, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "spatialclosemodule", data, opts);
+        return client.wshRpcCall("spatialclosemodule", data, opts);
+    }
+
     // command "spatialdetach" [call]
     SpatialDetachCommand(client: WshClient, data: CommandSpatialDetachData, opts?: RpcOpts): Promise<string> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "spatialdetach", data, opts);
@@ -898,6 +904,24 @@ export class RpcApiType {
     SpatialGetStateCommand(client: WshClient, data: CommandSpatialGetStateData, opts?: RpcOpts): Promise<SpatialState> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "spatialgetstate", data, opts);
         return client.wshRpcCall("spatialgetstate", data, opts);
+    }
+
+    // command "spatiallistmonitors" [call]
+    SpatialListMonitorsCommand(client: WshClient, opts?: RpcOpts): Promise<MonitorInfo[]> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "spatiallistmonitors", null, opts);
+        return client.wshRpcCall("spatiallistmonitors", null, opts);
+    }
+
+    // command "spatialmove" [call]
+    SpatialMoveCommand(client: WshClient, data: CommandSpatialMoveData, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "spatialmove", data, opts);
+        return client.wshRpcCall("spatialmove", data, opts);
+    }
+
+    // command "spatialupdatemonitors" [call]
+    SpatialUpdateMonitorsCommand(client: WshClient, data: MonitorInfo[], opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "spatialupdatemonitors", data, opts);
+        return client.wshRpcCall("spatialupdatemonitors", data, opts);
     }
 
     // command "startbuilder" [call]
