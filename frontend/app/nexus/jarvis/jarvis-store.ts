@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { JarvisBus } from "./jarvis-bus";
-import { JarvisActivityState, JarvisTask, JarvisTaskState } from "./jarvis-types";
+import { JarvisActivityState, JarvisConnectionState, JarvisTask, JarvisTaskState } from "./jarvis-types";
 
 const TerminalStates: JarvisTaskState[] = ["completed", "cancelled", "error"];
 
@@ -37,6 +37,21 @@ export function deriveActivityState(tasks: JarvisTask[], interaction: JarvisActi
         return "success";
     }
     return "idle";
+}
+
+// Surface honesty (ADR-0007, deuda de ADR-0005): what the block must admit
+// about itself. "preview" = mock runtime, always badged; "disconnected" =
+// real brain configured but unreachable; "live" = showing the brain's truth.
+export type JarvisSurfaceMode = "live" | "preview" | "disconnected";
+
+export function deriveSurfaceMode(connection: JarvisConnectionState): JarvisSurfaceMode {
+    if (connection === "mock") {
+        return "preview";
+    }
+    if (connection === "disconnected") {
+        return "disconnected";
+    }
+    return "live";
 }
 
 // Pure task-list reducer used by the store (and unit tests): returns a new

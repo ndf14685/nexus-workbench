@@ -8,7 +8,7 @@ import { useAtomValue } from "jotai";
 import { memo, useEffect, useRef, useState } from "react";
 import { JarvisCore } from "./jarvis-core";
 import { JarvisRing } from "./jarvis-ring";
-import { activeTasks, isTerminalTaskState, unseenResults } from "./jarvis-store";
+import { activeTasks, deriveSurfaceMode, isTerminalTaskState, unseenResults } from "./jarvis-store";
 import { JarvisActivityState, JarvisTask } from "./jarvis-types";
 
 const StateLabels: Record<JarvisActivityState, string> = {
@@ -39,6 +39,47 @@ function sizeModeFor(width: number, height: number): SizeMode {
     }
     return "large";
 }
+
+// ADR-0007 §5: the mock must never pass for the real brain — persistent badge.
+const PreviewBadge = memo(() => (
+    <div className="absolute top-1 right-1 z-10 px-1.5 py-0.5 rounded text-xxs tracking-wider text-[#d29922] border border-[#d29922]/40 bg-[#d29922]/10 pointer-events-none">
+        PREVIEW · simulado
+    </div>
+));
+PreviewBadge.displayName = "PreviewBadge";
+
+const DisconnectedView = memo(({ compact }: { compact: boolean }) => {
+    const core = JarvisCore.getInstance();
+    if (compact) {
+        return (
+            <div
+                className="flex items-center justify-center w-full h-full cursor-pointer"
+                title="Jarvis — cerebro no conectado (click para reintentar)"
+                onClick={() => core.retryConnection()}
+            >
+                <JarvisRing state="error" size={90} />
+            </div>
+        );
+    }
+    return (
+        <div className="flex flex-col items-center justify-center gap-2 w-full h-full p-3">
+            <JarvisRing state="error" size={110} />
+            <div className="text-sm text-error">Cerebro no conectado</div>
+            <div className="text-xs text-muted text-center max-w-[320px]">
+                jarvisd (nexus:jarvisbrainurl) no responde. El bloque muestra el estado real del cerebro; sin
+                conexión no hay Jarvis que mostrar.
+            </div>
+            <button
+                className="px-3 py-1 rounded-md text-sm bg-accent/80 text-primary hover:bg-accent transition-colors cursor-pointer"
+                onClick={() => core.retryConnection()}
+            >
+                <i className="fa fa-solid fa-rotate-right mr-1.5" />
+                Reintentar
+            </button>
+        </div>
+    );
+});
+DisconnectedView.displayName = "DisconnectedView";
 
 const PushToTalkButton = memo(({ listening }: { listening: boolean }) => {
     const core = JarvisCore.getInstance();
@@ -200,6 +241,7 @@ const JarvisView = memo(({ blockId, contentRef, model }: ViewComponentProps<Jarv
     const transcript = useAtomValue(core.transcriptAtom);
     const ctx = useAtomValue(core.contextAtom);
     const interaction = useAtomValue(core.interactionAtom);
+    const connection = useAtomValue(core.connectionAtom);
     const [sizeMode, setSizeMode] = useState<SizeMode>("large");
     const [order, setOrder] = useState("");
     const containerRef = useRef<HTMLDivElement>(null);
@@ -225,15 +267,27 @@ const JarvisView = memo(({ blockId, contentRef, model }: ViewComponentProps<Jarv
     const pending = unseenResults(tasks);
     const history = tasks.filter((t) => isTerminalTaskState(t.state));
     const listening = interaction === "listening";
+    const surface = deriveSurfaceMode(connection);
+
+    if (surface === "disconnected") {
+        return (
+            <div ref={containerRef} className="relative w-full h-full">
+                <DisconnectedView compact={sizeMode === "compact"} />
+            </div>
+        );
+    }
+
+    const badge = surface === "preview" ? <PreviewBadge /> : null;
 
     if (sizeMode === "compact") {
         return (
             <div
                 ref={containerRef}
-                className="flex items-center justify-center w-full h-full cursor-pointer"
-                title={`Jarvis — ${StateLabels[activity]}${active.length ? ` (${active.length} tareas)` : ""}`}
+                className="relative flex items-center justify-center w-full h-full cursor-pointer"
+                title={`Jarvis — ${StateLabels[activity]}${active.length ? ` (${active.length} tareas)` : ""}${surface === "preview" ? " — PREVIEW simulado" : ""}`}
                 onClick={() => core.pushToTalk()}
             >
+                {badge}
                 <JarvisRing state={activity} size={90} />
             </div>
         );
@@ -241,7 +295,8 @@ const JarvisView = memo(({ blockId, contentRef, model }: ViewComponentProps<Jarv
 
     if (sizeMode === "medium") {
         return (
-            <div ref={containerRef} className="flex flex-col items-center justify-center gap-2 w-full h-full p-2">
+            <div ref={containerRef} className="relative flex flex-col items-center justify-center gap-2 w-full h-full p-2">
+                {badge}
                 <JarvisRing state={activity} size={110} />
                 <div className="text-sm text-primary">{StateLabels[activity]}</div>
                 <div className="text-xs text-secondary">
@@ -254,7 +309,8 @@ const JarvisView = memo(({ blockId, contentRef, model }: ViewComponentProps<Jarv
     }
 
     return (
-        <div ref={containerRef} className="flex flex-col gap-3 w-full h-full p-3 overflow-y-auto">
+        <div ref={containerRef} className="relative flex flex-col gap-3 w-full h-full p-3 overflow-y-auto">
+            {badge}
             <div className="flex items-center gap-4 shrink-0">
                 <JarvisRing state={activity} size={72} />
                 <div className="flex flex-col gap-1 min-w-0 flex-1">

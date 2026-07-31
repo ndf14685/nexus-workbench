@@ -7,6 +7,7 @@ import { MockJarvisRuntime } from "./jarvis-runtime-mock";
 import {
     applyTaskTransition,
     deriveActivityState,
+    deriveSurfaceMode,
     JarvisTaskStore,
     upsertTask,
 } from "./jarvis-store";
@@ -84,6 +85,12 @@ test("store emits lifecycle events through the bus", () => {
     store.updateTask("t1", { state: "running" });
     store.updateTask("t1", { state: "completed", result: "done" });
     assert.deepEqual(events, ["created", "updated", "updated", "completed", "result"]);
+});
+
+test("deriveSurfaceMode: mock is always a labeled preview, http is live or disconnected", () => {
+    assert.equal(deriveSurfaceMode("mock"), "preview");
+    assert.equal(deriveSurfaceMode("disconnected"), "disconnected");
+    assert.equal(deriveSurfaceMode("connected"), "live");
 });
 
 // --- mock runtime lifecycle (fake timers) ---
