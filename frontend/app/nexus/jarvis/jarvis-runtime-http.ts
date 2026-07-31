@@ -6,22 +6,56 @@
 // does not support (editing an approval action, cancelling non-LLM work,
 // task progress) surfaces as not-supported, never as simulated success.
 //
-// Brain API mapping (app/intelligence/http_api.py in jarvis-openclaw-desktop):
+// Brain API mapping (Jarvis Protocol v1.1, docs/architecture/
+// jarvis-protocol-v1.md in jarvis-openclaw-desktop):
 //   submitPrompt  -> POST /intent {text, source:"workbench", session, project?}
 //   approveTask   -> POST /intent {text:"sí"} (DialogueActResolver confirms the
 //                    pending action of the SAME source channel)
 //   rejectTask    -> POST /intent {text:"no"}
 //   cancelTask    -> POST /llm/cancel {id} (LLM jobs only)
-//   poll loop     -> GET /poll (proactive insights), GET /llm/job?id= (job
-//                    state), GET /inbox?client=workbench (routed LLM answers)
+//   attach        -> POST /clients/register (workspace.* capabilities), then
+//                    GET /events?client= (SSE) + one GET /state snapshot
+//   SSE events    -> task.update (LLM job transitions), inbox.message (routed
+//                    answers), state (proactive insights), mode.changed (bus),
+//                    capability.invoke (execute + POST /capability/result),
+//                    ping (liveness)
+//   legacy poll   -> GET /poll + /llm/job + /inbox ONLY as fallback when the
+//                    brain predates protocol v1.1 (404/501 on register/events)
+//
+// Wire dialect note: request/response fields of this protocol are snake_case
+// (client_id, params_schema, invocation_id, …) because the contract is owned
+// by the brain (Python). The repo's lowercase-JSON rule applies to Wave types,
+// not to this external protocol.
 
 import { JarvisBus } from "./jarvis-bus";
+import {
+    executeWorkspaceCapability,
+    ModuleResolver,
+    WorkspaceCapabilities,
+    WorkspaceFacade,
+} from "./jarvis-capabilities";
+import { JarvisSseClient, SseUnsupportedError } from "./jarvis-sse";
 import { JarvisTaskStore } from "./jarvis-store";
 import { JarvisRuntime, JarvisTask, WorkbenchContext } from "./jarvis-types";
 
 const OriginClient = "workbench";
+const ClientType = "workbench";
 const DefaultPollIntervalMs = 2000;
 const HttpTimeoutMs = 10000;
+
+export class HttpStatusError extends Error {
+    status: number;
+
+    constructor(status: number, path: string) {
+        super(`brain HTTP ${status} on ${path}`);
+        this.status = status;
+    }
+}
+
+type CapabilityHost = {
+    facade: WorkspaceFacade;
+    resolveModule: ModuleResolver;
+};
 
 type HttpJarvisRuntimeConfig = {
     baseUrl: string;
@@ -29,6 +63,7 @@ type HttpJarvisRuntimeConfig = {
     onConnectionChange?: (state: "connected" | "disconnected") => void;
     pollIntervalMs?: number;
     fetchFn?: typeof fetch;
+    capabilityHost?: CapabilityHost;
 };
 
 type LlmJobRef = {
@@ -54,15 +89,22 @@ export class HttpJarvisRuntime implements JarvisRuntime {
     private onConnectionChange: (state: "connected" | "disconnected") => void;
     private pollIntervalMs: number;
     private fetchFn: typeof fetch;
-    private sessionId = `wb-${Date.now().toString(36)}`;
+    // session id doubles as the protocol client_id: stable while the renderer
+    // lives, unique across renderers (spec §3.1 requires re-registration per
+    // process anyway, the registry is in-memory brain-side).
+    private sessionId = `wb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
     private attachCount = 0;
+    private active = false;
+    private legacyMode = false;
+    private sse: JarvisSseClient;
     private pollTimer: ReturnType<typeof setInterval> = null;
     private polling = false;
     private connected: boolean = null;
     private jobs: Map<string, LlmJobRef> = new Map(); // taskId -> job ref
     private awaitingInbox: LlmJobRef[] = [];
-    private inboxWatermark: number = null; // brain journal timestamp (epoch seconds)
+    private inboxWatermark: number = null; // brain journal timestamp (epoch seconds), legacy poll only
+    private capabilityHost: CapabilityHost = null;
 
     constructor(
         private store: JarvisTaskStore,
@@ -74,6 +116,30 @@ export class HttpJarvisRuntime implements JarvisRuntime {
         this.onConnectionChange = config.onConnectionChange ?? (() => {});
         this.pollIntervalMs = config.pollIntervalMs ?? DefaultPollIntervalMs;
         this.fetchFn = config.fetchFn ?? ((input, init) => fetch(input, init));
+        this.capabilityHost = config.capabilityHost ?? null;
+        this.sse = new JarvisSseClient({
+            eventsUrl: `${this.baseUrl}/events?client=${encodeURIComponent(this.sessionId)}`,
+            token: this.token,
+            fetchFn: this.fetchFn,
+            beforeConnect: () => this.registerClient(),
+            onEvent: (event, data) => this.handleSseEvent(event, data),
+            onConnected: () => {
+                this.setConnected(true);
+                // one snapshot per (re)connect (spec §6): replaces the poll
+                // loop's steady-state reads; SSE replay covers the gap.
+                void this.request("GET", "/state").catch(() => {});
+            },
+            onDisconnected: () => this.setConnected(false),
+            onUnsupported: () => {
+                // LEGACY FALLBACK: brain predates protocol v1.1 (no
+                // /clients/register + /events). Transitional M1 polling until
+                // the brain is upgraded; sticky for this process lifetime.
+                this.legacyMode = true;
+                if (this.active) {
+                    this.startLegacyPolling();
+                }
+            },
+        });
     }
 
     // -- transport ----------------------------------------------------------
@@ -85,24 +151,26 @@ export class HttpJarvisRuntime implements JarvisRuntime {
         }
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), HttpTimeoutMs);
+        let resp: Response;
         try {
-            const resp = await this.fetchFn(`${this.baseUrl}${path}`, {
+            resp = await this.fetchFn(`${this.baseUrl}${path}`, {
                 method,
                 headers,
                 body: body != null ? JSON.stringify(body) : undefined,
                 signal: controller.signal,
             });
-            if (!resp.ok) {
-                throw new Error(`brain HTTP ${resp.status} on ${path}`);
-            }
-            this.setConnected(true);
-            return await resp.json();
         } catch (e) {
             this.setConnected(false);
             throw e;
         } finally {
             clearTimeout(timeout);
         }
+        // any HTTP response (even an error status) proves the brain is alive
+        this.setConnected(true);
+        if (!resp.ok) {
+            throw new HttpStatusError(resp.status, path);
+        }
+        return await resp.json();
     }
 
     private setConnected(connected: boolean) {
@@ -113,30 +181,37 @@ export class HttpJarvisRuntime implements JarvisRuntime {
         this.onConnectionChange(connected ? "connected" : "disconnected");
     }
 
-    // -- lifecycle (polling only while a Jarvis block is mounted) ------------
+    // -- lifecycle (transports live only while a Jarvis block is mounted) ----
 
     attach(): void {
         this.attachCount++;
-        if (this.pollTimer != null) {
+        if (this.active) {
             return;
         }
-        // TRANSITIONAL polling until the brain grows push events (SSE, M2 of
-        // ADR-0007). The interval only exists while a block is mounted.
-        this.pollTimer = setInterval(() => this.pollOnce(), this.pollIntervalMs);
-        this.pollOnce();
+        this.active = true;
+        if (this.legacyMode) {
+            this.startLegacyPolling();
+            return;
+        }
+        this.sse.start();
     }
 
     detach(): void {
         this.attachCount = Math.max(0, this.attachCount - 1);
-        if (this.attachCount > 0 || this.pollTimer == null) {
+        if (this.attachCount > 0 || !this.active) {
             return;
         }
-        clearInterval(this.pollTimer);
-        this.pollTimer = null;
+        this.stopTransports();
     }
 
     dispose(): void {
         this.attachCount = 0;
+        this.stopTransports();
+    }
+
+    private stopTransports(): void {
+        this.active = false;
+        this.sse.stop();
         if (this.pollTimer != null) {
             clearInterval(this.pollTimer);
             this.pollTimer = null;
@@ -144,7 +219,160 @@ export class HttpJarvisRuntime implements JarvisRuntime {
     }
 
     retryNow(): void {
-        this.pollOnce();
+        if (this.legacyMode) {
+            void this.pollOnce();
+            return;
+        }
+        if (this.active) {
+            this.sse.retryNow();
+            return;
+        }
+        // no block mounted: a lone probe so the UI can reflect reachability
+        void this.request("GET", "/state").catch(() => {});
+    }
+
+    // -- protocol v1.1: registration + SSE -----------------------------------
+
+    private async registerClient(): Promise<void> {
+        try {
+            await this.request("POST", "/clients/register", {
+                client_id: this.sessionId,
+                client_type: ClientType,
+                capabilities: WorkspaceCapabilities,
+            });
+        } catch (e) {
+            if (e instanceof HttpStatusError && (e.status === 404 || e.status === 501)) {
+                throw new SseUnsupportedError(e.message);
+            }
+            throw e;
+        }
+    }
+
+    private handleSseEvent(event: string, data: any): void {
+        switch (event) {
+            case "state":
+                this.handleStateEvent(data);
+                return;
+            case "task.update":
+                this.handleTaskUpdateEvent(data);
+                return;
+            case "inbox.message":
+                this.handleInboxMessageEvent(data);
+                return;
+            case "mode.changed":
+                this.bus.emit("mode.changed", {
+                    mode: String(data?.mode ?? ""),
+                    previous: data?.previous != null ? String(data.previous) : undefined,
+                });
+                return;
+            case "capability.invoke":
+                void this.handleCapabilityInvoke(data);
+                return;
+            case "ping":
+                return;
+            default:
+                // spec §7: shells tolerate unknown event types
+                return;
+        }
+    }
+
+    // Broadcast brain activity. Proactive insights surface exactly like the
+    // legacy /poll translation; turn echoes from other shells are ignored.
+    private handleStateEvent(data: any): void {
+        if (data?.activity !== "insights") {
+            return;
+        }
+        for (const message of data?.messages ?? []) {
+            const text = String(message);
+            if (text) {
+                this.surfaceMessage("Mensaje proactivo de Jarvis", text);
+            }
+        }
+    }
+
+    // Same job-state translation the legacy /llm/job poll performed. Only jobs
+    // this runtime started are acted on (task.update is broadcast).
+    private handleTaskUpdateEvent(data: any): void {
+        if (data?.kind !== "llm_job") {
+            return;
+        }
+        const jobId = String(data?.job_id ?? "");
+        const ref = [...this.jobs.values()].find((r) => r.jobId === jobId);
+        if (ref == null) {
+            return;
+        }
+        const state = String(data?.state ?? "");
+        if (state === "cancelled" || data?.stale) {
+            this.jobs.delete(ref.taskId);
+            this.store.updateTask(ref.taskId, {
+                state: "cancelled",
+                error: data?.stale ? "La conversación avanzó: respuesta descartada por el cerebro" : undefined,
+            });
+            return;
+        }
+        if (state === "failed" || state === "timed_out") {
+            this.jobs.delete(ref.taskId);
+            this.store.updateTask(ref.taskId, {
+                state: "error",
+                error: String(data?.error ?? "") || `trabajo LLM ${state === "timed_out" ? "expiró" : "falló"}`,
+            });
+            return;
+        }
+        if (state === "completed") {
+            // the job event has no result text; the answer arrives as a
+            // directed inbox.message on this same stream (ordered by cursor)
+            this.jobs.delete(ref.taskId);
+            this.awaitingInbox.push(ref);
+        }
+    }
+
+    // Same translation the legacy /inbox poll performed; no watermark needed:
+    // inbox.message is directed to this client_id and replay is cursor-based.
+    private handleInboxMessageEvent(data: any): void {
+        const text = String(data?.text ?? "");
+        const ref = this.awaitingInbox.shift();
+        if (ref != null) {
+            this.store.updateTask(ref.taskId, { state: "completed", progress: 100, result: text });
+            return;
+        }
+        if (text) {
+            this.surfaceMessage("Respuesta de Jarvis", text);
+        }
+    }
+
+    // -- capability.invoke: execute locally, ALWAYS answer the brain ---------
+
+    private async getCapabilityHost(): Promise<CapabilityHost> {
+        if (this.capabilityHost == null) {
+            // lazy: the live bindings drag in Wave's store graph; tests inject
+            // their own host and never load it
+            const live = await import("./jarvis-capabilities-live");
+            this.capabilityHost = { facade: live.liveWorkspaceFacade, resolveModule: live.resolveModuleRef };
+        }
+        return this.capabilityHost;
+    }
+
+    private async handleCapabilityInvoke(data: any): Promise<void> {
+        const invocationId = String(data?.invocation_id ?? "");
+        const capability = String(data?.capability ?? "");
+        const args = data?.args != null && typeof data.args === "object" ? data.args : {};
+        let outcome: { ok: true; result: Record<string, unknown> } | { ok: false; error: string };
+        try {
+            const host = await this.getCapabilityHost();
+            const result = await executeWorkspaceCapability(capability, args, host.facade, host.resolveModule);
+            outcome = { ok: true, result };
+        } catch (e) {
+            outcome = { ok: false, error: e instanceof Error ? e.message : String(e) };
+        }
+        if (!invocationId) {
+            return;
+        }
+        try {
+            await this.request("POST", "/capability/result", { invocation_id: invocationId, ...outcome });
+        } catch (e) {
+            // the brain times the invocation out and audits it; nothing to fake
+            console.warn("jarvis-runtime-http: no pude entregar /capability/result", e);
+        }
     }
 
     // -- JarvisRuntime -------------------------------------------------------
@@ -285,7 +513,25 @@ export class HttpJarvisRuntime implements JarvisRuntime {
         this.bus.emit("jarvis.error", { message: `No soportado por el cerebro: ${message}`, taskId });
     }
 
-    // -- poll loop (transitional until SSE, M2 per ADR-0007) -----------------
+    // Surfacing a brain message that arrived outside a tracked task: created
+    // then completed in two steps so the store emits resultReady for the UI.
+    private surfaceMessage(title: string, text: string) {
+        const id = makeLocalTaskId();
+        this.store.createTask({ id, state: "queued", title, progress: 0, startedAt: Date.now() });
+        this.store.updateTask(id, { state: "completed", progress: 100, result: text });
+    }
+
+    // -- LEGACY poll loop ----------------------------------------------------
+    // Kept ONLY for brains that predate protocol v1.1 (register/events answer
+    // 404/501). M2 of ADR-0007 replaced this with the SSE channel above.
+
+    private startLegacyPolling(): void {
+        if (this.pollTimer != null) {
+            return;
+        }
+        this.pollTimer = setInterval(() => this.pollOnce(), this.pollIntervalMs);
+        void this.pollOnce();
+    }
 
     private async pollOnce(): Promise<void> {
         if (this.polling) {
@@ -301,14 +547,6 @@ export class HttpJarvisRuntime implements JarvisRuntime {
         } finally {
             this.polling = false;
         }
-    }
-
-    // Surfacing a brain message that arrived outside a tracked task: created
-    // then completed in two steps so the store emits resultReady for the UI.
-    private surfaceMessage(title: string, text: string) {
-        const id = makeLocalTaskId();
-        this.store.createTask({ id, state: "queued", title, progress: 0, startedAt: Date.now() });
-        this.store.updateTask(id, { state: "completed", progress: 100, result: text });
     }
 
     // GET /poll drains proactive insights. Each message becomes a completed

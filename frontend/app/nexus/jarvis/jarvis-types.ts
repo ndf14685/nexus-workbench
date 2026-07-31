@@ -62,6 +62,8 @@ export type JarvisEventMap = {
     "jarvis.contextChanged": WorkbenchContext;
     "jarvis.resultReady": JarvisTask;
     "jarvis.error": { message: string; taskId?: string };
+    // pushed by the brain over SSE (Jarvis Protocol v1.1, event `mode.changed`)
+    "mode.changed": { mode: string; previous?: string };
 };
 
 export type JarvisEventName = keyof JarvisEventMap;
