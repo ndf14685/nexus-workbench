@@ -16,7 +16,9 @@ SpatialFocusCommand(ctx, CommandSpatialFocusData) error
 SpatialRestoreCommand(ctx, CommandSpatialRestoreData) error
 SpatialMoveCommand(ctx, CommandSpatialMoveData) error
 SpatialSetMinimizedCommand(ctx, CommandSpatialSetMinimizedData) error
+SpatialCloseModuleCommand(ctx, CommandSpatialCloseModuleData) error // extensión: cierre real de un detached
 SpatialListMonitorsCommand(ctx) ([]spatial.MonitorInfo, error)
+SpatialUpdateMonitorsCommand(ctx, monitors []spatial.MonitorInfo) error // extensión: emain empuja el catálogo
 SpatialSaveProfileCommand(ctx, CommandSpatialProfileData) error
 SpatialLoadProfileCommand(ctx, CommandSpatialProfileData) error
 SpatialListProfilesCommand(ctx) ([]string, error)
@@ -50,6 +52,9 @@ type CommandSpatialSetMinimizedData struct {
     ModuleId  string `json:"moduleid"`
     Minimized bool   `json:"minimized"`
 }
+type CommandSpatialCloseModuleData struct {
+    ModuleId string `json:"moduleid"`
+}
 type CommandSpatialProfileData struct {
     Name        string `json:"name"`
     WorkspaceId string `json:"workspaceid"`
@@ -64,6 +69,31 @@ Semántica clave:
   (doble focus no pisa el snapshot original); `Restore` consume el snapshot.
 - Todas publican `spatial:update` tras persistir. Ninguna espera a que el
   renderer confirme (el motor ya funciona así con `PendingBackendActions`).
+
+Extensiones fijadas durante la implementación (Tasks 4-11):
+
+- **Structs en waveobj:** los tipos persistidos (SpatialState, Surface,
+  MonitorInfo, etc.) viven en `pkg/waveobj/wtypespatial.go` y `pkg/spatial`
+  los alias-ea; `wshrpctypes.go` los referencia como `waveobj.*` porque
+  importar `pkg/spatial` ciclaría vía spatial→wcore→wshrpc. `MonitorInfo`
+  también se genera a TS desde waveobj.
+- **Semántica del payload de Move:** `module.moved` publica SOLO el
+  placement pedido (`nil` en un move de monitor puro). Así emain distingue
+  "aplicar bounds" de "mover al monitor conservando offset relativo", y el
+  eco de un self-report de bounds queda idéntico a lo ya aplicado.
+- **Catálogo de monitores:** Electron es el dueño. `emain-displays.ts`
+  empuja el catálogo vigente con `SpatialUpdateMonitorsCommand` al arrancar
+  y en cada `display-added/removed/metrics-changed`; el engine lo cachea en
+  memoria, sirve `SpatialListMonitorsCommand` desde el cache y deriva
+  `monitor.connected/disconnected` del diff entre catálogos (el engine
+  queda libre de Electron).
+- **Política de cierre:** cerrar la ventana detached con la X del SO NO
+  cierra el módulo: emain lo traduce a `SpatialAttachCommand` (= Pop In,
+  R12). El cierre real de un detached es `SpatialCloseModuleCommand` (solo
+  detached; error si acoplado): limpia ModuleInstance + Surface + snapshot,
+  publica `surface.closed` (emain cierra la ventana marcándola
+  engineClosing para no re-disparar el Pop In) y recién entonces
+  `DeleteBlock(recursive=false)` — nunca cascadea al tab.
 
 ## 2. Evento WPS y bus tipado frontend
 
@@ -92,6 +122,7 @@ Scope de publicación: `workspace:<workspaceId>`. Tipos (`SpatialEventData.Type`
 | `module.detached` / `module.attached` | engine | `Surface` |
 | `module.moved` / `module.resized` | engine (vía sync de emain) | `SpatialPlacement` |
 | `module.focused` / `module.focusReleased` | engine | `FocusSnapshot` |
+| `module.minimized` | engine | `{minimized}` — extensión Task 10: SetMinimized necesita tipo propio (`module.moved` implicaría bounds) |
 | `module.surfaceChanged` | engine | `{from,to}` |
 | `surface.created` / `surface.closed` | engine | `Surface` |
 | `monitor.connected` / `monitor.disconnected` | emain→engine | `MonitorInfo` |
@@ -111,6 +142,7 @@ export interface SpatialEventMap {
     "module.resized": { moduleId: string; placement: SpatialPlacement };
     "module.focused": { moduleId: string };
     "module.focusReleased": { moduleId: string };
+    "module.minimized": { moduleId: string; minimized: boolean };
     "module.surfaceChanged": { moduleId: string; from: string; to: string };
     "surface.created": { surface: Surface };
     "surface.closed": { surfaceId: string };
