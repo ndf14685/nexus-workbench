@@ -1,0 +1,100 @@
+// Copyright 2026, Nexus Workbench (fork extension)
+// SPDX-License-Identifier: Apache-2.0
+
+// JarvisCore: singleton wiring of bus + store + runtime + voice + context.
+// Jarvis is ONE presence in the Workbench: every Jarvis block renders the same
+// core state, so tasks survive closing/reopening blocks.
+
+import { globalStore } from "@/app/store/jotaiStore";
+import * as jotai from "jotai";
+import { JarvisBus } from "./jarvis-bus";
+import { WorkbenchContextProvider } from "./jarvis-context";
+import { MockJarvisRuntime, MockVoiceProvider } from "./jarvis-runtime-mock";
+import { deriveActivityState, JarvisTaskStore } from "./jarvis-store";
+import { JarvisActivityState, JarvisRuntime, JarvisTask, VoiceProvider, WorkbenchContext } from "./jarvis-types";
+
+export class JarvisCore {
+    private static instance: JarvisCore = null;
+
+    bus: JarvisBus;
+    store: JarvisTaskStore;
+    runtime: JarvisRuntime;
+    voice: VoiceProvider;
+    contextProvider: WorkbenchContextProvider;
+
+    tasksAtom: jotai.PrimitiveAtom<JarvisTask[]> = jotai.atom([]);
+    interactionAtom: jotai.PrimitiveAtom<JarvisActivityState | null> = jotai.atom(null) as jotai.PrimitiveAtom<JarvisActivityState | null>;
+    transcriptAtom: jotai.PrimitiveAtom<string> = jotai.atom("");
+    contextAtom: jotai.PrimitiveAtom<WorkbenchContext> = jotai.atom({}) as jotai.PrimitiveAtom<WorkbenchContext>;
+    activityAtom!: jotai.Atom<JarvisActivityState>;
+
+    private constructor() {
+        this.bus = new JarvisBus();
+        this.store = new JarvisTaskStore(this.bus);
+        // Runtime/voice are mocks behind stable interfaces (ADR-0005); the
+        // OpenClaw adapter replaces these two lines only.
+        this.runtime = new MockJarvisRuntime(this.store, this.bus);
+        this.voice = new MockVoiceProvider();
+        this.contextProvider = new WorkbenchContextProvider(this.bus);
+
+        this.activityAtom = jotai.atom((get) => deriveActivityState(get(this.tasksAtom), get(this.interactionAtom)));
+
+        this.store.subscribe(() => {
+            globalStore.set(this.tasksAtom, this.store.getTasks());
+        });
+        this.bus.on("jarvis.contextChanged", (ctx) => {
+            globalStore.set(this.contextAtom, ctx);
+        });
+        this.contextProvider.start();
+        globalStore.set(this.contextAtom, this.contextProvider.getContext());
+    }
+
+    static getInstance(): JarvisCore {
+        if (!JarvisCore.instance) {
+            JarvisCore.instance = new JarvisCore();
+        }
+        return JarvisCore.instance;
+    }
+
+    isListening(): boolean {
+        return globalStore.get(this.interactionAtom) === "listening";
+    }
+
+    // Push-to-talk: first call starts listening, second call stops, transcribes
+    // (mock) and submits to the runtime with fresh Workbench context.
+    async pushToTalk(): Promise<void> {
+        if (this.isListening()) {
+            await this.voice.stopListening();
+            this.bus.emit("jarvis.stopListening", undefined);
+            globalStore.set(this.interactionAtom, "thinking");
+            try {
+                const transcript = await this.voice.transcribe();
+                globalStore.set(this.transcriptAtom, transcript);
+                await this.submit(transcript);
+            } catch (e) {
+                this.bus.emit("jarvis.error", { message: String(e) });
+                globalStore.set(this.interactionAtom, null);
+            }
+            return;
+        }
+        await this.voice.startListening();
+        this.bus.emit("jarvis.startListening", undefined);
+        globalStore.set(this.interactionAtom, "listening");
+    }
+
+    async submit(prompt: string): Promise<void> {
+        if (!prompt?.trim()) {
+            globalStore.set(this.interactionAtom, null);
+            return;
+        }
+        globalStore.set(this.interactionAtom, "thinking");
+        const ctx = this.contextProvider.getContext();
+        globalStore.set(this.contextAtom, ctx);
+        try {
+            await this.runtime.submitPrompt(prompt.trim(), ctx);
+        } finally {
+            // task states drive the ring from here on
+            globalStore.set(this.interactionAtom, null);
+        }
+    }
+}

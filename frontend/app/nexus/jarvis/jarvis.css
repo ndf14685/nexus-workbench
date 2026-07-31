@@ -1,0 +1,76 @@
+/* Jarvis Block — ring animations (light, GPU-friendly: transform/opacity only) */
+
+.jarvis-ring {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.jarvis-ring svg {
+    overflow: visible;
+}
+
+.jarvis-ring .ring-outer {
+    transform-origin: center;
+    animation: jarvis-rotate 14s linear infinite;
+}
+
+.jarvis-ring .ring-dashes {
+    transform-origin: center;
+    animation: jarvis-rotate 30s linear infinite reverse;
+}
+
+.jarvis-ring .ring-core {
+    transform-origin: center;
+}
+
+@keyframes jarvis-rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes jarvis-breathe {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+}
+
+@keyframes jarvis-pulse-fast {
+    0%, 100% { transform: scale(1); opacity: 0.9; }
+    50% { transform: scale(1.06); opacity: 1; }
+}
+
+/* per-state ring color + tempo */
+.jarvis-ring[data-state="idle"] { --jarvis-color: #4a6b72; }
+.jarvis-ring[data-state="idle"] .ring-core { animation: jarvis-breathe 4s ease-in-out infinite; }
+
+.jarvis-ring[data-state="listening"] { --jarvis-color: #7ee0e6; }
+.jarvis-ring[data-state="listening"] .ring-outer { animation-duration: 4s; }
+.jarvis-ring[data-state="listening"] .ring-core { animation: jarvis-pulse-fast 1.1s ease-in-out infinite; }
+
+.jarvis-ring[data-state="thinking"] { --jarvis-color: #a371f7; }
+.jarvis-ring[data-state="thinking"] .ring-outer { animation-duration: 2.2s; }
+.jarvis-ring[data-state="thinking"] .ring-dashes { animation-duration: 6s; }
+
+.jarvis-ring[data-state="working"] { --jarvis-color: #58a6ff; }
+.jarvis-ring[data-state="working"] .ring-outer { animation-duration: 3s; }
+
+.jarvis-ring[data-state="waiting-approval"] { --jarvis-color: #d29922; }
+.jarvis-ring[data-state="waiting-approval"] .ring-core { animation: jarvis-breathe 1.4s ease-in-out infinite; }
+
+.jarvis-ring[data-state="speaking"] { --jarvis-color: #7ee0e6; }
+.jarvis-ring[data-state="speaking"] .ring-core { animation: jarvis-pulse-fast 0.7s ease-in-out infinite; }
+
+.jarvis-ring[data-state="success"] { --jarvis-color: #3fb950; }
+
+.jarvis-ring[data-state="error"] { --jarvis-color: #f85149; }
+.jarvis-ring[data-state="error"] .ring-outer { animation-play-state: paused; }
+.jarvis-ring[data-state="error"] .ring-dashes { animation-play-state: paused; }
+
+@media (prefers-reduced-motion: reduce) {
+    .jarvis-ring .ring-outer,
+    .jarvis-ring .ring-dashes,
+    .jarvis-ring .ring-core {
+        animation: none !important;
+    }
+}

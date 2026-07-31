@@ -162,7 +162,13 @@ const KindIcons = { local: "desktop", wsl: "layer-group", ssh: "server" };
 const widgetsPath = path.join(configDir, "widgets.json");
 const widgets = readJson(widgetsPath);
 for (const key of Object.keys(widgets)) {
-    if (key.startsWith("nexus-env-") || key.startsWith("nexus-agent-") || key.startsWith("nexus-cmd-")) {
+    if (
+        key.startsWith("nexus-env-") ||
+        key.startsWith("nexus-agent-") ||
+        key.startsWith("nexus-cmd-") ||
+        key.startsWith("nexus-link-") ||
+        key === "nexus-jarvis"
+    ) {
         delete widgets[key];
     }
 }
@@ -264,6 +270,39 @@ if (cmdPath) {
     }
     console.log(`comandos: ${cmdPath} (${cmdCount} widgets, ${cmdSkipped} omitidos por destructive/placeholder)`);
 }
+
+// Links web (repos, dashboards): abren en el navegador embebido del Workbench
+// (Chromium de Electron, sesión/cookies propias que PERSISTEN entre reinicios
+// en el data dir de la app — el login de GitHub se hace una sola vez).
+let linkCount = 0;
+for (const link of catalog.links ?? []) {
+    if (!link.id || !link.url) {
+        console.warn(`link omitido (requiere id y url): ${JSON.stringify(link)}`);
+        continue;
+    }
+    widgets[`nexus-link-${link.id}`] = {
+        "display:order": 150 + linkCount,
+        icon: link.icon ?? "globe",
+        color: link.color ?? "#8b949e",
+        label: link.name ?? link.id,
+        description: link.url,
+        blockdef: { meta: { view: "web", url: link.url } },
+    };
+    linkCount++;
+}
+if (linkCount > 0) {
+    console.log(`links: ${linkCount} widgets web`);
+}
+
+// Jarvis Block: copiloto operativo del Workbench (view propia "jarvis")
+widgets["nexus-jarvis"] = {
+    "display:order": 90,
+    icon: "circle-notch",
+    color: "#7ee0e6",
+    label: "Jarvis",
+    description: "Jarvis — copiloto operativo (bloque nativo)",
+    blockdef: { meta: { view: "jarvis" } },
+};
 
 // Catálogo para el frontend (indicador de ambiente en la tab bar): se proyecta
 // como clave gestionada nexus:environments en settings.json. conn = clave de
