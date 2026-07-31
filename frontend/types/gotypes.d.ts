@@ -1621,6 +1621,8 @@ declare global {
         "nexus:sidebarwidth"?: number;
         "nexus:sidebarcollapsedgroups"?: string[];
         "nexus:lastselectedenv"?: string;
+        "nexus:jarvisbrainurl"?: string;
+        "nexus:jarvisbraintoken"?: string;
     };
 
     // spatial.SpatialEventData

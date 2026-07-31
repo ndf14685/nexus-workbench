@@ -13,6 +13,19 @@ import { findEnvByConn } from "../envsidebar-util";
 import { JarvisBus } from "./jarvis-bus";
 import { WorkbenchContext } from "./jarvis-types";
 
+// Brain endpoint settings (ADR-0007). Read here — not in jarvis-core — because
+// this is the only Jarvis module allowed to import Wave internals (ADR-0005).
+export function getJarvisBrainConfig(): { url: string; token: string } {
+    try {
+        const url = globalStore.get(getSettingsKeyAtom("nexus:jarvisbrainurl")) ?? "";
+        const token = globalStore.get(getSettingsKeyAtom("nexus:jarvisbraintoken")) ?? "";
+        return { url: String(url).trim(), token: String(token).trim() };
+    } catch (e) {
+        console.error("jarvis-context: error reading brain settings", e);
+        return { url: "", token: "" };
+    }
+}
+
 export class WorkbenchContextProvider {
     private unsubscribe: (() => void) | null = null;
     private lastSnapshot = "";

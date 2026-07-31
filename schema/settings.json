@@ -405,6 +405,12 @@
         },
         "nexus:lastselectedenv": {
           "type": "string"
+        },
+        "nexus:jarvisbrainurl": {
+          "type": "string"
+        },
+        "nexus:jarvisbraintoken": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

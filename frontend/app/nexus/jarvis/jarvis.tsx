@@ -205,6 +205,11 @@ const JarvisView = memo(({ blockId, contentRef, model }: ViewComponentProps<Jarv
     const containerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        core.attachView();
+        return () => core.detachView();
+    }, []);
+
+    useEffect(() => {
         const el = containerRef.current;
         if (el == null) {
             return;

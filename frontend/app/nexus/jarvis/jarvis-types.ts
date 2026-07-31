@@ -66,13 +66,23 @@ export type JarvisEventMap = {
 
 export type JarvisEventName = keyof JarvisEventMap;
 
+// Where the runtime's truth lives (ADR-0007): "mock" = simulated preview,
+// "connected"/"disconnected" = real brain (jarvisd) reachable or not.
+export type JarvisConnectionState = "mock" | "connected" | "disconnected";
+
 // The runtime is the ONLY door to intelligence. The mock implementation ships
-// first; OpenClaw/Jarvis Runtime replaces it behind this same interface.
+// first; HttpJarvisRuntime (jarvisd :8770, ADR-0007) replaces it behind this
+// same interface.
 export interface JarvisRuntime {
     submitPrompt(prompt: string, context: WorkbenchContext): Promise<string>; // returns taskId
     cancelTask(taskId: string): void;
     approveTask(taskId: string, editedAction?: string): void;
     rejectTask(taskId: string): void;
+    // Lifecycle hooks for runtimes that hold resources (e.g. polling) while at
+    // least one Jarvis block is mounted. Optional: the mock needs none.
+    attach?(): void;
+    detach?(): void;
+    dispose?(): void;
 }
 
 // Voice is interface-only for the MVP (push-to-talk drives it; wake word later).

@@ -189,6 +189,10 @@ type SettingsType struct {
 	NexusSidebarWidth           float64        `json:"nexus:sidebarwidth,omitempty"`
 	NexusSidebarCollapsedGroups []string       `json:"nexus:sidebarcollapsedgroups,omitempty"`
 	NexusLastSelectedEnv        string         `json:"nexus:lastselectedenv,omitempty"`
+	// nexus: jarvisd brain endpoint (ADR-0007). Empty url = MockJarvisRuntime.
+	// Token is plaintext here as an interim measure; target is the secret store (D-015).
+	NexusJarvisBrainUrl   string `json:"nexus:jarvisbrainurl,omitempty"`
+	NexusJarvisBrainToken string `json:"nexus:jarvisbraintoken,omitempty"`
 }
 
 // NexusEnvType is a Nexus Workbench extension: one entry of the environment

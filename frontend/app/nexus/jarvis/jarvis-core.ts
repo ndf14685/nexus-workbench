@@ -8,10 +8,18 @@
 import { globalStore } from "@/app/store/jotaiStore";
 import * as jotai from "jotai";
 import { JarvisBus } from "./jarvis-bus";
-import { WorkbenchContextProvider } from "./jarvis-context";
+import { getJarvisBrainConfig, WorkbenchContextProvider } from "./jarvis-context";
+import { HttpJarvisRuntime } from "./jarvis-runtime-http";
 import { MockJarvisRuntime, MockVoiceProvider } from "./jarvis-runtime-mock";
 import { deriveActivityState, JarvisTaskStore } from "./jarvis-store";
-import { JarvisActivityState, JarvisRuntime, JarvisTask, VoiceProvider, WorkbenchContext } from "./jarvis-types";
+import {
+    JarvisActivityState,
+    JarvisConnectionState,
+    JarvisRuntime,
+    JarvisTask,
+    VoiceProvider,
+    WorkbenchContext,
+} from "./jarvis-types";
 
 export class JarvisCore {
     private static instance: JarvisCore = null;
@@ -27,13 +35,26 @@ export class JarvisCore {
     transcriptAtom: jotai.PrimitiveAtom<string> = jotai.atom("");
     contextAtom: jotai.PrimitiveAtom<WorkbenchContext> = jotai.atom({}) as jotai.PrimitiveAtom<WorkbenchContext>;
     activityAtom!: jotai.Atom<JarvisActivityState>;
+    connectionAtom!: jotai.PrimitiveAtom<JarvisConnectionState>;
 
     private constructor() {
         this.bus = new JarvisBus();
         this.store = new JarvisTaskStore(this.bus);
-        // Runtime/voice are mocks behind stable interfaces (ADR-0005); the
-        // OpenClaw adapter replaces these two lines only.
-        this.runtime = new MockJarvisRuntime(this.store, this.bus);
+        // ADR-0005 swap point, resolved per ADR-0007: a configured brain URL
+        // selects the real jarvisd adapter; otherwise the labeled mock preview.
+        // Voice stays mock either way (real voice pipeline is HUD-side, M4).
+        const brain = getJarvisBrainConfig();
+        if (brain.url) {
+            this.connectionAtom = jotai.atom<JarvisConnectionState>("disconnected");
+            this.runtime = new HttpJarvisRuntime(this.store, this.bus, {
+                baseUrl: brain.url,
+                token: brain.token,
+                onConnectionChange: (state) => globalStore.set(this.connectionAtom, state),
+            });
+        } else {
+            this.connectionAtom = jotai.atom<JarvisConnectionState>("mock");
+            this.runtime = new MockJarvisRuntime(this.store, this.bus);
+        }
         this.voice = new MockVoiceProvider();
         this.contextProvider = new WorkbenchContextProvider(this.bus);
 
@@ -54,6 +75,22 @@ export class JarvisCore {
             JarvisCore.instance = new JarvisCore();
         }
         return JarvisCore.instance;
+    }
+
+    // Called from the Jarvis view's mount/unmount effect: runtimes that poll
+    // (HttpJarvisRuntime) only do so while at least one block is visible.
+    attachView(): void {
+        this.runtime.attach?.();
+    }
+
+    detachView(): void {
+        this.runtime.detach?.();
+    }
+
+    retryConnection(): void {
+        if (this.runtime instanceof HttpJarvisRuntime) {
+            this.runtime.retryNow();
+        }
     }
 
     isListening(): boolean {
