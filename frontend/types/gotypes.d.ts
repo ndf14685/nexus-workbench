@@ -683,6 +683,12 @@ declare global {
         placement?: SpatialPlacement;
     };
 
+    // wshrpc.CommandSpatialProfileData
+    type CommandSpatialProfileData = {
+        name: string;
+        workspaceid: string;
+    };
+
     // wshrpc.CommandSpatialRestoreData
     type CommandSpatialRestoreData = {
         moduleid: string;

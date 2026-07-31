@@ -918,6 +918,18 @@ export class RpcApiType {
         return client.wshRpcCall("spatiallistmonitors", null, opts);
     }
 
+    // command "spatiallistprofiles" [call]
+    SpatialListProfilesCommand(client: WshClient, opts?: RpcOpts): Promise<string[]> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "spatiallistprofiles", null, opts);
+        return client.wshRpcCall("spatiallistprofiles", null, opts);
+    }
+
+    // command "spatialloadprofile" [call]
+    SpatialLoadProfileCommand(client: WshClient, data: CommandSpatialProfileData, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "spatialloadprofile", data, opts);
+        return client.wshRpcCall("spatialloadprofile", data, opts);
+    }
+
     // command "spatialmove" [call]
     SpatialMoveCommand(client: WshClient, data: CommandSpatialMoveData, opts?: RpcOpts): Promise<void> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "spatialmove", data, opts);
@@ -928,6 +940,12 @@ export class RpcApiType {
     SpatialRestoreCommand(client: WshClient, data: CommandSpatialRestoreData, opts?: RpcOpts): Promise<void> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "spatialrestore", data, opts);
         return client.wshRpcCall("spatialrestore", data, opts);
+    }
+
+    // command "spatialsaveprofile" [call]
+    SpatialSaveProfileCommand(client: WshClient, data: CommandSpatialProfileData, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "spatialsaveprofile", data, opts);
+        return client.wshRpcCall("spatialsaveprofile", data, opts);
     }
 
     // command "spatialsetminimized" [call]

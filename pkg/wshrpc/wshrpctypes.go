@@ -162,6 +162,9 @@ type WshRpcInterface interface {
 	SpatialCloseModuleCommand(ctx context.Context, data CommandSpatialCloseModuleData) error
 	SpatialListMonitorsCommand(ctx context.Context) ([]waveobj.MonitorInfo, error)
 	SpatialUpdateMonitorsCommand(ctx context.Context, monitors []waveobj.MonitorInfo) error
+	SpatialSaveProfileCommand(ctx context.Context, data CommandSpatialProfileData) error
+	SpatialLoadProfileCommand(ctx context.Context, data CommandSpatialProfileData) error
+	SpatialListProfilesCommand(ctx context.Context) ([]string, error)
 
 	// terminal
 	VDomCreateContextCommand(ctx context.Context, data vdom.VDomCreateContext) (*waveobj.ORef, error)
@@ -546,6 +549,11 @@ type CommandSpatialRestoreData struct {
 type CommandSpatialSetMinimizedData struct {
 	ModuleId  string `json:"moduleid"`
 	Minimized bool   `json:"minimized"`
+}
+
+type CommandSpatialProfileData struct {
+	Name        string `json:"name"`
+	WorkspaceId string `json:"workspaceid"`
 }
 
 type BlocksListRequest struct {

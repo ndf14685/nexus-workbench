@@ -1107,6 +1107,34 @@ func (ws *WshServer) SpatialUpdateMonitorsCommand(ctx context.Context, monitors 
 	return nil
 }
 
+func (ws *WshServer) SpatialSaveProfileCommand(ctx context.Context, data wshrpc.CommandSpatialProfileData) error {
+	ctx = waveobj.ContextWithUpdates(ctx)
+	if err := spatial.SaveProfile(ctx, data.Name, data.WorkspaceId); err != nil {
+		return fmt.Errorf("error saving profile: %w", err)
+	}
+	updates := waveobj.ContextGetUpdatesRtn(ctx)
+	wps.Broker.SendUpdateEvents(updates)
+	return nil
+}
+
+func (ws *WshServer) SpatialLoadProfileCommand(ctx context.Context, data wshrpc.CommandSpatialProfileData) error {
+	ctx = waveobj.ContextWithUpdates(ctx)
+	if err := spatial.LoadProfile(ctx, data.Name, data.WorkspaceId); err != nil {
+		return fmt.Errorf("error loading profile: %w", err)
+	}
+	updates := waveobj.ContextGetUpdatesRtn(ctx)
+	wps.Broker.SendUpdateEvents(updates)
+	return nil
+}
+
+func (ws *WshServer) SpatialListProfilesCommand(ctx context.Context) ([]string, error) {
+	names, err := spatial.ListProfiles()
+	if err != nil {
+		return nil, fmt.Errorf("error listing profiles: %w", err)
+	}
+	return names, nil
+}
+
 func (ws *WshServer) ListAllAppsCommand(ctx context.Context) ([]wshrpc.AppInfo, error) {
 	return waveappstore.ListAllApps()
 }

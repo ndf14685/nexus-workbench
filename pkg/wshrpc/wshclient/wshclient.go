@@ -914,6 +914,18 @@ func SpatialListMonitorsCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]wave
 	return resp, err
 }
 
+// command "spatiallistprofiles", wshserver.SpatialListProfilesCommand
+func SpatialListProfilesCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]string, error) {
+	resp, err := sendRpcRequestCallHelper[[]string](w, "spatiallistprofiles", nil, opts)
+	return resp, err
+}
+
+// command "spatialloadprofile", wshserver.SpatialLoadProfileCommand
+func SpatialLoadProfileCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialProfileData, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "spatialloadprofile", data, opts)
+	return err
+}
+
 // command "spatialmove", wshserver.SpatialMoveCommand
 func SpatialMoveCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialMoveData, opts *wshrpc.RpcOpts) error {
 	_, err := sendRpcRequestCallHelper[any](w, "spatialmove", data, opts)
@@ -923,6 +935,12 @@ func SpatialMoveCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialMoveData, o
 // command "spatialrestore", wshserver.SpatialRestoreCommand
 func SpatialRestoreCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialRestoreData, opts *wshrpc.RpcOpts) error {
 	_, err := sendRpcRequestCallHelper[any](w, "spatialrestore", data, opts)
+	return err
+}
+
+// command "spatialsaveprofile", wshserver.SpatialSaveProfileCommand
+func SpatialSaveProfileCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialProfileData, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "spatialsaveprofile", data, opts)
 	return err
 }
 
