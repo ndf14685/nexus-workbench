@@ -21,6 +21,7 @@ import {
 import { globalStore } from "@/app/store/jotaiStore";
 import { uxCloseBlock } from "@/app/store/keymodel";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { applySpatialMenu } from "@/app/nexus/spatial/spatial-menu"; // nexus:
 import { useWaveEnv } from "@/app/waveenv/waveenv";
 import { IconButton } from "@/element/iconbutton";
 import { NodeModel } from "@/layout/index";
@@ -65,7 +66,7 @@ function handleHeaderContextMenu(
             click: () => uxCloseBlock(blockId),
         }
     );
-    blockEnv.showContextMenu(menu, e);
+    blockEnv.showContextMenu(applySpatialMenu(menu, blockId), e); // nexus: ítems espaciales (spatial CONTRACTS §7)
 }
 
 type HeaderTextElemsProps = {

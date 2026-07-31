@@ -4,6 +4,7 @@
 import { globalStore } from "@/app/store/jotaiStore";
 import { assert, beforeEach, test } from "vitest";
 import { getSpatialBus, resetSpatialBus, SpatialBus } from "./spatial-bus";
+import { applySpatialMenu, buildSpatialMenuItems } from "./spatial-menu";
 import { makeSurfaceNodeModel } from "./surface-node-model";
 import { isDetachedModule, shouldPreserveBlockOnDelete, SpatialModel } from "./spatial-model";
 
@@ -146,6 +147,73 @@ test("attach for unknown module is a safe no-op", () => {
     const model = SpatialModel.getInstance();
     model.handleWpsEvent(makeUpdateEvent({ type: "module.attached", moduleid: "ghost" }));
     assert.equal(globalStore.get(model.spatialStateAtom), null);
+});
+
+function detachModuleForTest(moduleId: string, surfaceId: string) {
+    SpatialModel.getInstance().handleWpsEvent(
+        makeUpdateEvent({
+            type: "module.detached",
+            moduleid: moduleId,
+            surfaceid: surfaceId,
+            payload: makeSurface(surfaceId) as any,
+        })
+    );
+}
+
+test("spatial menu: docked shows Pop Out only", () => {
+    const items = buildSpatialMenuItems("blk-docked");
+    assert.deepEqual(
+        items.map((it) => it.label),
+        ["Desacoplar (Pop Out)"]
+    );
+});
+
+test("spatial menu: detached shows Pop In only", () => {
+    detachModuleForTest("blk-1", "surf-1");
+    const items = buildSpatialMenuItems("blk-1");
+    assert.deepEqual(
+        items.map((it) => it.label),
+        ["Acoplar a ventana principal"]
+    );
+});
+
+test("spatial menu: visibility flips after attach", () => {
+    detachModuleForTest("blk-1", "surf-1");
+    SpatialModel.getInstance().handleWpsEvent(makeUpdateEvent({ type: "module.attached", moduleid: "blk-1" }));
+    const items = buildSpatialMenuItems("blk-1");
+    assert.deepEqual(
+        items.map((it) => it.label),
+        ["Desacoplar (Pop Out)"]
+    );
+});
+
+test("applySpatialMenu appends items to a docked header menu", () => {
+    const base: ContextMenuItem[] = [
+        { label: "Magnify Block", click: () => {} },
+        { type: "separator" },
+        { label: "Close Block", click: () => {} },
+    ];
+    const menu = applySpatialMenu(base, "blk-docked");
+    assert.deepEqual(
+        menu.map((it) => it.label ?? "|"),
+        ["Magnify Block", "|", "Close Block", "|", "Desacoplar (Pop Out)"]
+    );
+});
+
+test("applySpatialMenu prunes tab-centric actions when detached (R11)", () => {
+    detachModuleForTest("blk-1", "surf-1");
+    const base: ContextMenuItem[] = [
+        { label: "Magnify Block", click: () => {} },
+        { type: "separator" },
+        { label: "Copy BlockId", click: () => {} },
+        { type: "separator" },
+        { label: "Close Block", click: () => {} },
+    ];
+    const menu = applySpatialMenu(base, "blk-1");
+    assert.deepEqual(
+        menu.map((it) => it.label ?? "|"),
+        ["Copy BlockId", "|", "Acoplar a ventana principal"]
+    );
 });
 
 test("synthetic surface NodeModel satisfies the interface without a LayoutModel", () => {
