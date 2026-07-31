@@ -906,6 +906,15 @@ declare global {
         modifiedtime: string;
     };
 
+    // waveobj.DockMemory
+    type DockMemory = {
+        tabid: string;
+        indexarr?: number[];
+        nodesize?: number;
+        magnified?: boolean;
+        capturedts: number;
+    };
+
     // vdom.DomRect
     type DomRect = {
         top: number;
@@ -1001,6 +1010,15 @@ declare global {
         ijsonbudget?: number;
         truncate?: boolean;
         append?: boolean;
+    };
+
+    // waveobj.FocusSnapshot
+    type FocusSnapshot = {
+        moduleid: string;
+        wasdetached: boolean;
+        placement?: SpatialPlacement;
+        dock?: DockMemory;
+        capturedts: number;
     };
 
     // wshrpc.FocusedBlockData
@@ -1232,6 +1250,35 @@ declare global {
     type MimeTypeConfigType = {
         icon: string;
         color: string;
+    };
+
+    // waveobj.ModuleInstance
+    type ModuleInstance = {
+        id: string;
+        type: string;
+        title?: string;
+        lifecyclestate: string;
+        currentsurfaceid: string;
+        previoussurfaceid?: string;
+        placement?: SpatialPlacement;
+        prevdock?: DockMemory;
+        monitorid?: string;
+        isdetached?: boolean;
+        isfocused?: boolean;
+        isminimized?: boolean;
+        ismaximized?: boolean;
+        contextbinding?: {[key: string]: string};
+        createdts: number;
+        updatedts: number;
+    };
+
+    // waveobj.MonitorMap
+    type MonitorMap = {
+        monitorid: string;
+        bounds: SpatialPlacement;
+        scalefactor: number;
+        modules: {[key: string]: SpatialPlacement};
+        lostts: number;
     };
 
     // wconfig.NexusEnvType
@@ -1512,6 +1559,32 @@ declare global {
         "nexus:lastselectedenv"?: string;
     };
 
+    // waveobj.SpatialPlacement
+    type SpatialPlacement = {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        zindex?: number;
+        z?: number;
+        rotation?: Vec3;
+        depth?: number;
+        anchor?: string;
+        spatialscale?: number;
+    };
+
+    // waveobj.SpatialState
+    type SpatialState = WaveObj & {
+        schemaversion: number;
+        workspaceid: string;
+        surfaces?: {[key: string]: Surface};
+        modules?: {[key: string]: ModuleInstance};
+        focussnapshots?: {[key: string]: FocusSnapshot};
+        monitormemory?: {[key: string]: MonitorMap};
+        createdts: number;
+        updatedts: number;
+    };
+
     // waveobj.StickerClickOptsType
     type StickerClickOptsType = {
         sendinput?: string;
@@ -1564,6 +1637,23 @@ declare global {
         "file:path"?: string;
         "file:name"?: string;
         "url:url"?: string;
+    };
+
+    // waveobj.Surface
+    type Surface = {
+        id: string;
+        type: string;
+        renderertype: string;
+        bounds?: SpatialPlacement;
+        availablearea?: SpatialPlacement;
+        monitorid?: string;
+        scalefactor?: number;
+        moduleids?: string[];
+        windowid?: string;
+        tabid?: string;
+        meta?: MetaType;
+        createdts: number;
+        updatedts: number;
     };
 
     // telemetrydata.TEvent
@@ -2008,6 +2098,13 @@ declare global {
         statuscode?: number;
         headers?: {[key: string]: string};
         body?: string;
+    };
+
+    // waveobj.Vec3
+    type Vec3 = {
+        x: number;
+        y: number;
+        z: number;
     };
 
     type WSCommandType = {

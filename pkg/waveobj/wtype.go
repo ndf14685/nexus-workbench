@@ -32,6 +32,7 @@ const (
 	OType_Job         = "job"
 	OType_Temp        = "temp"
 	OType_Builder     = "builder" // not persisted to DB
+	OType_Spatial     = "spatial" // nexus: spatial workspace state
 )
 
 var ValidOTypes = map[string]bool{
@@ -45,6 +46,7 @@ var ValidOTypes = map[string]bool{
 	OType_Job:         true,
 	OType_Temp:        true,
 	OType_Builder:     true,
+	OType_Spatial:     true, // nexus:
 }
 
 type WaveObjUpdate struct {
@@ -364,6 +366,7 @@ func AllWaveObjTypes() []reflect.Type {
 		reflect.TypeOf(&LayoutState{}),
 		reflect.TypeOf(&MainServer{}),
 		reflect.TypeOf(&Job{}),
+		reflect.TypeOf(&SpatialState{}), // nexus:
 	}
 }
 
