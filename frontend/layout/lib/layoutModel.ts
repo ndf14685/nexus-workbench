@@ -1,7 +1,7 @@
 // Copyright 2025, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isDetachedModule } from "@/app/nexus/spatial/spatial-model"; // nexus:
+import { isDetachedModule, shouldPreserveBlockOnDelete } from "@/app/nexus/spatial/spatial-model"; // nexus:
 import { FocusManager } from "@/app/store/focusManager";
 import { getSettingsKeyAtom } from "@/app/store/global";
 import { BlockService } from "@/app/store/services";
@@ -458,6 +458,21 @@ export class LayoutModel {
             case LayoutTreeActionType.DeleteNode: {
                 const leaf = this?.getNodeByBlockId(action.blockid);
                 if (leaf) {
+                    // nexus: el delete encolado por Detach solo saca el nodo del árbol; closeNode
+                    // dispararía onNodeDelete→DeleteBlock y destruiría el módulo (spatial R1)
+                    if (shouldPreserveBlockOnDelete(action.blockid)) {
+                        if (leaf.id === this.magnifiedNodeId) {
+                            this.magnifyNodeToggle(leaf.id, false);
+                        }
+                        this.treeReducer(
+                            {
+                                type: LayoutTreeActionType.DeleteNode,
+                                nodeId: leaf.id,
+                            } as LayoutTreeDeleteNodeAction,
+                            false
+                        );
+                        break;
+                    }
                     await this.closeNode(leaf.id);
                 } else {
                     console.error(

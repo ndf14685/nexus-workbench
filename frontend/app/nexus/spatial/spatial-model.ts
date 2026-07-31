@@ -47,6 +47,14 @@ export function isDetachedModule(blockId: string): boolean {
     }
 }
 
+// Decision helper for LayoutModel.handleBackendAction "delete" (R1): the
+// engine's Detach queues a layout delete for the block being popped out, so
+// that delete must only remove the tree node — never DeleteBlock — or the
+// module (pty, scrollback, state) is destroyed mid-detach.
+export function shouldPreserveBlockOnDelete(blockId: string): boolean {
+    return isDetachedModule(blockId);
+}
+
 export class SpatialModel {
     private static instance: SpatialModel = null;
 
