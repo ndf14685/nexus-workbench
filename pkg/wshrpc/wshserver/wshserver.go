@@ -37,6 +37,7 @@ import (
 	"github.com/wavetermdev/waveterm/pkg/remote/conncontroller"
 	"github.com/wavetermdev/waveterm/pkg/remote/fileshare/wshfs"
 	"github.com/wavetermdev/waveterm/pkg/secretstore"
+	"github.com/wavetermdev/waveterm/pkg/spatial"
 	"github.com/wavetermdev/waveterm/pkg/suggestion"
 	"github.com/wavetermdev/waveterm/pkg/telemetry"
 	"github.com/wavetermdev/waveterm/pkg/telemetry/telemetrydata"
@@ -1002,6 +1003,44 @@ func (ws *WshServer) WorkspaceCreateCommand(ctx context.Context, data wshrpc.Com
 		}
 	}
 	return wsObj.OID, nil
+}
+
+// nexus: spatial workspace engine RPCs — thin handlers over pkg/spatial
+// (nexus/docs/spatial/CONTRACTS.md §1)
+func (ws *WshServer) SpatialGetStateCommand(ctx context.Context, data wshrpc.CommandSpatialGetStateData) (*waveobj.SpatialState, error) {
+	ctx = waveobj.ContextWithUpdates(ctx)
+	st, err := spatial.GetState(ctx, data.WorkspaceId)
+	if err != nil {
+		return nil, fmt.Errorf("error getting spatial state: %w", err)
+	}
+	updates := waveobj.ContextGetUpdatesRtn(ctx)
+	wps.Broker.SendUpdateEvents(updates)
+	return st, nil
+}
+
+func (ws *WshServer) SpatialDetachCommand(ctx context.Context, data wshrpc.CommandSpatialDetachData) (string, error) {
+	ctx = waveobj.ContextWithUpdates(ctx)
+	surfaceId, err := spatial.Detach(ctx, data.ModuleId, spatial.DetachOpts{
+		MonitorId: data.MonitorId,
+		Placement: data.Placement,
+		Fill:      data.Fill,
+	})
+	if err != nil {
+		return "", fmt.Errorf("error detaching module: %w", err)
+	}
+	updates := waveobj.ContextGetUpdatesRtn(ctx)
+	wps.Broker.SendUpdateEvents(updates)
+	return surfaceId, nil
+}
+
+func (ws *WshServer) SpatialAttachCommand(ctx context.Context, data wshrpc.CommandSpatialAttachData) error {
+	ctx = waveobj.ContextWithUpdates(ctx)
+	if err := spatial.Attach(ctx, data.ModuleId); err != nil {
+		return fmt.Errorf("error attaching module: %w", err)
+	}
+	updates := waveobj.ContextGetUpdatesRtn(ctx)
+	wps.Broker.SendUpdateEvents(updates)
+	return nil
 }
 
 func (ws *WshServer) ListAllAppsCommand(ctx context.Context) ([]wshrpc.AppInfo, error) {

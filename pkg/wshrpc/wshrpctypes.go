@@ -149,6 +149,13 @@ type WshRpcInterface interface {
 	WorkspaceCreateCommand(ctx context.Context, data CommandWorkspaceCreateData) (string, error)
 	GetUpdateChannelCommand(ctx context.Context) (string, error)
 
+	// nexus: spatial workspace engine (nexus/docs/spatial/CONTRACTS.md §1).
+	// Uses the waveobj structs directly (pkg/spatial aliases them); importing
+	// pkg/spatial here would cycle via spatial→wcore→wshrpc.
+	SpatialGetStateCommand(ctx context.Context, data CommandSpatialGetStateData) (*waveobj.SpatialState, error)
+	SpatialDetachCommand(ctx context.Context, data CommandSpatialDetachData) (string, error) // → surfaceId
+	SpatialAttachCommand(ctx context.Context, data CommandSpatialAttachData) error
+
 	// terminal
 	VDomCreateContextCommand(ctx context.Context, data vdom.VDomCreateContext) (*waveobj.ORef, error)
 	VDomAsyncInitiationCommand(ctx context.Context, data vdom.VDomAsyncInitiationRequest) error
@@ -492,6 +499,22 @@ type CommandWorkspaceCreateData struct {
 	Color   string             `json:"color,omitempty"`
 	TabName string             `json:"tabname,omitempty"`
 	Blocks  []*waveobj.BlockDef `json:"blocks,omitempty"`
+}
+
+// nexus: spatial engine RPC payloads (nexus/docs/spatial/CONTRACTS.md §1)
+type CommandSpatialGetStateData struct {
+	WorkspaceId string `json:"workspaceid"`
+}
+
+type CommandSpatialDetachData struct {
+	ModuleId  string                    `json:"moduleid"`            // blockId
+	MonitorId string                    `json:"monitorid,omitempty"` // destino opcional
+	Placement *waveobj.SpatialPlacement `json:"placement,omitempty"` // bounds opcionales
+	Fill      bool                      `json:"fill,omitempty"`      // MonitorSurface (ocupar workArea)
+}
+
+type CommandSpatialAttachData struct {
+	ModuleId string `json:"moduleid"`
 }
 
 type BlocksListRequest struct {

@@ -648,6 +648,24 @@ declare global {
         delete?: boolean;
     };
 
+    // wshrpc.CommandSpatialAttachData
+    type CommandSpatialAttachData = {
+        moduleid: string;
+    };
+
+    // wshrpc.CommandSpatialDetachData
+    type CommandSpatialDetachData = {
+        moduleid: string;
+        monitorid?: string;
+        placement?: SpatialPlacement;
+        fill?: boolean;
+    };
+
+    // wshrpc.CommandSpatialGetStateData
+    type CommandSpatialGetStateData = {
+        workspaceid: string;
+    };
+
     // wshrpc.CommandStartBuilderData
     type CommandStartBuilderData = {
         builderid: string;

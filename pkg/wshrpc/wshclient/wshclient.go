@@ -878,6 +878,24 @@ func SetVarCommand(w *wshutil.WshRpc, data wshrpc.CommandVarData, opts *wshrpc.R
 	return err
 }
 
+// command "spatialattach", wshserver.SpatialAttachCommand
+func SpatialAttachCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialAttachData, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "spatialattach", data, opts)
+	return err
+}
+
+// command "spatialdetach", wshserver.SpatialDetachCommand
+func SpatialDetachCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialDetachData, opts *wshrpc.RpcOpts) (string, error) {
+	resp, err := sendRpcRequestCallHelper[string](w, "spatialdetach", data, opts)
+	return resp, err
+}
+
+// command "spatialgetstate", wshserver.SpatialGetStateCommand
+func SpatialGetStateCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialGetStateData, opts *wshrpc.RpcOpts) (*waveobj.SpatialState, error) {
+	resp, err := sendRpcRequestCallHelper[*waveobj.SpatialState](w, "spatialgetstate", data, opts)
+	return resp, err
+}
+
 // command "startbuilder", wshserver.StartBuilderCommand
 func StartBuilderCommand(w *wshutil.WshRpc, data wshrpc.CommandStartBuilderData, opts *wshrpc.RpcOpts) error {
 	_, err := sendRpcRequestCallHelper[any](w, "startbuilder", data, opts)

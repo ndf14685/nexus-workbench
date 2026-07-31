@@ -882,6 +882,24 @@ export class RpcApiType {
         return client.wshRpcCall("setvar", data, opts);
     }
 
+    // command "spatialattach" [call]
+    SpatialAttachCommand(client: WshClient, data: CommandSpatialAttachData, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "spatialattach", data, opts);
+        return client.wshRpcCall("spatialattach", data, opts);
+    }
+
+    // command "spatialdetach" [call]
+    SpatialDetachCommand(client: WshClient, data: CommandSpatialDetachData, opts?: RpcOpts): Promise<string> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "spatialdetach", data, opts);
+        return client.wshRpcCall("spatialdetach", data, opts);
+    }
+
+    // command "spatialgetstate" [call]
+    SpatialGetStateCommand(client: WshClient, data: CommandSpatialGetStateData, opts?: RpcOpts): Promise<SpatialState> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "spatialgetstate", data, opts);
+        return client.wshRpcCall("spatialgetstate", data, opts);
+    }
+
     // command "startbuilder" [call]
     StartBuilderCommand(client: WshClient, data: CommandStartBuilderData, opts?: RpcOpts): Promise<void> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "startbuilder", data, opts);
