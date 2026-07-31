@@ -13,7 +13,10 @@ import (
 	"github.com/wavetermdev/waveterm/pkg/wstore"
 )
 
-func GetOrCreateSpatialState(ctx context.Context, workspaceId string) (*SpatialState, error) {
+// GetSpatialStateForWorkspace is the read-only lookup: returns nil (no error)
+// when the workspace has no spatial state yet, so callers like the
+// cleanuporphaned guard never create state as a side effect.
+func GetSpatialStateForWorkspace(ctx context.Context, workspaceId string) (*SpatialState, error) {
 	if workspaceId == "" {
 		return nil, fmt.Errorf("workspaceid is required")
 	}
@@ -32,6 +35,17 @@ func GetOrCreateSpatialState(ctx context.Context, workspaceId string) (*SpatialS
 			}
 		}
 		return migrated, nil
+	}
+	return nil, nil
+}
+
+func GetOrCreateSpatialState(ctx context.Context, workspaceId string) (*SpatialState, error) {
+	existing, err := GetSpatialStateForWorkspace(ctx, workspaceId)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return existing, nil
 	}
 	st := makeEmptyState(uuid.NewString(), workspaceId)
 	if err := wstore.DBInsert(ctx, st); err != nil {

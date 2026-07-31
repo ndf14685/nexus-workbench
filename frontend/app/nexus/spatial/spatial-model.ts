@@ -34,6 +34,19 @@ function makeModuleStub(moduleId: string): ModuleInstance {
     };
 }
 
+// Guard predicate for layoutModel.cleanupOrphanedBlocks (CONTRACTS §6): a
+// detached module is in tab.blockids but outside the layout tree on purpose.
+// Must never break the layout, so any failure reads as "not detached".
+export function isDetachedModule(blockId: string): boolean {
+    try {
+        const model = SpatialModel.getInstance();
+        return globalStore.get(model.detachedModuleIdsAtom).has(blockId);
+    } catch (e) {
+        console.error("spatial-model: isDetachedModule failed", e);
+        return false;
+    }
+}
+
 export class SpatialModel {
     private static instance: SpatialModel = null;
 

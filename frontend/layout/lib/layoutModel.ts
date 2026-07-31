@@ -1,6 +1,7 @@
 // Copyright 2025, Command Line Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { isDetachedModule } from "@/app/nexus/spatial/spatial-model"; // nexus:
 import { FocusManager } from "@/app/store/focusManager";
 import { getSettingsKeyAtom } from "@/app/store/global";
 import { BlockService } from "@/app/store/services";
@@ -424,6 +425,10 @@ export class LayoutModel {
 
         for (const blockId of tab.blockids || []) {
             if (!layoutBlockIds.has(blockId)) {
+                // nexus: spatially-detached modules live outside the tab tree on purpose (spatial CONTRACTS §6)
+                if (isDetachedModule(blockId)) {
+                    continue;
+                }
                 console.log("Cleaning up orphaned block:", blockId);
                 if (this.onNodeDelete) {
                     await this.onNodeDelete({ blockId });

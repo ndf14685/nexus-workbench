@@ -4,7 +4,7 @@
 import { globalStore } from "@/app/store/jotaiStore";
 import { assert, beforeEach, test } from "vitest";
 import { getSpatialBus, resetSpatialBus, SpatialBus } from "./spatial-bus";
-import { SpatialModel } from "./spatial-model";
+import { isDetachedModule, SpatialModel } from "./spatial-model";
 
 function makeUpdateEvent(data: { type: string } & Partial<SpatialEventData>): WaveEvent {
     return {
@@ -113,6 +113,19 @@ test("detachedModuleIdsAtom derives from state on detach/attach events", () => {
     detached = globalStore.get(model.detachedModuleIdsAtom);
     assert.deepEqual([...detached], ["blk-2"]);
     assert.isUndefined(globalStore.get(model.spatialStateAtom).surfaces["surf-1"]);
+});
+
+test("isDetachedModule guards layout cleanup for detached blocks", () => {
+    assert.equal(isDetachedModule("blk-1"), false);
+    const model = SpatialModel.getInstance();
+    model.handleWpsEvent(
+        makeUpdateEvent({ type: "module.detached", moduleid: "blk-1", surfaceid: "surf-1", payload: makeSurface("surf-1") as any })
+    );
+    assert.equal(isDetachedModule("blk-1"), true);
+    assert.equal(isDetachedModule("blk-docked"), false);
+
+    model.handleWpsEvent(makeUpdateEvent({ type: "module.attached", moduleid: "blk-1" }));
+    assert.equal(isDetachedModule("blk-1"), false);
 });
 
 test("attach for unknown module is a safe no-op", () => {

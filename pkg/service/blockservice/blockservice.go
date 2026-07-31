@@ -6,11 +6,13 @@ package blockservice
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/wavetermdev/waveterm/pkg/blockcontroller"
 	"github.com/wavetermdev/waveterm/pkg/filestore"
+	"github.com/wavetermdev/waveterm/pkg/spatial"
 	"github.com/wavetermdev/waveterm/pkg/tsgen/tsgenmeta"
 	"github.com/wavetermdev/waveterm/pkg/waveobj"
 	"github.com/wavetermdev/waveterm/pkg/wcore"
@@ -76,6 +78,10 @@ func (*BlockService) CleanupOrphanedBlocks_Meta() tsgenmeta.MethodMeta {
 
 func (bs *BlockService) CleanupOrphanedBlocks(ctx context.Context, tabId string) (waveobj.UpdatesRtnType, error) {
 	ctx = waveobj.ContextWithUpdates(ctx)
+	// nexus: delete orphans server-side with the spatial guard (CONTRACTS §6)
+	// before queueing the frontend sweep — a detached module lives in
+	// tab.BlockIds but outside the layout tree ON PURPOSE and must survive.
+	cleanupOrphanedTabBlocks(ctx, tabId)
 	layoutAction := waveobj.LayoutActionData{
 		ActionType: wcore.LayoutActionDataType_CleanupOrphaned,
 		ActionId:   uuid.NewString(),
@@ -85,4 +91,72 @@ func (bs *BlockService) CleanupOrphanedBlocks(ctx context.Context, tabId string)
 		return nil, fmt.Errorf("error queuing cleanup layout action: %w", err)
 	}
 	return waveobj.ContextGetUpdatesRtn(ctx), nil
+}
+
+// nexus: server-side counterpart of layoutModel.cleanupOrphanedBlocks. An
+// orphan is a blockId in tab.BlockIds that neither the persisted layout tree
+// nor any pending layout action references. Spatially-detached modules are
+// skipped (CONTRACTS §6); a failed SpatialState load logs and behaves as
+// before (orphans deleted). Best-effort: never fails the cleanup call.
+func cleanupOrphanedTabBlocks(ctx context.Context, tabId string) {
+	tab, err := wstore.DBGet[*waveobj.Tab](ctx, tabId)
+	if err != nil || tab == nil {
+		log.Printf("CleanupOrphanedBlocks: cannot load tab %s: %v\n", tabId, err)
+		return
+	}
+	layoutStateId, err := wcore.GetLayoutIdForTab(ctx, tabId)
+	if err != nil {
+		log.Printf("CleanupOrphanedBlocks: cannot resolve layout for tab %s: %v\n", tabId, err)
+		return
+	}
+	layoutState, err := wstore.DBGet[*waveobj.LayoutState](ctx, layoutStateId)
+	if err != nil || layoutState == nil {
+		log.Printf("CleanupOrphanedBlocks: cannot load layout state %s: %v\n", layoutStateId, err)
+		return
+	}
+	// mirror the frontend: a nil tree means "not initialized", not "empty"
+	if layoutState.RootNode == nil {
+		return
+	}
+	referenced := spatial.CollectTreeBlockIds(layoutState.RootNode)
+	if layoutState.PendingBackendActions != nil {
+		for _, action := range *layoutState.PendingBackendActions {
+			if action.BlockId != "" {
+				referenced[action.BlockId] = true
+			}
+		}
+	}
+	detachedIds := getDetachedModuleIds(ctx, tabId)
+	for _, blockId := range tab.BlockIds {
+		if referenced[blockId] || detachedIds[blockId] {
+			continue
+		}
+		log.Printf("CleanupOrphanedBlocks: deleting orphaned block %s in tab %s\n", blockId, tabId)
+		if err := wcore.DeleteBlock(ctx, blockId, false); err != nil {
+			log.Printf("CleanupOrphanedBlocks: error deleting block %s: %v\n", blockId, err)
+		}
+	}
+}
+
+func getDetachedModuleIds(ctx context.Context, tabId string) map[string]bool {
+	detachedIds := make(map[string]bool)
+	workspaceId, err := wstore.DBFindWorkspaceForTabId(ctx, tabId)
+	if err != nil || workspaceId == "" {
+		log.Printf("CleanupOrphanedBlocks: cannot resolve workspace for tab %s: %v\n", tabId, err)
+		return detachedIds
+	}
+	st, err := spatial.GetSpatialStateForWorkspace(ctx, workspaceId)
+	if err != nil {
+		log.Printf("CleanupOrphanedBlocks: cannot load spatial state for workspace %s: %v\n", workspaceId, err)
+		return detachedIds
+	}
+	if st == nil {
+		return detachedIds
+	}
+	for moduleId, mod := range st.Modules {
+		if mod != nil && mod.IsDetached {
+			detachedIds[moduleId] = true
+		}
+	}
+	return detachedIds
 }
