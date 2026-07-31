@@ -45,6 +45,7 @@ const previewElectronApi: ElectronApi = {
     setWindowInitStatus: (_status: "ready" | "wave-ready") => {},
     onWaveInit: (_callback: (initOpts: WaveInitOpts) => void) => {},
     onBuilderInit: (_callback: (initOpts: BuilderInitOpts) => void) => {},
+    onSpatialInit: (_callback: (initOpts: SpatialInitOpts) => void) => {}, // nexus:
     sendLog: (_log: string) => {},
     onQuicklook: (_filePath: string) => {},
     openNativePath: (_filePath: string) => {},

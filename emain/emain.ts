@@ -39,6 +39,7 @@ import {
     unameArch,
     unamePlatform,
 } from "./emain-platform";
+import { getAllSpatialWindows, initSpatialEventSubscription, reconcileSpatialWindows } from "./emain-spatial"; // nexus:
 import { ensureHotSpareTab, setMaxTabCacheSize } from "./emain-tabview";
 import { getIsWaveSrvDead, getWaveSrvProc, getWaveSrvReady, runWaveSrv } from "./emain-wavesrv";
 import {
@@ -309,6 +310,12 @@ electronApp.on("before-quit", (e) => {
     for (const builder of allBuilders) {
         builder.hide();
     }
+    // nexus: ocultar ventanas spatial en el apagado (el guard de quitting evita un Pop In espurio)
+    for (const spatialWin of getAllSpatialWindows()) {
+        if (!spatialWin.isDestroyed()) {
+            spatialWin.hide();
+        }
+    }
     if (getIsWaveSrvDead()) {
         console.log("wavesrv is dead, quitting immediately");
         setForceQuit(true);
@@ -406,6 +413,7 @@ async function appMain() {
         initElectronWshClient();
         initElectronWshrpc(ElectronWshClient, { authKey: AuthKey });
         initMenuEventSubscriptions();
+        initSpatialEventSubscription(); // nexus: reaccionar a detach/attach espacial
     } catch (e) {
         console.log("error initializing wshrpc", e);
     }
@@ -416,6 +424,7 @@ async function appMain() {
     }
     ensureHotSpareTab(fullConfig);
     await relaunchBrowserWindows();
+    fireAndForget(reconcileSpatialWindows); // nexus: recrear ventanas detached / rescatar módulos (R6)
     setTimeout(runActiveTimer, 5000); // start active timer, wait 5s just to be safe
     setTimeout(sendDisplaysTDataEvent, 5000);
 

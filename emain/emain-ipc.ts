@@ -20,6 +20,7 @@ import {
     setWasActive,
 } from "./emain-activity";
 import { createBuilderWindow, getAllBuilderWindows, getBuilderWindowByWebContentsId } from "./emain-builder";
+import { getSpatialWindowByWebContentsId } from "./emain-spatial"; // nexus:
 import { callWithOriginalXdgCurrentDesktopAsync, unamePlatform } from "./emain-platform";
 import { getWaveTabViewByWebContentsId } from "./emain-tabview";
 import { handleCtrlShiftState } from "./emain-util";
@@ -427,6 +428,16 @@ export function initIpcHandlers() {
                     console.log("savedInitOpts calling builder-init", builderWindow.savedInitOpts.builderId);
                     builderWindow.webContents.send("builder-init", builderWindow.savedInitOpts);
                 }
+            }
+            return;
+        }
+
+        // nexus: spatial detached windows use the same handshake with their own init event
+        const spatialWindow = getSpatialWindowByWebContentsId(event.sender.id);
+        if (spatialWindow != null) {
+            if (status === "ready" && spatialWindow.savedInitOpts) {
+                console.log("savedInitOpts calling spatial-init", spatialWindow.savedInitOpts.surfaceId);
+                spatialWindow.webContents.send("spatial-init", spatialWindow.savedInitOpts);
             }
             return;
         }

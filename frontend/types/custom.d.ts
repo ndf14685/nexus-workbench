@@ -77,6 +77,16 @@ declare global {
         windowId: string;
     };
 
+    // nexus: identidad de una ventana spatial desacoplada (CONTRACTS §5)
+    type SpatialInitOpts = {
+        surfaceId: string;
+        moduleId: string;
+        tabId: string;
+        workspaceId: string;
+        clientId: string;
+        windowId: string;
+    };
+
     type ElectronApi = {
         getAuthKey(): string; // get-auth-key
         getIsDev(): boolean; // get-is-dev
@@ -120,6 +130,7 @@ declare global {
         setWindowInitStatus: (status: "ready" | "wave-ready") => void; // set-window-init-status
         onWaveInit: (callback: (initOpts: WaveInitOpts) => void) => void; // wave-init
         onBuilderInit: (callback: (initOpts: BuilderInitOpts) => void) => void; // builder-init
+        onSpatialInit: (callback: (initOpts: SpatialInitOpts) => void) => void; // nexus: spatial-init
         sendLog: (log: string) => void; // fe-log
         onQuicklook: (filePath: string) => void; // quicklook
         openNativePath(filePath: string): void; // open-native-path
