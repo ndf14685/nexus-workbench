@@ -11,8 +11,10 @@ import type { LayoutNodeAdditionalProps, NodeModel } from "@/layout/lib/types";
 // Synthetic NodeModel for a detached window (ADR-0006 §7): there is no
 // LayoutModel in a surface renderer, so the single module gets a fixed
 // always-focused, never-magnified node. onClose = Pop In (the engine closes
-// the window via surface.closed). toggleMagnify is a no-op in the MVP: the
-// window-maximize IPC arrives with Task 10.
+// the window via surface.closed). toggleMagnify = maximize/unmaximize de la
+// PROPIA ventana vía IPC de preload (spatial-toggle-maximize): decisión Task
+// 10 — es chrome de ventana puro, sin estado del engine ni snapshot (eso es
+// Focus); import dinámico de getApi para no exigir Electron en vitest.
 export function makeSurfaceNodeModel(moduleId: string): NodeModel {
     return {
         additionalProps: atom({} as LayoutNodeAdditionalProps),
@@ -30,7 +32,9 @@ export function makeSurfaceNodeModel(moduleId: string): NodeModel {
         isEphemeral: atom(false),
         ready: atom(true),
         disablePointerEvents: atom(false),
-        toggleMagnify: () => {},
+        toggleMagnify: () => {
+            fireAndForget(async () => (await import("@/app/store/global")).getApi().spatialToggleMaximize());
+        },
         focusNode: () => {},
         onClose: () => {
             fireAndForget(async () => RpcApi.SpatialAttachCommand(TabRpcClient, { moduleid: moduleId }));

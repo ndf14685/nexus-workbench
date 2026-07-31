@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld("api", {
     // nexus: spatial detached windows (patrón builder-init)
     onSpatialInit: (callback) => ipcRenderer.on("spatial-init", (_event, initOpts) => callback(initOpts)),
     getDisplays: () => ipcRenderer.invoke("get-displays"), // nexus: catálogo MonitorInfo (CONTRACTS §5)
+    spatialToggleMaximize: () => ipcRenderer.send("spatial-toggle-maximize"), // nexus: maximize de ventana detached
     sendLog: (log) => ipcRenderer.send("fe-log", log),
     onQuicklook: (filePath: string) => ipcRenderer.send("quicklook", filePath),
     openNativePath: (filePath: string) => ipcRenderer.send("open-native-path", filePath),

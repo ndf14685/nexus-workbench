@@ -1063,6 +1063,36 @@ func (ws *WshServer) SpatialCloseModuleCommand(ctx context.Context, data wshrpc.
 	return nil
 }
 
+func (ws *WshServer) SpatialFocusCommand(ctx context.Context, data wshrpc.CommandSpatialFocusData) error {
+	ctx = waveobj.ContextWithUpdates(ctx)
+	if err := spatial.Focus(ctx, data.ModuleId); err != nil {
+		return fmt.Errorf("error focusing module: %w", err)
+	}
+	updates := waveobj.ContextGetUpdatesRtn(ctx)
+	wps.Broker.SendUpdateEvents(updates)
+	return nil
+}
+
+func (ws *WshServer) SpatialRestoreCommand(ctx context.Context, data wshrpc.CommandSpatialRestoreData) error {
+	ctx = waveobj.ContextWithUpdates(ctx)
+	if err := spatial.Restore(ctx, data.ModuleId); err != nil {
+		return fmt.Errorf("error restoring module: %w", err)
+	}
+	updates := waveobj.ContextGetUpdatesRtn(ctx)
+	wps.Broker.SendUpdateEvents(updates)
+	return nil
+}
+
+func (ws *WshServer) SpatialSetMinimizedCommand(ctx context.Context, data wshrpc.CommandSpatialSetMinimizedData) error {
+	ctx = waveobj.ContextWithUpdates(ctx)
+	if err := spatial.SetMinimized(ctx, data.ModuleId, data.Minimized); err != nil {
+		return fmt.Errorf("error setting minimized: %w", err)
+	}
+	updates := waveobj.ContextGetUpdatesRtn(ctx)
+	wps.Broker.SendUpdateEvents(updates)
+	return nil
+}
+
 func (ws *WshServer) SpatialListMonitorsCommand(ctx context.Context) ([]waveobj.MonitorInfo, error) {
 	return spatial.ListMonitors(), nil
 }

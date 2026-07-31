@@ -4,7 +4,52 @@
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { fireAndForget } from "@/util/util";
-import { isDetachedModule, SpatialModel } from "./spatial-model";
+import { hasFocusSnapshot, isDetachedModule, SpatialModel } from "./spatial-model";
+
+// Imports dinámicos en los click handlers: spatial-focus arrastra el grafo de
+// layoutModel y getApi() exige entorno Electron; ninguno debe entrar al
+// grafo estático de este archivo (lo importa el vitest de spatial).
+function makeFocusItems(blockId: string, detached: boolean): ContextMenuItem[] {
+    const items: ContextMenuItem[] = [
+        {
+            label: "Enfocar módulo",
+            click: () =>
+                fireAndForget(async () => {
+                    await RpcApi.SpatialFocusCommand(TabRpcClient, { moduleid: blockId });
+                }),
+        },
+    ];
+    if (hasFocusSnapshot(blockId)) {
+        items.push({
+            label: "Restaurar posición anterior",
+            click: () =>
+                fireAndForget(async () => {
+                    await RpcApi.SpatialRestoreCommand(TabRpcClient, { moduleid: blockId });
+                }),
+        });
+    }
+    items.push({
+        label: "Maximizar módulo",
+        click: () =>
+            fireAndForget(async () => {
+                if (detached) {
+                    (await import("@/app/store/global")).getApi().spatialToggleMaximize();
+                } else {
+                    (await import("./spatial-focus")).toggleDockedMagnify(blockId);
+                }
+            }),
+    });
+    if (detached) {
+        items.push({
+            label: "Minimizar módulo",
+            click: () =>
+                fireAndForget(async () => {
+                    await RpcApi.SpatialSetMinimizedCommand(TabRpcClient, { moduleid: blockId, minimized: true });
+                }),
+        });
+    }
+    return items;
+}
 
 function monitorDisplayLabel(monitor: MonitorInfo): string {
     const base = monitor.label || `Monitor ${monitor.displayid}`;
@@ -41,6 +86,7 @@ export function buildSpatialMenuItems(blockId: string, monitors?: MonitorInfo[])
                         await RpcApi.SpatialDetachCommand(TabRpcClient, { moduleid: blockId });
                     }),
             },
+            ...makeFocusItems(blockId, false),
         ];
     }
     const items: ContextMenuItem[] = [
@@ -63,6 +109,7 @@ export function buildSpatialMenuItems(blockId: string, monitors?: MonitorInfo[])
             ),
         });
     }
+    items.push(...makeFocusItems(blockId, true));
     items.push({
         label: "Cerrar módulo",
         click: () =>

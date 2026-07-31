@@ -896,6 +896,12 @@ func SpatialDetachCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialDetachDat
 	return resp, err
 }
 
+// command "spatialfocus", wshserver.SpatialFocusCommand
+func SpatialFocusCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialFocusData, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "spatialfocus", data, opts)
+	return err
+}
+
 // command "spatialgetstate", wshserver.SpatialGetStateCommand
 func SpatialGetStateCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialGetStateData, opts *wshrpc.RpcOpts) (*waveobj.SpatialState, error) {
 	resp, err := sendRpcRequestCallHelper[*waveobj.SpatialState](w, "spatialgetstate", data, opts)
@@ -911,6 +917,18 @@ func SpatialListMonitorsCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]wave
 // command "spatialmove", wshserver.SpatialMoveCommand
 func SpatialMoveCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialMoveData, opts *wshrpc.RpcOpts) error {
 	_, err := sendRpcRequestCallHelper[any](w, "spatialmove", data, opts)
+	return err
+}
+
+// command "spatialrestore", wshserver.SpatialRestoreCommand
+func SpatialRestoreCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialRestoreData, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "spatialrestore", data, opts)
+	return err
+}
+
+// command "spatialsetminimized", wshserver.SpatialSetMinimizedCommand
+func SpatialSetMinimizedCommand(w *wshutil.WshRpc, data wshrpc.CommandSpatialSetMinimizedData, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "spatialsetminimized", data, opts)
 	return err
 }
 

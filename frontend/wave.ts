@@ -14,6 +14,7 @@ import {
 } from "@/app/store/keymodel";
 import { modalsModel } from "@/app/store/modalmodel";
 import { RpcApi } from "@/app/store/wshclientapi";
+import { wireDockedFocusHandlers } from "@/app/nexus/spatial/spatial-focus"; // nexus:
 import { SpatialModel } from "@/app/nexus/spatial/spatial-model"; // nexus:
 import { SurfaceApp } from "@/app/nexus/spatial/surfaceapp"; // nexus:
 import { makeBuilderRouteId, makeSurfaceRouteId, makeTabRouteId } from "@/app/store/wshrouter"; // nexus: makeSurfaceRouteId
@@ -188,6 +189,7 @@ async function initWave(initOpts: WaveInitOpts) {
         // nexus: sin esto los guards R1 y el menú espacial de la ventana
         // principal quedan ciegos (el modelo solo arrancaba en initSurface)
         SpatialModel.getInstance().start(waveWindow.workspaceid);
+        wireDockedFocusHandlers(); // nexus: module.focused → magnify (Task 10)
         document.title = `Nexus Workbench - ${initialTab.name}`; // TODO update with tab name change
     } catch (e) {
         console.error("Failed initialization error", e);

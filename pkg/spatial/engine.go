@@ -246,6 +246,199 @@ func CloseModule(ctx context.Context, moduleId string) error {
 	return nil
 }
 
+// Focus captura FocusSnapshot SOLO si no hay uno vigente (un doble focus
+// jamás pisa el original, CONTRACTS §1), marca IsFocused exclusivo y publica
+// module.focused. Para un módulo acoplado "default" (sin entrada en Modules)
+// crea la entrada mínima; snapshot acoplado = dock memory best-effort.
+func Focus(ctx context.Context, moduleId string) error {
+	if moduleId == "" {
+		return fmt.Errorf("moduleid is required")
+	}
+	tabId, err := wstore.DBFindTabForBlockId(ctx, moduleId)
+	if err != nil {
+		return fmt.Errorf("finding tab for module %s: %w", moduleId, err)
+	}
+	workspaceId, err := wstore.DBFindWorkspaceForTabId(ctx, tabId)
+	if err != nil || workspaceId == "" {
+		return fmt.Errorf("no workspace found for tab %s: %w", tabId, err)
+	}
+	lock := getWorkspaceLock(workspaceId)
+	lock.Lock()
+	defer lock.Unlock()
+	st, err := GetOrCreateSpatialState(ctx, workspaceId)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UnixMilli()
+	mi := st.Modules[moduleId]
+	if mi == nil {
+		block, err := wstore.DBGet[*waveobj.Block](ctx, moduleId)
+		if err != nil {
+			return fmt.Errorf("getting block %s: %w", moduleId, err)
+		}
+		if block == nil {
+			return fmt.Errorf("block %s not found", moduleId)
+		}
+		mainSurf := ensureMainSurface(ctx, st, workspaceId, tabId, now)
+		mi = &ModuleInstance{
+			Id:               moduleId,
+			Type:             block.Meta.GetString(waveobj.MetaKey_View, ""),
+			Title:            block.Meta.GetString(waveobj.MetaKey_FrameTitle, ""),
+			LifecycleState:   Lifecycle_Active,
+			CurrentSurfaceId: mainSurf.Id,
+			CreatedTs:        now,
+			UpdatedTs:        now,
+		}
+		if st.Modules == nil {
+			st.Modules = make(map[string]*ModuleInstance)
+		}
+		st.Modules[moduleId] = mi
+	}
+	snap := st.FocusSnapshots[moduleId]
+	if snap == nil {
+		snap = &FocusSnapshot{ModuleId: moduleId, WasDetached: mi.IsDetached, CapturedTs: now}
+		if mi.IsDetached {
+			snap.Placement = mi.Placement
+		} else {
+			snap.Dock = captureDockMemory(ctx, tabId, moduleId, now)
+		}
+		if st.FocusSnapshots == nil {
+			st.FocusSnapshots = make(map[string]*FocusSnapshot)
+		}
+		st.FocusSnapshots[moduleId] = snap
+	}
+	for otherId, other := range st.Modules {
+		if otherId != moduleId && other != nil && other.IsFocused {
+			other.IsFocused = false
+			other.UpdatedTs = now
+		}
+	}
+	mi.IsFocused = true
+	mi.UpdatedTs = now
+	if err := SaveSpatialState(ctx, st); err != nil {
+		return fmt.Errorf("persisting spatial state: %w", err)
+	}
+	publishSpatialEvent(SpatialEventData{
+		Type:        SpatialEvent_ModuleFocused,
+		WorkspaceId: workspaceId,
+		ModuleId:    moduleId,
+		SurfaceId:   mi.CurrentSurfaceId,
+		MonitorId:   mi.MonitorId,
+	}, snap)
+	return nil
+}
+
+// Restore consume el snapshot (Return con una sola acción). Sin snapshot =
+// no-op amable. Para detached también publica module.moved con el placement
+// restaurado para que emain aplique los bounds.
+func Restore(ctx context.Context, moduleId string) error {
+	if moduleId == "" {
+		return fmt.Errorf("moduleid is required")
+	}
+	workspaceId, err := findWorkspaceForModule(ctx, moduleId)
+	if err != nil {
+		return err
+	}
+	lock := getWorkspaceLock(workspaceId)
+	lock.Lock()
+	defer lock.Unlock()
+	st, err := GetOrCreateSpatialState(ctx, workspaceId)
+	if err != nil {
+		return err
+	}
+	snap := st.FocusSnapshots[moduleId]
+	if snap == nil {
+		log.Printf("spatial: restore ignored, module %s has no focus snapshot\n", moduleId)
+		return nil
+	}
+	delete(st.FocusSnapshots, moduleId)
+	now := time.Now().UnixMilli()
+	mi := st.Modules[moduleId]
+	var restoredPlacement *SpatialPlacement
+	var restoredMonitorId string
+	if mi != nil {
+		mi.IsFocused = false
+		mi.UpdatedTs = now
+		if snap.WasDetached && mi.IsDetached && snap.Placement != nil {
+			mi.Placement = snap.Placement
+			restoredPlacement = snap.Placement
+			restoredMonitorId = mi.MonitorId
+			if surf := st.Surfaces[mi.CurrentSurfaceId]; surf != nil {
+				surf.Bounds = snap.Placement
+				surf.UpdatedTs = now
+			}
+		}
+		// La entrada acoplada creada solo para el focus vuelve a ser "default"
+		// y se limpia (DATA_MODEL §2: Modules solo guarda estado no-default).
+		if !mi.IsDetached && !mi.IsMinimized {
+			delete(st.Modules, moduleId)
+		}
+	}
+	if err := SaveSpatialState(ctx, st); err != nil {
+		return fmt.Errorf("persisting spatial state: %w", err)
+	}
+	publishSpatialEvent(SpatialEventData{
+		Type:        SpatialEvent_ModuleFocusReleased,
+		WorkspaceId: workspaceId,
+		ModuleId:    moduleId,
+	}, snap)
+	if restoredPlacement != nil {
+		publishSpatialEvent(SpatialEventData{
+			Type:        SpatialEvent_ModuleMoved,
+			WorkspaceId: workspaceId,
+			ModuleId:    moduleId,
+			MonitorId:   restoredMonitorId,
+		}, restoredPlacement)
+	}
+	return nil
+}
+
+// SetMinimized aplica solo a detached (minimizar acoplado queda fuera del
+// MVP: el menú solo lo ofrece en detached). emain materializa el flag en la
+// BrowserWindow al recibir module.minimized; el skip idempotente corta el
+// eco de los listeners minimize/restore de la ventana.
+func SetMinimized(ctx context.Context, moduleId string, minimized bool) error {
+	if moduleId == "" {
+		return fmt.Errorf("moduleid is required")
+	}
+	workspaceId, err := findWorkspaceForModule(ctx, moduleId)
+	if err != nil {
+		return err
+	}
+	lock := getWorkspaceLock(workspaceId)
+	lock.Lock()
+	defer lock.Unlock()
+	st, err := GetOrCreateSpatialState(ctx, workspaceId)
+	if err != nil {
+		return err
+	}
+	mi := st.Modules[moduleId]
+	if mi == nil || !mi.IsDetached {
+		return fmt.Errorf("module %s is not detached (docked minimize is out of MVP scope)", moduleId)
+	}
+	if mi.IsMinimized == minimized {
+		return nil
+	}
+	now := time.Now().UnixMilli()
+	mi.IsMinimized = minimized
+	if minimized {
+		mi.LifecycleState = Lifecycle_Minimized
+	} else {
+		mi.LifecycleState = Lifecycle_Detached
+	}
+	mi.UpdatedTs = now
+	if err := SaveSpatialState(ctx, st); err != nil {
+		return fmt.Errorf("persisting spatial state: %w", err)
+	}
+	publishSpatialEvent(SpatialEventData{
+		Type:        SpatialEvent_ModuleMinimized,
+		WorkspaceId: workspaceId,
+		ModuleId:    moduleId,
+		SurfaceId:   mi.CurrentSurfaceId,
+	}, map[string]bool{"minimized": minimized})
+	return nil
+}
+
 func findWorkspaceForModule(ctx context.Context, moduleId string) (string, error) {
 	tabId, err := wstore.DBFindTabForBlockId(ctx, moduleId)
 	if err != nil {

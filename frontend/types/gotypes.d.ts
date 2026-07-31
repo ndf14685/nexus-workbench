@@ -666,6 +666,11 @@ declare global {
         fill?: boolean;
     };
 
+    // wshrpc.CommandSpatialFocusData
+    type CommandSpatialFocusData = {
+        moduleid: string;
+    };
+
     // wshrpc.CommandSpatialGetStateData
     type CommandSpatialGetStateData = {
         workspaceid: string;
@@ -676,6 +681,17 @@ declare global {
         moduleid: string;
         monitorid?: string;
         placement?: SpatialPlacement;
+    };
+
+    // wshrpc.CommandSpatialRestoreData
+    type CommandSpatialRestoreData = {
+        moduleid: string;
+    };
+
+    // wshrpc.CommandSpatialSetMinimizedData
+    type CommandSpatialSetMinimizedData = {
+        moduleid: string;
+        minimized: boolean;
     };
 
     // wshrpc.CommandStartBuilderData

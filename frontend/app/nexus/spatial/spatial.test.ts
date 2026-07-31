@@ -6,7 +6,14 @@ import { assert, beforeEach, test } from "vitest";
 import { getSpatialBus, resetSpatialBus, SpatialBus } from "./spatial-bus";
 import { applySpatialMenu, buildMonitorSubmenu, buildSpatialMenuItems } from "./spatial-menu";
 import { makeSurfaceNodeModel } from "./surface-node-model";
-import { isDetachedModule, shouldPreserveBlockOnDelete, SpatialModel } from "./spatial-model";
+import {
+    decideDockedFocusAction,
+    decideDockedFocusReleaseAction,
+    hasFocusSnapshot,
+    isDetachedModule,
+    shouldPreserveBlockOnDelete,
+    SpatialModel,
+} from "./spatial-model";
 
 function makeUpdateEvent(data: { type: string } & Partial<SpatialEventData>): WaveEvent {
     return {
@@ -160,20 +167,23 @@ function detachModuleForTest(moduleId: string, surfaceId: string) {
     );
 }
 
-test("spatial menu: docked shows Pop Out only", () => {
+const DockedBaseLabels = ["Desacoplar (Pop Out)", "Enfocar módulo", "Maximizar módulo"];
+const DetachedBaseLabels = ["Acoplar a ventana principal", "Enfocar módulo", "Maximizar módulo", "Minimizar módulo", "Cerrar módulo"];
+
+test("spatial menu: docked shows Pop Out + Focus + Maximize", () => {
     const items = buildSpatialMenuItems("blk-docked");
     assert.deepEqual(
         items.map((it) => it.label),
-        ["Desacoplar (Pop Out)"]
+        DockedBaseLabels
     );
 });
 
-test("spatial menu: detached shows Pop In and Close", () => {
+test("spatial menu: detached shows Pop In, Focus, Maximize, Minimize, Close", () => {
     detachModuleForTest("blk-1", "surf-1");
     const items = buildSpatialMenuItems("blk-1");
     assert.deepEqual(
         items.map((it) => it.label),
-        ["Acoplar a ventana principal", "Cerrar módulo"]
+        DetachedBaseLabels
     );
 });
 
@@ -196,7 +206,7 @@ test("spatial menu: detached with monitor catalog shows Move to Monitor submenu"
     const items = buildSpatialMenuItems("blk-1", monitors);
     assert.deepEqual(
         items.map((it) => it.label),
-        ["Acoplar a ventana principal", "Mover a monitor", "Cerrar módulo"]
+        ["Acoplar a ventana principal", "Mover a monitor", "Enfocar módulo", "Maximizar módulo", "Minimizar módulo", "Cerrar módulo"]
     );
     const submenu = items.find((it) => it.label === "Mover a monitor");
     assert.equal(submenu.type, "submenu");
@@ -251,8 +261,82 @@ test("spatial menu: visibility flips after attach", () => {
     const items = buildSpatialMenuItems("blk-1");
     assert.deepEqual(
         items.map((it) => it.label),
-        ["Desacoplar (Pop Out)"]
+        DockedBaseLabels
     );
+});
+
+test("spatial menu: Restore appears only while a focus snapshot exists", () => {
+    const model = SpatialModel.getInstance();
+    assert.equal(hasFocusSnapshot("blk-1"), false);
+    model.handleWpsEvent(
+        makeUpdateEvent({
+            type: "module.focused",
+            moduleid: "blk-1",
+            payload: { moduleid: "blk-1", wasdetached: false, capturedts: 5 } as any,
+        })
+    );
+    assert.equal(hasFocusSnapshot("blk-1"), true);
+    let labels = buildSpatialMenuItems("blk-1").map((it) => it.label);
+    assert.deepEqual(labels, ["Desacoplar (Pop Out)", "Enfocar módulo", "Restaurar posición anterior", "Maximizar módulo"]);
+
+    model.handleWpsEvent(makeUpdateEvent({ type: "module.focusReleased", moduleid: "blk-1" }));
+    assert.equal(hasFocusSnapshot("blk-1"), false);
+    labels = buildSpatialMenuItems("blk-1").map((it) => it.label);
+    assert.deepEqual(labels, DockedBaseLabels);
+});
+
+test("focus snapshot delta also works for detached modules", () => {
+    const model = SpatialModel.getInstance();
+    detachModuleForTest("blk-1", "surf-1");
+    model.handleWpsEvent(
+        makeUpdateEvent({
+            type: "module.focused",
+            moduleid: "blk-1",
+            payload: { moduleid: "blk-1", wasdetached: true, capturedts: 7 } as any,
+        })
+    );
+    assert.equal(hasFocusSnapshot("blk-1"), true);
+    const labels = buildSpatialMenuItems("blk-1").map((it) => it.label);
+    assert.deepEqual(labels, [
+        "Acoplar a ventana principal",
+        "Enfocar módulo",
+        "Restaurar posición anterior",
+        "Maximizar módulo",
+        "Minimizar módulo",
+        "Cerrar módulo",
+    ]);
+    // focusReleased de un detached conserva la entrada del módulo
+    model.handleWpsEvent(makeUpdateEvent({ type: "module.focusReleased", moduleid: "blk-1" }));
+    assert.equal(hasFocusSnapshot("blk-1"), false);
+    assert.equal(isDetachedModule("blk-1"), true);
+});
+
+test("decideDockedFocusAction: magnify only for docked, unmagnified, present nodes", () => {
+    assert.equal(decideDockedFocusAction(false, "node-1", null), "magnify");
+    assert.equal(decideDockedFocusAction(false, "node-1", "node-other"), "magnify");
+    assert.equal(decideDockedFocusAction(false, "node-1", "node-1"), "noop"); // idempotente
+    assert.equal(decideDockedFocusAction(true, "node-1", null), "noop"); // detached lo maneja emain
+    assert.equal(decideDockedFocusAction(false, null, null), "noop"); // no está en este tab
+});
+
+test("decideDockedFocusReleaseAction: unmagnify only when currently magnified", () => {
+    assert.equal(decideDockedFocusReleaseAction(false, "node-1", "node-1"), "unmagnify");
+    assert.equal(decideDockedFocusReleaseAction(false, "node-1", "node-other"), "noop");
+    assert.equal(decideDockedFocusReleaseAction(false, "node-1", null), "noop");
+    assert.equal(decideDockedFocusReleaseAction(true, "node-1", "node-1"), "noop");
+    assert.equal(decideDockedFocusReleaseAction(false, null, "node-1"), "noop");
+});
+
+test("module.minimized delta and typed re-emit", () => {
+    const model = SpatialModel.getInstance();
+    detachModuleForTest("blk-1", "surf-1");
+    const seen: [string, boolean][] = [];
+    getSpatialBus().on("module.minimized", (p) => seen.push([p.moduleId, p.minimized]));
+    model.handleWpsEvent(makeUpdateEvent({ type: "module.minimized", moduleid: "blk-1", payload: { minimized: true } as any }));
+    assert.deepEqual(seen, [["blk-1", true]]);
+    assert.equal(globalStore.get(model.spatialStateAtom).modules["blk-1"].isminimized, true);
+    model.handleWpsEvent(makeUpdateEvent({ type: "module.minimized", moduleid: "blk-1", payload: { minimized: false } as any }));
+    assert.equal(globalStore.get(model.spatialStateAtom).modules["blk-1"].isminimized, false);
 });
 
 test("applySpatialMenu appends items to a docked header menu", () => {
@@ -264,7 +348,7 @@ test("applySpatialMenu appends items to a docked header menu", () => {
     const menu = applySpatialMenu(base, "blk-docked");
     assert.deepEqual(
         menu.map((it) => it.label ?? "|"),
-        ["Magnify Block", "|", "Close Block", "|", "Desacoplar (Pop Out)"]
+        ["Magnify Block", "|", "Close Block", "|", ...DockedBaseLabels]
     );
 });
 
@@ -280,7 +364,7 @@ test("applySpatialMenu prunes tab-centric actions when detached (R11)", () => {
     const menu = applySpatialMenu(base, "blk-1");
     assert.deepEqual(
         menu.map((it) => it.label ?? "|"),
-        ["Copy BlockId", "|", "Acoplar a ventana principal", "Cerrar módulo"]
+        ["Copy BlockId", "|", ...DetachedBaseLabels]
     );
 });
 

@@ -156,6 +156,9 @@ type WshRpcInterface interface {
 	SpatialDetachCommand(ctx context.Context, data CommandSpatialDetachData) (string, error) // → surfaceId
 	SpatialAttachCommand(ctx context.Context, data CommandSpatialAttachData) error
 	SpatialMoveCommand(ctx context.Context, data CommandSpatialMoveData) error
+	SpatialFocusCommand(ctx context.Context, data CommandSpatialFocusData) error
+	SpatialRestoreCommand(ctx context.Context, data CommandSpatialRestoreData) error
+	SpatialSetMinimizedCommand(ctx context.Context, data CommandSpatialSetMinimizedData) error
 	SpatialCloseModuleCommand(ctx context.Context, data CommandSpatialCloseModuleData) error
 	SpatialListMonitorsCommand(ctx context.Context) ([]waveobj.MonitorInfo, error)
 	SpatialUpdateMonitorsCommand(ctx context.Context, monitors []waveobj.MonitorInfo) error
@@ -530,6 +533,19 @@ type CommandSpatialMoveData struct {
 
 type CommandSpatialCloseModuleData struct {
 	ModuleId string `json:"moduleid"`
+}
+
+type CommandSpatialFocusData struct {
+	ModuleId string `json:"moduleid"`
+}
+
+type CommandSpatialRestoreData struct {
+	ModuleId string `json:"moduleid"`
+}
+
+type CommandSpatialSetMinimizedData struct {
+	ModuleId  string `json:"moduleid"`
+	Minimized bool   `json:"minimized"`
 }
 
 type BlocksListRequest struct {

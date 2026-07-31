@@ -12,6 +12,8 @@ export interface SpatialEventMap {
     "module.resized": { moduleId: string; placement: SpatialPlacement };
     "module.focused": { moduleId: string };
     "module.focusReleased": { moduleId: string };
+    // Extensión al contrato §2 (Task 10): estado minimizado de un detached
+    "module.minimized": { moduleId: string; minimized: boolean };
     "module.surfaceChanged": { moduleId: string; from: string; to: string };
     "surface.created": { surface: Surface };
     "surface.closed": { surfaceId: string };

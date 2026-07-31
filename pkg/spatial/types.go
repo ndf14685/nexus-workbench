@@ -50,6 +50,9 @@ const (
 	SpatialEvent_ModuleResized           = "module.resized"
 	SpatialEvent_ModuleFocused           = "module.focused"
 	SpatialEvent_ModuleFocusReleased     = "module.focusReleased"
+	// Extensión al contrato §2: SetMinimized necesita su propio tipo de evento
+	// (module.moved implicaría bounds); payload {minimized:bool}.
+	SpatialEvent_ModuleMinimized = "module.minimized"
 	SpatialEvent_ModuleSurfaceChanged    = "module.surfaceChanged"
 	SpatialEvent_SurfaceCreated          = "surface.created"
 	SpatialEvent_SurfaceClosed           = "surface.closed"

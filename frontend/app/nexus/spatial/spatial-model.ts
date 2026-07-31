@@ -58,6 +58,42 @@ export function shouldPreserveBlockOnDelete(blockId: string): boolean {
     return isDetachedModule(blockId);
 }
 
+// Decisión pura del cableado bus→magnify (Task 10): el focus acoplado se
+// materializa con magnify en el tab estático; detached lo materializa emain.
+// Idempotente: ya magnificado → no-op.
+export function decideDockedFocusAction(
+    isDetached: boolean,
+    nodeId: string,
+    magnifiedNodeId: string
+): "magnify" | "noop" {
+    if (isDetached || nodeId == null) {
+        return "noop";
+    }
+    return magnifiedNodeId === nodeId ? "noop" : "magnify";
+}
+
+export function decideDockedFocusReleaseAction(
+    isDetached: boolean,
+    nodeId: string,
+    magnifiedNodeId: string
+): "unmagnify" | "noop" {
+    if (isDetached || nodeId == null) {
+        return "noop";
+    }
+    return magnifiedNodeId === nodeId ? "unmagnify" : "noop";
+}
+
+// Visibilidad de "Restaurar posición anterior" (CONTRACTS §7)
+export function hasFocusSnapshot(blockId: string): boolean {
+    try {
+        const st = globalStore.get(SpatialModel.getInstance().spatialStateAtom);
+        return st?.focussnapshots?.[blockId] != null;
+    } catch (e) {
+        console.error("spatial-model: hasFocusSnapshot failed", e);
+        return false;
+    }
+}
+
 export class SpatialModel {
     private static instance: SpatialModel = null;
 
@@ -191,6 +227,42 @@ export class SpatialModel {
             if (surfaceId) {
                 delete st.surfaces[surfaceId];
             }
+            delete st.focussnapshots[data.moduleid];
+            globalStore.set(this.spatialStateAtom, st);
+            return;
+        }
+        if (data.type === "module.focused") {
+            const st = this.cloneState(data.workspaceid);
+            st.focussnapshots[data.moduleid] = (payload as FocusSnapshot) ?? { moduleid: data.moduleid, wasdetached: false, capturedts: 0 };
+            if (st.modules[data.moduleid] != null) {
+                st.modules[data.moduleid] = { ...st.modules[data.moduleid], isfocused: true };
+            }
+            globalStore.set(this.spatialStateAtom, st);
+            return;
+        }
+        if (data.type === "module.focusReleased") {
+            const st = this.cloneState(data.workspaceid);
+            delete st.focussnapshots[data.moduleid];
+            const mod = st.modules[data.moduleid];
+            if (mod != null) {
+                // espejo del engine: la entrada acoplada creada solo para el
+                // focus vuelve a "default" y desaparece
+                if (!mod.isdetached && !mod.isminimized) {
+                    delete st.modules[data.moduleid];
+                } else {
+                    st.modules[data.moduleid] = { ...mod, isfocused: false };
+                }
+            }
+            globalStore.set(this.spatialStateAtom, st);
+            return;
+        }
+        if (data.type === "module.minimized") {
+            const cur = globalStore.get(this.spatialStateAtom);
+            if (cur?.modules?.[data.moduleid] == null) {
+                return;
+            }
+            const st = this.cloneState(data.workspaceid);
+            st.modules[data.moduleid] = { ...st.modules[data.moduleid], isminimized: payload?.minimized === true };
             globalStore.set(this.spatialStateAtom, st);
         }
     }
@@ -212,6 +284,7 @@ export class SpatialModel {
             ...cur,
             modules: { ...cur?.modules },
             surfaces: { ...cur?.surfaces },
+            focussnapshots: { ...cur?.focussnapshots },
         };
     }
 
@@ -231,6 +304,9 @@ export class SpatialModel {
             case "module.moved":
             case "module.resized":
                 this.bus.emit(eventType, { moduleId: data.moduleid, placement: payload as SpatialPlacement });
+                break;
+            case "module.minimized":
+                this.bus.emit(eventType, { moduleId: data.moduleid, minimized: payload?.minimized === true });
                 break;
             case "module.surfaceChanged":
                 this.bus.emit(eventType, { moduleId: data.moduleid, from: payload?.from, to: payload?.to });

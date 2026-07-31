@@ -6,7 +6,7 @@ import { waveEventSubscribeSingle } from "@/app/store/wps";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { fireAndForget } from "@/util/util";
 import { randomUUID } from "crypto";
-import { BrowserWindow, screen } from "electron";
+import { BrowserWindow, ipcMain, screen } from "electron";
 import path from "path";
 import { debounce } from "throttle-debounce";
 import { getGlobalIsQuitting, getGlobalIsRelaunching } from "./emain-activity";
@@ -155,6 +155,8 @@ export async function createDetachedWindow(
         "move",
         debounce(400, () => reportSurfaceBounds(spatialWindow))
     );
+    spatialWindow.on("minimize", () => reportMinimizedState(spatialWindow, true));
+    spatialWindow.on("restore", () => reportMinimizedState(spatialWindow, false));
     spatialWindow.on("closed", () => {
         console.log("spatial window closed", surface.id, "engineClosing:", spatialWindow.engineClosing);
         spatialWindows.delete(surface.id);
@@ -181,6 +183,9 @@ export async function createDetachedWindow(
         throw e;
     }
     spatialWindow.show();
+    if (module.isminimized) {
+        spatialWindow.minimize();
+    }
     console.log("created spatial window", surface.id, "module:", module.id);
     return spatialWindow;
 }
@@ -245,6 +250,56 @@ function applyModuleMove(data: SpatialEventData) {
     moveWindowToDisplayPreservingOffset(win, targetDisplay);
 }
 
+// Focus de un detached: traer la ventana al frente y agrandarla al 80%
+// centrado del workArea de su display actual. El snapshot que permite volver
+// lo capturó el engine (una sola vez); el self-report de bounds pisará el
+// placement vivo pero Restore repone el del snapshot vía module.moved.
+function applyModuleFocus(data: SpatialEventData) {
+    const win = getSpatialWindowByModuleId(data.moduleid);
+    if (win == null || win.isDestroyed() || win.engineClosing) {
+        return; // acoplado: lo materializa el renderer principal (magnify)
+    }
+    if (win.isMinimized()) {
+        win.restore();
+    }
+    win.show();
+    win.focus();
+    const workArea = screen.getDisplayMatching(win.getBounds()).workArea;
+    const target = {
+        x: Math.round(workArea.x + workArea.width * 0.1),
+        y: Math.round(workArea.y + workArea.height * 0.1),
+        width: Math.round(workArea.width * 0.8),
+        height: Math.round(workArea.height * 0.8),
+    };
+    const cur = win.getBounds();
+    if (cur.x !== target.x || cur.y !== target.y || cur.width !== target.width || cur.height !== target.height) {
+        win.setBounds(target);
+    }
+}
+
+// Los guards de estado actual cortan el eco: minimize() dispara el listener
+// que reporta SetMinimized(true), el engine lo salta por idempotente.
+function applyModuleMinimized(data: SpatialEventData) {
+    const win = getSpatialWindowByModuleId(data.moduleid);
+    if (win == null || win.isDestroyed() || win.engineClosing) {
+        return;
+    }
+    const minimized = parseSpatialPayload(data.payload)?.minimized === true;
+    if (minimized && !win.isMinimized()) {
+        win.minimize();
+    } else if (!minimized && win.isMinimized()) {
+        win.restore();
+        win.show();
+    }
+}
+
+function reportMinimizedState(win: SpatialWindowType, minimized: boolean) {
+    if (win.isDestroyed() || win.engineClosing) {
+        return;
+    }
+    RpcApi.SpatialSetMinimizedCommand(ElectronWshClient, { moduleid: win.moduleId, minimized }, { noresponse: true });
+}
+
 async function handleModuleDetached(data: SpatialEventData) {
     const state = await RpcApi.SpatialGetStateCommand(ElectronWshClient, { workspaceid: data.workspaceid });
     const module = state?.modules?.[data.moduleid];
@@ -280,6 +335,12 @@ function handleSpatialEvent(event: WaveEvent) {
             case "module.moved":
                 applyModuleMove(data);
                 break;
+            case "module.focused":
+                applyModuleFocus(data);
+                break;
+            case "module.minimized":
+                applyModuleMinimized(data);
+                break;
         }
     });
 }
@@ -288,6 +349,19 @@ export function initSpatialEventSubscription() {
     waveEventSubscribeSingle({
         eventType: "spatial:update",
         handler: handleSpatialEvent,
+    });
+    // Task 10: la ventana detached se maximiza a sí misma (preload
+    // spatialToggleMaximize); chrome de ventana puro, sin estado del engine.
+    ipcMain.on("spatial-toggle-maximize", (event) => {
+        const win = getSpatialWindowByWebContentsId(event.sender.id);
+        if (win == null || win.isDestroyed()) {
+            return;
+        }
+        if (win.isMaximized()) {
+            win.unmaximize();
+        } else {
+            win.maximize();
+        }
     });
 }
 

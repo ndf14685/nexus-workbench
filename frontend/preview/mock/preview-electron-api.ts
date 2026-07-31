@@ -47,6 +47,7 @@ const previewElectronApi: ElectronApi = {
     onBuilderInit: (_callback: (initOpts: BuilderInitOpts) => void) => {},
     onSpatialInit: (_callback: (initOpts: SpatialInitOpts) => void) => {}, // nexus:
     getDisplays: () => Promise.resolve([]), // nexus:
+    spatialToggleMaximize: () => {}, // nexus:
     sendLog: (_log: string) => {},
     onQuicklook: (_filePath: string) => {},
     openNativePath: (_filePath: string) => {},
