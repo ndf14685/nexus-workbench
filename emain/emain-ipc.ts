@@ -19,9 +19,10 @@ import {
     incrementTermCommandsWsl,
     setWasActive,
 } from "./emain-activity";
+import { hardenAiSession } from "./emain-aiweb"; // nexus:
 import { createBuilderWindow, getAllBuilderWindows, getBuilderWindowByWebContentsId } from "./emain-builder";
-import { getSpatialWindowByWebContentsId } from "./emain-spatial"; // nexus:
 import { callWithOriginalXdgCurrentDesktopAsync, unamePlatform } from "./emain-platform";
+import { getSpatialWindowByWebContentsId } from "./emain-spatial"; // nexus:
 import { getWaveTabViewByWebContentsId } from "./emain-tabview";
 import { handleCtrlShiftState } from "./emain-util";
 import { getWaveVersion } from "./emain-wavesrv";
@@ -401,6 +402,14 @@ export function initIpcHandlers() {
             console.error("Failed to clear cookies and storage:", e);
             throw e;
         }
+    });
+
+    // nexus: un panel web de IA avisa cuál es su partición antes de cargar, para
+    // que la política de permisos/certificados esté aplicada desde el primer
+    // request. Las particiones del catálogo ya se preparan al arrancar; esto
+    // cubre los proveedores que el usuario agrega en widgets.json (D-031).
+    electron.ipcMain.on("ensure-ai-session", (event, partition: string) => {
+        hardenAiSession(partition);
     });
 
     electron.ipcMain.on("open-native-path", (event, filePath: string) => {

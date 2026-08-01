@@ -9,6 +9,12 @@ import { createNewWaveWindow, getWaveWindowById } from "emain/emain-window";
 import path from "path";
 import { configureAuthKeyRequestInjection } from "./authkey";
 import { setWasActive } from "./emain-activity";
+import {
+    attachAuthWindowGuards,
+    handleWebviewWindowOpen,
+    hardenWebviewPreferences,
+    partitionForWebContents,
+} from "./emain-aiweb"; // nexus:
 import { getElectronAppBasePath, isDevVite, unamePlatform } from "./emain-platform";
 import {
     decreaseZoomLevel,
@@ -314,13 +320,29 @@ export async function getOrCreateWebViewForTab(waveWindowId: string, tabId: stri
     tabView.waveTabId = tabId;
     tabView.webContents.on("will-navigate", shNavHandler);
     tabView.webContents.on("will-frame-navigate", shFrameNavHandler);
+    // nexus: ningún <webview> obtiene Node ni pierde el aislamiento de contexto,
+    // sin importar cómo esté escrito el tag en el renderer (D-031).
+    tabView.webContents.on("will-attach-webview", (_event, webPreferences) => {
+        hardenWebviewPreferences(webPreferences);
+    });
     tabView.webContents.on("did-attach-webview", (event, wc) => {
         wc.setWindowOpenHandler((details) => {
             if (wc == null || wc.isDestroyed() || tabView.webContents == null || tabView.webContents.isDestroyed()) {
                 return { action: "deny" };
             }
-            tabView.webContents.send("webview-new-window", wc.id, details);
-            return { action: "deny" };
+            // nexus: en un panel de chat de IA, la emergente de login se abre
+            // DENTRO de la app y en la misma partición (si no, la sesión queda
+            // en el navegador del sistema y el panel sigue deslogueado). El
+            // resto de los links conserva el camino de siempre.
+            return handleWebviewWindowOpen(wc, details, () => {
+                tabView.webContents.send("webview-new-window", wc.id, details);
+            });
+        });
+        wc.on("did-create-window", (win) => {
+            const partition = partitionForWebContents(wc);
+            if (partition != null) {
+                attachAuthWindowGuards(win, partition);
+            }
         });
     });
     tabView.webContents.on("before-input-event", (e, input) => {

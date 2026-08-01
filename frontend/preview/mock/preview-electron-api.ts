@@ -55,6 +55,7 @@ const previewElectronApi: ElectronApi = {
     captureScreenshot: (_rect: Electron.Rectangle) => Promise.resolve(""),
     setKeyboardChordMode: () => {},
     clearWebviewStorage: (_webContentsId: number) => Promise.resolve(),
+    ensureAiSession: (_partition: string) => {}, // nexus:
     setWaveAIOpen: (_isOpen: boolean) => {},
     closeBuilderWindow: () => {},
     incrementTermCommands: (_opts?: { isRemote?: boolean; isWsl?: boolean; isDurable?: boolean }) => {},

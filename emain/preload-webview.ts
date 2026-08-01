@@ -5,6 +5,12 @@ import { ipcRenderer } from "electron";
 
 document.addEventListener("contextmenu", (event) => {
     console.log("contextmenu event", event);
+    // nexus: un evento sintético (event.isTrusted === false) lo dispara la
+    // página, no el usuario: sin esta guarda una página podía hacer que el
+    // proceso main armara un menú "Save Image" sobre una URL elegida por ella.
+    if (!event.isTrusted) {
+        return;
+    }
     if (event.target == null) {
         return;
     }

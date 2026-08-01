@@ -67,6 +67,34 @@ Toda alerta en código propio (`nexus/`, extensiones en el árbol de Wave) se
 arregla o se justifica individualmente aquí. Las de código upstream se evalúan
 contra este modelo de amenaza; si upstream las arregla, el fix entra por sync.
 
+## Paneles web de IA (D-031)
+
+Un chat web embebido es contenido remoto corriendo dentro de la app: se trata
+como hostil por defecto.
+
+- **Sin puente al sistema.** `will-attach-webview` fuerza en CUALQUIER
+  `<webview>` `nodeIntegration:false`, `nodeIntegrationInSubFrames:false`,
+  `contextIsolation:true`, `webSecurity:true`, `allowRunningInsecureContent:false`.
+  No hay acceso a filesystem, terminal, SSH ni a las RPC internas: la única
+  superficie que un panel comparte con la app es el `preload-webview` histórico
+  (menú contextual de imagen y navegación con los botones laterales del mouse).
+- **Permisos mínimos** (`frontend/app/nexus/ai-web-policy.ts`, aplicados en
+  `emain/emain-aiweb.ts`): se conceden portapapeles sanitizado de ESCRITURA,
+  pantalla completa, storage-access y micrófono. Se niegan geolocalización,
+  notificaciones, cámara, captura de pantalla, USB/serial/HID, lectura del
+  portapapeles, detección de inactividad y midi. Dispositivos físicos: negados
+  en bloque (`setDevicePermissionHandler`).
+- **Certificados**: `setCertificateVerifyProc` delega siempre en Chromium
+  (`callback(-3)`); el handler existe solo para dejar registro del rechazo. Un
+  certificado inválido nunca se acepta en silencio.
+- **Ventanas y links**: un `window.open` reconocido como login abre una ventana
+  emergente propia (misma partición, `sandbox:true`, sin preload, solo `http(s)`);
+  el resto de los links va al navegador del sistema; los esquemas que no son web
+  no se abren en ningún lado.
+- **Credenciales**: no se guardan ni se inyectan. La sesión vive donde la pone
+  Chromium (partición `persist:ai-<proveedor>`, data dir de la app), aislada por
+  proveedor.
+
 ## SBOM / dependencias
 
 - `npm audit --omit=dev` corre en `verify.sh` (informativo, no bloquea).

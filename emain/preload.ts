@@ -67,6 +67,8 @@ contextBridge.exposeInMainWorld("api", {
     captureScreenshot: (rect: Rectangle) => ipcRenderer.invoke("capture-screenshot", rect),
     setKeyboardChordMode: () => ipcRenderer.send("set-keyboard-chord-mode"),
     clearWebviewStorage: (webContentsId: number) => ipcRenderer.invoke("clear-webview-storage", webContentsId),
+    // nexus: prepara la sesión persistente de un chat web (D-031)
+    ensureAiSession: (partition: string) => ipcRenderer.send("ensure-ai-session", partition),
     setWaveAIOpen: (isOpen: boolean) => ipcRenderer.send("set-waveai-open", isOpen),
     closeBuilderWindow: () => ipcRenderer.send("close-builder-window"),
     incrementTermCommands: (opts?: { isRemote?: boolean; isWsl?: boolean; isDurable?: boolean }) =>
@@ -81,9 +83,14 @@ contextBridge.exposeInMainWorld("api", {
 });
 
 // Custom event for "new-window"
+// nexus: el evento va al webview que REALMENTE disparó el window.open. Todos los
+// tags comparten id="webview", así que getElementById devolvía siempre el
+// primero: con dos paneles web abiertos, el link de uno se abría desde el otro.
 ipcRenderer.on("webview-new-window", (e, webContentsId, details) => {
     const event = new CustomEvent("new-window", { detail: details });
-    document.getElementById("webview").dispatchEvent(event);
+    const target =
+        document.querySelector(`webview[data-webcontentsid="${webContentsId}"]`) ?? document.getElementById("webview");
+    target?.dispatchEvent(event);
 });
 
 ipcRenderer.on("webcontentsid-from-blockid", (e, blockId, responseCh) => {

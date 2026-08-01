@@ -368,16 +368,66 @@ function normalizeModes(raw, ctx) {
     return modes;
 }
 
+// Herramienta de una invocación: "claude --dangerously-skip-permissions" →
+// "claude". Espejo de widgetBaseCommand() en frontend/app/nexus/ai-apps.ts.
+function baseTool(command) {
+    const first = String(command ?? "").trim().split(/\s+/)[0];
+    const base = first.split(/[/\\]/).pop() ?? first;
+    return base.replace(/\.(exe|cmd|bat|ps1)$/i, "").toLowerCase();
+}
+
+const DangerFlagRe =
+    /(^|\s)(--dangerously-skip-permissions|--dangerously-bypass-approvals-and-sandbox|--yolo|--full-auto|--bypass-permissions)(\s|$)/;
+
+// Un catálogo heredado declaraba una entrada por variante de permisos (claude,
+// claude-full, codex, codex-full): cuatro botones para dos herramientas. Las
+// entradas que comparten herramienta Y ambiente se funden en un solo agente con
+// `modes` (D-031). La app hace el mismo plegado en la barra por si el catálogo
+// no se vuelve a importar, pero acá se arregla el origen.
+function collapseAgents(rawAgents) {
+    const byKey = new Map();
+    const order = [];
+    for (const agent of rawAgents) {
+        const modes = normalizeModes(agent.modes, `agente '${agent.id ?? "?"}'`);
+        const command = agent.command ?? modes[0]?.command;
+        if (!agent.id || !command) {
+            console.warn(`agente omitido (requiere id y command o modes): ${JSON.stringify(agent)}`);
+            continue;
+        }
+        const key = `${baseTool(command)}@${agent.environment ?? ""}`;
+        const existing = byKey.get(key);
+        if (existing == null) {
+            byKey.set(key, { ...agent, command, modes });
+            order.push(key);
+            continue;
+        }
+        const merged = modes.length > 0 ? modes : [{ label: agent.name ?? agent.id, command }];
+        const known = new Set(existing.modes.map((m) => m.command));
+        if (existing.modes.length === 0) {
+            existing.modes.push({ label: existing.name ?? existing.id, command: existing.command });
+            known.add(existing.command);
+        }
+        for (const mode of merged) {
+            if (known.has(mode.command)) {
+                continue;
+            }
+            known.add(mode.command);
+            existing.modes.push(DangerFlagRe.test(mode.command) ? { ...mode, danger: true } : mode);
+        }
+        console.warn(
+            `agente '${agent.id}' FUNDIDO en '${existing.id}': misma herramienta (${baseTool(command)}) — ` +
+                `un botón con ${existing.modes.length} modos en vez de dos botones`
+        );
+    }
+    return order.map((k) => byKey.get(k));
+}
+
 const agentIds = new Set();
 const agentCommands = new Map();
 let agentCount = 0;
-for (const agent of catalog.agents ?? []) {
-    const modes = normalizeModes(agent.modes, `agente '${agent.id ?? "?"}'`);
-    const baseCommand = agent.command ?? modes[0]?.command;
-    if (!agent.id || !baseCommand) {
-        console.warn(`agente omitido (requiere id y command o modes): ${JSON.stringify(agent)}`);
-        continue;
-    }
+for (const agent of collapseAgents(catalog.agents ?? [])) {
+    const modes = agent.modes;
+    const baseCommand = agent.command;
     const meta = {
         view: "term",
         controller: "cmd",

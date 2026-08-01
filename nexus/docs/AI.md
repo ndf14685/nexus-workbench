@@ -70,6 +70,126 @@ el importador **no** genera el widget `nexus-cmd-*` y avisa nombrando ambas
 entradas. Así el catálogo no puede volver a producir dos botones para la misma
 herramienta.
 
+### El catálogo vive en la app (D-031)
+
+Desde D-031 los accesos de IA **no dependen** de que el importador haya corrido:
+el catálogo único está en `frontend/app/nexus/ai-apps.ts` y la barra lo fusiona
+con `widgets.json`. Desde D-032 son **tres botones, uno por proveedor**, y el
+click ofrece las superficies de ese proveedor:
+
+| Botón | Al hacer click | Qué abre |
+|---|---|---|
+| **ChatGPT** | ChatGPT (panel web) | bloque `web` en `persist:ai-chatgpt` |
+| | Codex CLI — Normal | bloque `term` corriendo `codex` |
+| | ⚠ Codex CLI — Permisos totales | bloque `term` corriendo `codex --yolo` |
+| **Claude** | Claude Chat (panel web) | bloque `web` en `persist:ai-claude` |
+| | Claude CLI — Normal | bloque `term` corriendo `claude` |
+| | ⚠ Claude CLI — Permisos totales | bloque `term` corriendo `claude --dangerously-skip-permissions` |
+| **Gemini** | Gemini (panel web) | bloque `web` en `persist:ai-gemini` |
+| | Agy CLI — Normal | bloque `term` corriendo `agy` |
+| | ⚠ Agy CLI — Permisos totales | bloque `term` corriendo `agy --dangerously-skip-permissions` |
+
+Un proveedor con una sola superficie no mostraría menú (el click abriría el
+bloque directo), pero hoy los tres tienen chat + CLI, así que los tres abren el
+desplegable.
+
+Antigravity **no** es un botón aparte: es el IDE agéntico de Google (el lado de
+código de Gemini) y no tiene chat web. Su CLI —`agy`— es el agente de terminal
+del botón Gemini, y el chat es `gemini.google.com/app`.
+
+**Plegado automático.** Si `widgets.json` trae widgets locales que lanzan
+`claude`, `codex` o `agy` —incluso envueltos en `wsl -d Ubuntu --`, `bash -lc "..."`,
+`cmd /c` o variables de entorno— la barra los **funde** dentro del botón del
+proveedor; las invocaciones que no estén en el catálogo se conservan como acción
+extra del mismo menú. Lo mismo con un widget web que apunte al mismo origen que
+un chat del catálogo (típicamente un `nexus-link-*`). Un widget con `connection`
+NO se pliega: un agente en un ambiente remoto es otra herramienta, no una
+variante de la local. El importador hace el mismo plegado en el origen, sobre la
+sección `agents:`.
+
+**Personalizar sin recompilar.** Cada built-in tiene una clave estable
+(`nexus-ai-<proveedor>`: `nexus-ai-openai`, `nexus-ai-anthropic`,
+`nexus-ai-google`) y un widget del usuario con esa misma
+clave **gana**. Para cambiar la URL de un chat, ocultar un acceso o agregar otro
+proveedor, menú contextual de la barra → *Edit widgets.json*:
+
+```json
+{
+    "nexus-ai-google": {
+        "icon": "gem",
+        "label": "Gemini",
+        "blockdef": {
+            "meta": { "view": "web", "url": "https://LA-URL/", "web:partition": "persist:ai-gemini" }
+        }
+    },
+    "nexus-ai-perplexity": {
+        "icon": "comments",
+        "label": "Perplexity",
+        "blockdef": {
+            "meta": { "view": "web", "url": "https://www.perplexity.ai/", "web:partition": "persist:ai-perplexity" }
+        }
+    }
+}
+```
+
+Para esconder un acceso built-in alcanza con redefinir su clave con
+`"display:hidden": true`.
+
+## Chats web: sesión, permisos y login
+
+Los chats web son bloques `web` normales — el mismo componente, el mismo layout,
+el mismo desacople a otra pantalla y la misma persistencia de workspace que
+cualquier otro módulo. Se pueden abrir varias instancias del mismo proveedor: son
+bloques distintos que **comparten la sesión**.
+
+**Persistencia.** Cada proveedor tiene su partición `persist:ai-<id>`. El prefijo
+`persist:` es el mecanismo de Chromium/Electron que escribe cookies,
+localStorage e IndexedDB en el data dir de la app: el login sobrevive al cierre y
+reapertura. No se guarda ni se inyecta ninguna credencial en la config.
+
+**Aislamiento.** `emain/emain-aiweb.ts` aplica sobre esas sesiones la política de
+`frontend/app/nexus/ai-web-policy.ts`, y `will-attach-webview` fuerza
+`nodeIntegration:false` / `contextIsolation:true` / `webSecurity:true` en
+CUALQUIER `<webview>`, sin importar cómo esté escrito el tag. Permisos
+concedidos: escritura sanitizada de portapapeles, pantalla completa, acceso a
+almacenamiento (logins federados) y **micrófono** (dictado). Todo lo demás se
+niega: geolocalización, notificaciones, cámara, captura de pantalla,
+USB/serial/HID, lectura del portapapeles, detección de inactividad. Los
+certificados los valida Chromium: uno inválido no se acepta en silencio.
+
+**Login y ventanas emergentes.** Un `window.open` de un panel de IA que la
+política reconoce como login (disposición `new-window`, o URL de un IdP conocido
+o un flujo OAuth con sus parámetros) se abre como **ventana emergente dentro de
+la app**, en la misma partición y con los mismos webPreferences endurecidos: la
+sesión resultante queda donde el panel la va a leer, y la relación con el
+`opener` se conserva (la crea Electron, no la fabricamos nosotros), que es lo que
+necesitan los flujos que hacen `postMessage` al abridor. Un link común del chat
+sigue yendo al navegador del sistema, y un esquema que no sea `http(s)` no se
+abre en ningún lado.
+
+**Limitaciones conocidas de la autenticación embebida:**
+
+- Los paneles de IA se presentan con el user-agent de Chrome de la propia app
+  (se le quitan los tokens `waveterm/` y `Electron/`, y nada más): sin eso el
+  login con Google contesta "este navegador no es seguro". Es una omisión del
+  envoltorio, no un user-agent falso — plataforma y versión de Chrome son las
+  reales. Si aun así un IdP rechaza el panel, queda el camino de loguearse en
+  el navegador externo.
+- **Passkeys / WebAuthn**: el `<webview>` de Electron no expone el autenticador
+  de plataforma del SO. Un proveedor que EXIJA passkey no va a poder completar el
+  login embebido; los que ofrecen contraseña o código sí.
+- **Una sola cuenta de Google por partición.** Loguearse en `persist:ai-gemini`
+  NO comparte esa sesión con ChatGPT o Claude: cada partición es un perfil
+  separado, y eso es a propósito (una cookie de un proveedor no viaja al otro).
+  Si querés "iniciar sesión con Google" en ChatGPT, ese login se hace dentro de
+  la partición de ChatGPT y queda ahí.
+- **El navegador embebido es el Chromium de Electron**, no tu Chrome instalado:
+  no comparte tu perfil de Google ni se actualiza con Chrome. Se actualiza
+  cuando actualizás la app (Electron 41.1 ⇒ Chromium 146). No hay forma
+  soportada de embeber Chrome del sistema dentro de la app: si querés tu Chrome
+  real con tu sesión, el botón "Open in External Browser" del bloque lo abre
+  afuera.
+
 ## Panel Wave AI con proveedores propios (requiere API key u Ollama)
 
 > Verificado en el código del baseline: `pkg/aiusechat/` tiene backends nativos

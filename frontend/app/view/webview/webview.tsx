@@ -3,6 +3,7 @@
 
 import { BlockNodeModel } from "@/app/block/blocktypes";
 import { Search, useSearch } from "@/app/element/search";
+import { chromeUserAgentFrom, isAiPartition } from "@/app/nexus/ai-apps";
 import { globalStore } from "@/app/store/jotaiStore";
 import { getSimpleControlShiftAtom } from "@/app/store/keymodel";
 import type { TabModel } from "@/app/store/tab-model";
@@ -30,6 +31,17 @@ const USER_AGENT_IPHONE =
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
 const USER_AGENT_ANDROID =
     "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.43 Mobile Safari/537.36";
+
+// nexus: particiones de IA ya anunciadas al proceso main en esta ventana
+const announcedAiPartitions = new Set<string>();
+
+function ensureAiSessionOnce(env: WebViewEnv, partition: string | undefined) {
+    if (!isAiPartition(partition) || announcedAiPartitions.has(partition)) {
+        return;
+    }
+    announcedAiPartitions.add(partition);
+    env.electron.ensureAiSession(partition);
+}
 
 let webviewPreloadUrl = null;
 
@@ -859,6 +871,12 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
     const partitionOverride = useAtomValueSafe(model.partitionOverride);
     const metaPartition = useAtomValue(env.getBlockMetaKeyAtom(model.blockId, "web:partition"));
     const webPartition = partitionOverride || metaPartition || undefined;
+    // nexus: la política de permisos/certificados de una partición de IA tiene
+    // que estar puesta ANTES de que el guest empiece a cargar. Las particiones
+    // del catálogo se preparan al arrancar la app; esto cubre las que agrega el
+    // usuario en widgets.json. Se hace en el cuerpo del componente (no en un
+    // efecto) justo por el orden: un efecto corre con el <webview> ya attacheado.
+    ensureAiSessionOnce(env, webPartition);
     const userAgentType = useAtomValue(model.userAgentType) || "default";
 
     // Determine user agent string based on type
@@ -867,6 +885,10 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
         userAgent = USER_AGENT_IPHONE;
     } else if (userAgentType === "mobile:android") {
         userAgent = USER_AGENT_ANDROID;
+    } else if (isAiPartition(webPartition)) {
+        // nexus: sin esto el login con Google contesta "este navegador no es
+        // seguro" y no hay forma de terminar la autenticación en el panel.
+        userAgent = chromeUserAgentFrom(navigator.userAgent);
     }
 
     // Search

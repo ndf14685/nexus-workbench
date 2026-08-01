@@ -39,6 +39,7 @@ import {
     unameArch,
     unamePlatform,
 } from "./emain-platform";
+import { initAiSessions } from "./emain-aiweb"; // nexus:
 import { initDisplays } from "./emain-displays"; // nexus:
 import { getAllSpatialWindows, initSpatialEventSubscription, reconcileSpatialWindows } from "./emain-spatial"; // nexus:
 import { ensureHotSpareTab, setMaxTabCacheSize } from "./emain-tabview";
@@ -407,6 +408,7 @@ async function appMain() {
     console.log("wavesrv ready signal received", ready, Date.now() - startTs, "ms");
     await electronApp.whenReady();
     configureAuthKeyRequestInjection(electron.session.defaultSession);
+    initAiSessions(); // nexus: particiones persistentes + política de permisos de los chats web (D-031)
     initIpcHandlers();
 
     await sleep(10); // wait a bit for wavesrv to be ready

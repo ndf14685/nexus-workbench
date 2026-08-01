@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Tooltip } from "@/app/element/tooltip";
-import { buildModeMenuItems } from "@/app/nexus/widget-modes";
+import { mergeAiWidgets } from "@/app/nexus/ai-apps";
+import { buildActionMenuItems, buildModeMenuItems } from "@/app/nexus/widget-modes";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { useWaveEnv, WaveEnv, WaveEnvSubset } from "@/app/waveenv/waveenv";
 import { shouldIncludeWidgetForWorkspace } from "@/app/workspace/widgetfilter";
@@ -19,7 +20,7 @@ import {
 } from "@floating-ui/react";
 import clsx from "clsx";
 import { useAtomValue } from "jotai";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export type WidgetsEnv = WaveEnvSubset<{
     isDev: WaveEnv["isDev"];
@@ -56,10 +57,22 @@ type WidgetPropsType = {
     env: WidgetsEnv;
 };
 
-async function handleWidgetSelect(widget: WidgetConfigType, env: WidgetsEnv, e: React.MouseEvent) {
+export async function handleWidgetSelect(widget: WidgetConfigType, env: WidgetsEnv, e: React.MouseEvent) {
     const blockDef = widget.blockdef;
-    // nexus: un widget con varios modos abre el menú en vez de crear el bloque
-    const modeItems = buildModeMenuItems(blockDef, (modeBlockDef) => env.createBlock(modeBlockDef, widget.magnified));
+    // nexus: un widget con varias superficies (chat web + CLI) o varios modos de
+    // permisos abre el menú en vez de crear el bloque directamente
+    const actionItems = buildActionMenuItems(
+        blockDef,
+        (actionBlockDef) => env.createBlock(actionBlockDef, widget.magnified),
+        { title: widget.label }
+    );
+    if (actionItems.length > 0) {
+        env.showContextMenu(actionItems, e);
+        return;
+    }
+    const modeItems = buildModeMenuItems(blockDef, (modeBlockDef) => env.createBlock(modeBlockDef, widget.magnified), {
+        title: widget.label,
+    });
     if (modeItems.length > 0) {
         env.showContextMenu(modeItems, e);
         return;
@@ -390,15 +403,20 @@ const Widgets = memo(() => {
     const envSidebarActive =
         (fullConfig?.settings?.["nexus:sidebarvisible"] ?? true) &&
         (fullConfig?.settings?.["nexus:environments"]?.length ?? 0) > 0;
-    const widgetsMap = fullConfig?.widgets ?? {};
-    const filteredWidgets = Object.fromEntries(
-        Object.entries(widgetsMap).filter(
-            ([key, widget]) =>
-                shouldIncludeWidgetForWorkspace(widget, workspaceId) &&
-                !(envSidebarActive && key.startsWith("nexus-env-"))
-        )
-    );
-    const widgets = sortByDisplayOrder(filteredWidgets);
+    // Nexus: la sección de IA (un botón por proveedor) la define el catálogo
+    // único de ai-apps.ts, que además pliega las variantes de permisos heredadas
+    // del catálogo del usuario dentro del botón de su proveedor (D-032).
+    const widgets = useMemo(() => {
+        const widgetsMap = mergeAiWidgets(fullConfig?.widgets ?? {});
+        const filteredWidgets = Object.fromEntries(
+            Object.entries(widgetsMap).filter(
+                ([key, widget]) =>
+                    shouldIncludeWidgetForWorkspace(widget, workspaceId) &&
+                    !(envSidebarActive && key.startsWith("nexus-env-"))
+            )
+        );
+        return sortByDisplayOrder(filteredWidgets);
+    }, [fullConfig?.widgets, workspaceId, envSidebarActive]);
 
     const [isAppsOpen, setIsAppsOpen] = useState(false);
     const appsButtonRef = useRef<HTMLDivElement>(null);

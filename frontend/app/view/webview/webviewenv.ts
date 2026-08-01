@@ -8,6 +8,7 @@ export type WebViewEnv = WaveEnvSubset<{
         openExternal: WaveEnv["electron"]["openExternal"];
         getWebviewPreload: WaveEnv["electron"]["getWebviewPreload"];
         clearWebviewStorage: WaveEnv["electron"]["clearWebviewStorage"];
+        ensureAiSession: WaveEnv["electron"]["ensureAiSession"]; // nexus:
         getConfigDir: WaveEnv["electron"]["getConfigDir"];
         setWebviewFocus: WaveEnv["electron"]["setWebviewFocus"];
     };
