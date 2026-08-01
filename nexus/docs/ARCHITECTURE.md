@@ -58,7 +58,8 @@
 ## Decisiones estructurales del fork
 
 1. **Diff mínimo dentro del árbol de Wave.** Cambios hoy: strings visibles de
-   branding, `publish.url` del updater, defaults `autoupdate:enabled=false` y
+   branding, feed propio del updater (`publish.owner/repo/channel`), defaults
+   `autoupdate:enabled=true` (D-026, feed propio) y
    `telemetry:enabled=false`, guardas `repository_owner` en 4 workflows de
    upstream, y 3 fixes de compilación/tests ya rotos en el baseline.
 2. **Todo lo propio vive en `nexus/`** (docs, config, scripts) más 3 workflows

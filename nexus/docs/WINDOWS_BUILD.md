@@ -48,9 +48,12 @@ task electron:winquickdev   # build wavesrv nativo + app dev con HMR
 
 "Check for Updates" (menú de la app) consulta **las GitHub Releases de
 `ndf14685/nexus-workbench`** — nunca los servers de Wave. Solo ve releases
-publicadas (los drafts que crea CI son el canal candidate). El chequeo
-automático periódico sigue apagado por default (`autoupdate:enabled=false`);
-el manual funciona siempre. Flujo completo en UPSTREAM_SYNC.md § Canales.
+publicadas (los drafts que crea CI son el canal candidate). Desde D-026 el
+chequeo automático periódico viene ENCENDIDO por default
+(`autoupdate:enabled=true`, canal `beta`): los tags `v*-beta.N` se publican
+como prerelease sin paso humano y la app las descarga sola; los tags `vX.Y.Z`
+siguen quedando en borrador (compuerta manual del canal stable). Flujo
+completo en UPSTREAM_SYNC.md § Canales.
 
 Nota: los builds anteriores a v0.14.6 se empaquetaron con un feed inválido a
 propósito; para engancharse al canal de updates hay que instalar v0.14.6+.

@@ -97,6 +97,11 @@ const config = {
     },
     win: {
         target: ["nsis", "msi", "zip"],
+        // nexus: el fork se distribuye SIN FIRMAR (D-013: no hay certificado EV).
+        // electron-updater verifica la firma del NSIS descargado contra
+        // publisherName y rechaza el update si no valida: con builds sin firma
+        // eso convierte cada auto-update en un fallo silencioso.
+        verifyUpdateCodeSignature: false,
         signtoolOptions: windowsShouldSign && {
             signingHashAlgorithms: ["sha256"],
             publisherName: "Command Line Inc",
@@ -119,12 +124,20 @@ const config = {
     },
     publish: {
         // Nexus Workbench: the update feed is OUR GitHub Releases, never Wave's servers.
-        // electron-updater only sees published (non-draft) releases, so the gate is:
-        // tag v* -> CI builds a DRAFT release (candidate) -> manual publish = stable.
+        // electron-updater never sees DRAFT releases, so the gate is:
+        // tag v*-beta.N -> CI publishes a PRERELEASE (auto, sin humano);
+        // tag vX.Y.Z    -> CI deja un DRAFT (compuerta manual = stable).
         // See nexus/docs/UPSTREAM_SYNC.md.
         provider: "github",
         owner: "ndf14685",
         repo: "nexus-workbench",
+        // nexus: el canal del fork es "beta" y viaja en app-update.yml (de ahí lo
+        // lee emain/updater.ts). Es obligatorio: el provider github, con
+        // allowPrerelease, solo empareja tags cuando el canal es null/alpha/beta
+        // — con "latest" no matchea NINGUNA entrada del feed atom. El canal beta
+        // acepta además las stables publicadas (tag sin sufijo de prerelease),
+        // así que es superset y no deja al usuario clavado en betas.
+        channel: "beta",
     },
     afterPack: (context) => {
         // This is a workaround to restore file permissions to the wavesrv binaries on macOS after packaging the universal binary.

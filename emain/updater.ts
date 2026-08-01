@@ -61,6 +61,14 @@ export class Updater {
         // Only update the release channel if it's specified, otherwise use the one configured in the updater.
         autoUpdater.channel = getUpdateChannel(settings);
         autoUpdater.allowDowngrade = false;
+        // nexus: las releases del fork son PRERELEASES (tags v*-beta.N) y el
+        // provider github las ignora salvo con allowPrerelease. El guard no es
+        // decorativo: con allowPrerelease y canal "latest" el provider recorre el
+        // feed atom sin emparejar ninguna entrada (ni prerelease ni stable) y
+        // aborta con ERR_UPDATER_NO_PUBLISHED_VERSIONS; en canal "latest" la
+        // ruta correcta es la de /releases/latest, que ya excluye prereleases.
+        autoUpdater.allowPrerelease = autoUpdater.channel !== "latest";
+        console.log("Allow prerelease:", autoUpdater.allowPrerelease);
 
         autoUpdater.removeAllListeners();
 

@@ -43,7 +43,9 @@ grep -q '"productName": "Nexus Workbench"' package.json ; check "productName" $?
 # D-013: el feed de updates es GitHub Releases del fork (reemplazó al placeholder .invalid de D-004)
 grep -q 'owner: "ndf14685"' electron-builder.config.cjs && ! grep -q 'waveterm\.dev' electron-builder.config.cjs
 check "feed de updates propio (no Wave)" $?
-grep -q '"autoupdate:enabled": false' pkg/wconfig/defaultconfig/settings.json ; check "autoupdate default off" $?
+# D-026: autoupdate pasa a ON, así que lo que hay que proteger ya no es el flag
+# sino que el feed sea NUESTRA release gobernada (owner + repo), no otra.
+grep -q 'repo: "nexus-workbench"' electron-builder.config.cjs ; check "repo del feed de updates" $?
 grep -q '"telemetry:enabled": false' pkg/wconfig/defaultconfig/settings.json ; check "telemetry default off" $?
 
 step "npm audit (informativo, no bloquea)"

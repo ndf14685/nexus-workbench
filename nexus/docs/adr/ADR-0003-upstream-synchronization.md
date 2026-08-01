@@ -48,6 +48,8 @@ Git es la herramienta de integración.
   propio (no existe todavía servidor de releases de Nexus): el updater
   empaquetado ya no puede descargar builds de Wave.
 - El default de `autoupdate:enabled` queda en `false` para el fork.
+  (Superado por D-026 el 2026-07-31: con el feed propio ya operativo el default
+  pasa a `true` y el canal del fork es `beta`.)
 - `publish-release.yml` y `bump-version.yml` de upstream se desactivan en el
   fork (requieren secretos de Command Line Inc y son peligrosos si se disparan).
 

@@ -1,9 +1,12 @@
 # Nexus Workbench: genera el instalador Windows (sin firma).
 # - workflow_dispatch: build suelto, artefactos solo en el run (canal dev/candidate).
-# - push de tag vX.Y.Z: además crea una GitHub Release en BORRADOR con el
-#   instalador + latest.yml. El "Check for Updates" de la app (electron-updater,
-#   provider github) solo ve releases PUBLICADAS: publicar el borrador a mano
-#   es la promoción candidate -> stable (ver nexus/docs/UPSTREAM_SYNC.md).
+# - push de tag v*: además crea una GitHub Release con el instalador + el
+#   channel file (beta.yml). El "Check for Updates" de la app (electron-updater,
+#   provider github) solo ve releases PUBLICADAS, nunca borradores:
+#     * tag con -beta.  -> PRERELEASE publicada automáticamente (D-026): el
+#       usuario recibe la actualización sin ningún paso manual.
+#     * tag vX.Y.Z      -> BORRADOR: publicarlo a mano sigue siendo la
+#       promoción candidate -> stable (ver nexus/docs/UPSTREAM_SYNC.md).
 name: Nexus Windows Package
 
 on:
@@ -65,24 +68,28 @@ jobs:
                       make/*.exe
                       make/*.msi
                       make/*.zip
-                      make/latest.yml
+                      make/*.yml
                       make/nexus-workbench-mcp.exe
                   retention-days: 30
-            - name: Create draft release (candidate)
+            # El channel file se llama beta.yml (publish.channel del builder), por eso
+            # el glob es make/*.yml y no make/latest.yml: sin él electron-updater no
+            # puede resolver la versión disponible.
+            - name: Create release (beta = prerelease publicada, stable = borrador)
               if: startsWith(github.ref, 'refs/tags/v')
               uses: softprops/action-gh-release@v2
               with:
-                  draft: true
-                  name: Nexus Workbench ${{ github.ref_name }} (candidate)
+                  draft: ${{ !contains(github.ref_name, '-beta.') }}
+                  prerelease: ${{ contains(github.ref_name, '-beta.') }}
+                  name: >-
+                      Nexus Workbench ${{ github.ref_name }}${{ contains(github.ref_name, '-beta.') && ' (beta)' || ' (candidate)' }}
                   files: |
                       make/*.exe
                       make/*.msi
                       make/*.zip
-                      make/latest.yml
+                      make/*.yml
                       make/nexus-workbench-mcp.exe
                   body: |
-                      Candidato sin publicar. Probarlo y, si está OK, publicar esta release
-                      para promoverla a **stable**: recién entonces "Check for Updates" la ofrece.
+                      ${{ contains(github.ref_name, '-beta.') && 'Beta publicada automáticamente (D-026): las instalaciones con autoupdate la descargan y ofrecen instalarla sin ningún paso manual.' || 'Candidato sin publicar. Probarlo y, si está OK, publicar esta release para promoverla a **stable**: recién entonces "Check for Updates" la ofrece.' }}
             - name: Prune old releases (keep newest 4)
               if: startsWith(github.ref, 'refs/tags/v')
               shell: bash
