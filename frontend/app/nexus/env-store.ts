@@ -191,11 +191,15 @@ export function envFromForm(form: EnvFormValues): NexusEnvType {
 
 // Reconstruye el formulario desde el catálogo. `host` sale del conn canónico
 // (sin user ni puerto) para que los tres campos no se dupliquen entre sí.
-export function formFromEnv(env: NexusEnvType): EnvFormValues {
+// `connEntry` es la entrada de connections.json: es la ÚNICA fuente que dice si
+// este servidor usa contraseña, porque el catálogo jamás guarda esa decisión
+// (solo el nombre del secreto, que vive del lado de la conexión).
+export function formFromEnv(env: NexusEnvType, connEntry?: ConnKeywords): EnvFormValues {
     const form = emptyEnvForm();
     if (env == null) {
         return form;
     }
+    const secretName = connEntry?.["ssh:passwordsecretname"] ?? "";
     form.id = env.id ?? "";
     form.name = env.name ?? "";
     form.kind = env.kind ?? "ssh";
@@ -217,8 +221,40 @@ export function formFromEnv(env: NexusEnvType): EnvFormValues {
     form.user = env.user ?? parts?.user ?? "";
     form.port = env.port ?? parts?.port ?? DefaultSshPort;
     form.identityfile = env.identityfile?.[0] ?? "";
-    form.auth = form.identityfile !== "" ? "key" : "agent";
+    form.auth = secretName !== "" ? "password" : form.identityfile !== "" ? "key" : "agent";
     return form;
+}
+
+export type PasswordPlan = {
+    // undefined = no tocar el secreto guardado.
+    password?: string;
+    secretName: string;
+    error?: string;
+};
+
+// Decide qué hacer con el secreto al guardar. Es su propia función porque es la
+// regla más fácil de romper de todo el administrador: escribir "" cuando el
+// usuario no tocó el campo BORRARÍA la contraseña guardada, y el síntoma
+// aparecería recién en la próxima conexión.
+export function passwordPlanForSave(args: {
+    envId: string;
+    auth: EnvAuthMethod;
+    password: string;
+    hasStoredPassword: boolean;
+}): PasswordPlan {
+    const typed = args.password ?? "";
+    if (args.auth !== "password") {
+        // Cambió de método: el secreto viejo se borra, no queda huérfano.
+        return { password: args.hasStoredPassword ? "" : undefined, secretName: "" };
+    }
+    const secretName = secretNameForEnvId(args.envId);
+    if (typed !== "") {
+        return { password: typed, secretName };
+    }
+    if (args.hasStoredPassword) {
+        return { secretName };
+    }
+    return { secretName, error: "La contraseña es obligatoria" };
 }
 
 export function upsertEnv(envs: NexusEnvType[], env: NexusEnvType): NexusEnvType[] {
@@ -236,12 +272,12 @@ export function deleteEnv(envs: NexusEnvType[], envId: string): NexusEnvType[] {
     return (envs ?? []).filter((e) => e?.id !== envId);
 }
 
-export function duplicateEnvForm(envs: NexusEnvType[], envId: string): EnvFormValues {
+export function duplicateEnvForm(envs: NexusEnvType[], envId: string, connEntry?: ConnKeywords): EnvFormValues {
     const src = (envs ?? []).find((e) => e?.id === envId);
     if (src == null) {
         return emptyEnvForm();
     }
-    const form = formFromEnv(src);
+    const form = formFromEnv(src, connEntry);
     form.name = `${form.name || src.id} (copia)`;
     form.id = uniqueEnvId(
         slugifyEnvId(form.name),

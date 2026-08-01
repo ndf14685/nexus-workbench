@@ -34,6 +34,7 @@ import {
     formFromEnv,
     hasErrors,
     OwnedConnKeys,
+    passwordPlanForSave,
     persistEnv,
     removeEnv,
     SecretNameRegex,
@@ -274,6 +275,62 @@ test("persistEnv reindexa display:order según la posición en el catálogo", as
     const b = envFromForm(sshForm({ id: "b", name: "B", host: "hb" }));
     await persistEnv({ envs: [a], env: b });
     assert.equal(rpcCalls[0][1].metamaptype["display:order"], 1);
+});
+
+test("el método de auth sale de connections.json, no del catálogo", () => {
+    const env = envFromForm(sshForm({ auth: "password", identityfile: "" }));
+    assert.equal(formFromEnv(env).auth, "agent");
+    assert.equal(
+        formFromEnv(env, { "ssh:passwordsecretname": "nexus_ssh_rig3060" } as ConnKeywords).auth,
+        "password"
+    );
+    // La clave privada sí vive en el catálogo, pero el secreto le gana: es lo
+    // que sshclient.go va a usar de verdad.
+    const withKey = envFromForm(sshForm({ auth: "key" }));
+    assert.equal(formFromEnv(withKey).auth, "key");
+    assert.equal(formFromEnv(withKey, { "ssh:passwordsecretname": "x" } as ConnKeywords).auth, "password");
+});
+
+test("la contraseña solo se sobrescribe cuando el usuario escribe una nueva", () => {
+    const base = { envId: "rig3060", auth: "password" as const };
+    // Campo vacío + contraseña guardada = no tocar el secreto.
+    assert.deepEqual(passwordPlanForSave({ ...base, password: "", hasStoredPassword: true }), {
+        secretName: "nexus_ssh_rig3060",
+    });
+    // Campo escrito = sobrescribir.
+    assert.deepEqual(passwordPlanForSave({ ...base, password: "nueva", hasStoredPassword: true }), {
+        password: "nueva",
+        secretName: "nexus_ssh_rig3060",
+    });
+    // Alta nueva sin contraseña = error, no un secreto vacío.
+    const plan = passwordPlanForSave({ ...base, password: "", hasStoredPassword: false });
+    assert.equal(plan.error, "La contraseña es obligatoria");
+    assert.equal(plan.password, undefined);
+});
+
+test("cambiar de método borra el secreto viejo y deja de referenciarlo", () => {
+    assert.deepEqual(passwordPlanForSave({ envId: "rig3060", auth: "key", password: "", hasStoredPassword: true }), {
+        password: "",
+        secretName: "",
+    });
+    // Sin secreto guardado no se manda un borrado inútil en cada guardado.
+    assert.deepEqual(passwordPlanForSave({ envId: "rig3060", auth: "agent", password: "", hasStoredPassword: false }), {
+        password: undefined,
+        secretName: "",
+    });
+});
+
+test("el duplicado no arrastra la contraseña del original", () => {
+    const envs = [envFromForm(sshForm({ auth: "password", identityfile: "" }))];
+    const copy = duplicateEnvForm(envs, "rig3060", { "ssh:passwordsecretname": "nexus_ssh_rig3060" } as ConnKeywords);
+    assert.equal(copy.auth, "password");
+    assert.equal(copy.password, "");
+    assert.notEqual(secretNameForEnvId(copy.id), "nexus_ssh_rig3060");
+    // Guardar la copia sin escribir contraseña tiene que fallar, no heredar.
+    assert.equal(
+        passwordPlanForSave({ envId: copy.id, auth: copy.auth, password: "", hasStoredPassword: false }).error,
+        "La contraseña es obligatoria"
+    );
 });
 
 test("borrar un ambiente limpia catálogo, claves de conexión y secreto", async () => {

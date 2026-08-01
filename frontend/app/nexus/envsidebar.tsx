@@ -16,9 +16,12 @@ import {
     WOS,
 } from "@/store/global";
 import { cn, fireAndForget, makeIconClass } from "@/util/util";
+import { modalsModel } from "@/store/modalmodel";
 import { atom, Atom, PrimitiveAtom, useAtomValue } from "jotai";
 import { memo, useCallback, useRef } from "react";
 import { canonicalizeConnName } from "./conn-name";
+import { connEntryForConn } from "./env-edit-modal";
+import { duplicateEnvForm, emptyEnvForm, formFromEnv } from "./env-store";
 import {
     clampSidebarWidth,
     colorForEnv,
@@ -220,6 +223,30 @@ class EnvSidebarModel {
     }
 }
 
+function openNewEnvModal() {
+    modalsModel.pushModal("EnvEditModal", { form: emptyEnvForm(), isNew: true });
+}
+
+function openEditEnvModal(env: NexusEnvType) {
+    const connEntry = connEntryForConn(env.conn);
+    modalsModel.pushModal("EnvEditModal", {
+        form: formFromEnv(env, connEntry),
+        isNew: false,
+        hasStoredPassword: !!connEntry?.["ssh:passwordsecretname"],
+    });
+}
+
+// El duplicado NO copia la contraseña: el secreto vive bajo el id del ambiente
+// original y clonarlo requeriría leer el valor en claro para reescribirlo con
+// otro nombre. Se abre en método Contraseña con el campo vacío.
+function openDuplicateEnvModal(env: NexusEnvType) {
+    const envs = globalStore.get(getSettingsKeyAtom("nexus:environments")) ?? [];
+    modalsModel.pushModal("EnvEditModal", {
+        form: duplicateEnvForm(envs, env.id, connEntryForConn(env.conn)),
+        isNew: true,
+    });
+}
+
 function envContextMenu(model: EnvSidebarModel, env: NexusEnvType, connState: string): ContextMenuItem[] {
     const menu: ContextMenuItem[] = [{ label: "Abrir terminal", click: () => model.openEnv(env) }];
     const conn = canonicalizeConnName(env.conn ?? "");
@@ -245,6 +272,13 @@ function envContextMenu(model: EnvSidebarModel, env: NexusEnvType, connState: st
             click: () => fireAndForget(() => navigator.clipboard.writeText(conn)),
         });
     }
+    menu.push({ type: "separator" });
+    menu.push({ label: "Editar…", click: () => openEditEnvModal(env) });
+    menu.push({ label: "Duplicar", click: () => openDuplicateEnvModal(env) });
+    menu.push({
+        label: "Eliminar",
+        click: () => modalsModel.pushModal("EnvDeleteModal", { env }),
+    });
     menu.push({ type: "separator" });
     menu.push({
         label: "Editar catálogo (settings.json)",
@@ -373,11 +407,14 @@ const EnvSidebar = memo(() => {
         [model]
     );
 
-    if (!visible || envs == null || envs.length === 0) {
+    // Antes se ocultaba también con el catálogo vacío. Con el administrador
+    // adentro eso era un callejón sin salida: sin sidebar no hay "+", y sin "+"
+    // el único camino para el primer servidor volvía a ser el YAML.
+    if (!visible) {
         return null;
     }
 
-    const groups = groupEnvironments(envs);
+    const groups = groupEnvironments(envs ?? []);
 
     return (
         <div
@@ -391,6 +428,15 @@ const EnvSidebar = memo(() => {
                             Ambientes
                         </span>
                     )}
+                    <Tooltip content="Nuevo servidor" placement="right">
+                        <button
+                            className="text-secondary hover:text-primary hover:bg-hoverbg rounded-sm px-1.5 py-0.5 cursor-pointer"
+                            onClick={() => openNewEnvModal()}
+                            aria-label="Nuevo servidor"
+                        >
+                            <i className={makeIconClass("plus", true)} />
+                        </button>
+                    </Tooltip>
                     <Tooltip content={collapsed ? "Expandir ambientes" : "Colapsar a iconos"} placement="right">
                         <button
                             className="text-secondary hover:text-primary hover:bg-hoverbg rounded-sm px-1.5 py-0.5 cursor-pointer"
@@ -402,6 +448,14 @@ const EnvSidebar = memo(() => {
                     </Tooltip>
                 </div>
                 <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden px-1 pb-1 gap-0.5">
+                    {groups.length === 0 && !collapsed && (
+                        <button
+                            className="text-xs text-muted hover:text-secondary text-left px-2 py-3 cursor-pointer"
+                            onClick={() => openNewEnvModal()}
+                        >
+                            Todavía no hay servidores. Agregá el primero con +.
+                        </button>
+                    )}
                     {groups.map((group) => {
                         const groupCollapsed = collapsedGroups.includes(group.title);
                         return (
