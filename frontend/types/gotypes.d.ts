@@ -1354,6 +1354,13 @@ declare global {
         conn?: string;
         color?: string;
         icon?: string;
+        description?: string;
+        group?: string;
+        user?: string;
+        port?: string;
+        identityfile?: string[];
+        wsh?: boolean;
+        initscript?: string;
     };
 
     // waveobj.ORef

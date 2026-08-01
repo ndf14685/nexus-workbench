@@ -200,17 +200,35 @@ type SettingsType struct {
 }
 
 // NexusEnvType is a Nexus Workbench extension: one entry of the environment
-// catalog projected into settings.json by nexus/scripts/import-environments.mjs.
+// catalog, written either by the in-app connection manager
+// (frontend/app/nexus/env-store.ts, the primary path) or projected from the
+// optional YAML bootstrap by nexus/scripts/import-environments.mjs.
 // Conn is the Wave connection key ("host" for ssh, "wsl://distro" for wsl,
 // empty for local).
+//
+// User/Port/IdentityFile/Wsh/InitScript duplicate what ends up in
+// connections.json on purpose: Conn is lossy (it drops the default port 22 and
+// carries no identity file), so without them the editor could not round-trip a
+// server back into its form. Credentials NEVER live here — a password is stored
+// in the OS secret store and only its NAME reaches connections.json
+// (ssh:passwordsecretname).
 type NexusEnvType struct {
-	Id    string `json:"id"`
-	Name  string `json:"name,omitempty"`
-	Class string `json:"class,omitempty"`
-	Kind  string `json:"kind,omitempty"`
-	Conn  string `json:"conn,omitempty"`
-	Color string `json:"color,omitempty"`
-	Icon  string `json:"icon,omitempty"`
+	Id           string   `json:"id"`
+	Name         string   `json:"name,omitempty"`
+	Class        string   `json:"class,omitempty"`
+	Kind         string   `json:"kind,omitempty"`
+	Conn         string   `json:"conn,omitempty"`
+	Color        string   `json:"color,omitempty"`
+	Icon         string   `json:"icon,omitempty"`
+	Description  string   `json:"description,omitempty"`
+	Group        string   `json:"group,omitempty"`
+	User         string   `json:"user,omitempty"`
+	Port         string   `json:"port,omitempty"`
+	IdentityFile []string `json:"identityfile,omitempty"`
+	// Wsh is a pointer so an explicit false (plain shell, WinSSHTerm style)
+	// survives marshalling to the frontend instead of being dropped by omitempty.
+	Wsh        *bool  `json:"wsh,omitempty"`
+	InitScript string `json:"initscript,omitempty"`
 }
 
 func (s *SettingsType) GetAiSettings() *AiSettingsType {

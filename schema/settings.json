@@ -25,6 +25,30 @@
         },
         "icon": {
           "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        },
+        "user": {
+          "type": "string"
+        },
+        "port": {
+          "type": "string"
+        },
+        "identityfile": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "wsh": {
+          "type": "boolean"
+        },
+        "initscript": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

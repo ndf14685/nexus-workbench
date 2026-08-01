@@ -16,9 +16,16 @@ const GroupLocal = "Local";
 const GroupServers = "Servidores";
 const GroupOther = "Otros";
 
-// Grouping is derived from `kind`, never from environment names, so any
-// catalog (including future kinds) renders without hardcoding entries.
+export const KindGroupOrder = [GroupLocal, GroupServers, GroupOther];
+
+// El grupo explícito del ambiente manda (es lo que el usuario escribió en el
+// administrador). Sin grupo se cae al derivado de `kind`, nunca del nombre, así
+// que cualquier catálogo (incluidos kinds futuros) renderiza sin hardcodear.
 export function groupTitleForEnv(env: NexusEnvType): string {
+    const explicit = (env.group ?? "").trim();
+    if (explicit !== "") {
+        return explicit;
+    }
     if (env.kind === "local" || env.kind === "wsl") {
         return GroupLocal;
     }
@@ -28,9 +35,11 @@ export function groupTitleForEnv(env: NexusEnvType): string {
     return GroupOther;
 }
 
+// Los grupos propios del usuario van primero, en orden de aparición en el
+// catálogo; los derivados de `kind` cierran en su orden canónico.
 export function groupEnvironments(envs: NexusEnvType[]): EnvGroup[] {
-    const order = [GroupLocal, GroupServers, GroupOther];
     const byTitle = new Map<string, NexusEnvType[]>();
+    const customOrder: string[] = [];
     for (const env of envs ?? []) {
         if (env?.id == null) {
             continue;
@@ -38,10 +47,14 @@ export function groupEnvironments(envs: NexusEnvType[]): EnvGroup[] {
         const title = groupTitleForEnv(env);
         if (!byTitle.has(title)) {
             byTitle.set(title, []);
+            if (!KindGroupOrder.includes(title)) {
+                customOrder.push(title);
+            }
         }
         byTitle.get(title).push(env);
     }
-    return order.filter((t) => byTitle.has(t)).map((title) => ({ title, envs: byTitle.get(title) }));
+    const order = [...customOrder, ...KindGroupOrder.filter((t) => byTitle.has(t))];
+    return order.map((title) => ({ title, envs: byTitle.get(title) }));
 }
 
 export function findEnvByConn(envs: NexusEnvType[], conn: string): NexusEnvType {

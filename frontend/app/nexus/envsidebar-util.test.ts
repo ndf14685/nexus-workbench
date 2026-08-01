@@ -119,6 +119,50 @@ test("findEnvByConn compara en forma canónica, no byte a byte", () => {
     assert.equal(findEnvByConn(catalog, "wsl://Ubuntu")?.id, "wsl-ubuntu");
 });
 
+test("el grupo explícito le gana al derivado de kind", () => {
+    const env = { id: "x", kind: "ssh", group: "Producción" } as NexusEnvType;
+    assert.equal(groupTitleForEnv(env), "Producción");
+    assert.equal(groupTitleForEnv({ id: "y", kind: "ssh", group: "   " } as NexusEnvType), "Servidores");
+});
+
+test("los grupos propios van primero y los derivados de kind cierran en orden canónico", () => {
+    const envs: NexusEnvType[] = [
+        { id: "a", kind: "ssh" },
+        { id: "b", kind: "ssh", group: "Producción" },
+        { id: "c", kind: "local" },
+        { id: "d", kind: "ssh", group: "Clientes" },
+        { id: "e", kind: "ssh", group: "Producción" },
+    ];
+    const groups = groupEnvironments(envs);
+    assert.deepEqual(
+        groups.map((g) => g.title),
+        ["Producción", "Clientes", "Local", "Servidores"]
+    );
+    assert.deepEqual(
+        groups[0].envs.map((e) => e.id),
+        ["b", "e"]
+    );
+    assert.deepEqual(
+        groups[3].envs.map((e) => e.id),
+        ["a"]
+    );
+});
+
+test("un grupo explícito que se llama igual que uno derivado es el mismo bucket", () => {
+    const groups = groupEnvironments([
+        { id: "a", kind: "ssh" },
+        { id: "b", kind: "local", group: "Servidores" },
+    ]);
+    assert.deepEqual(
+        groups.map((g) => g.title),
+        ["Servidores"]
+    );
+    assert.deepEqual(
+        groups[0].envs.map((e) => e.id),
+        ["a", "b"]
+    );
+});
+
 test("connStateForConn refleja el estado sin necesitar el env entero", () => {
     assert.equal(connStateForConn("", null), "none");
     assert.equal(connStateForConn("ndf@host", { status: "connected" } as ConnStatus), "connected");
