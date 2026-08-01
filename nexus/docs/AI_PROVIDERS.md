@@ -60,6 +60,14 @@ CLI, sin API keys en el Workbench) en un bloque terminal visible, local o en un
 ambiente remoto (`environment: <id>`). El importador los proyecta como widgets
 (`nexus-agent-*`) — esa es la ubicación discreta de "AI Providers" en la UI.
 
+**Un proveedor = un botón (D-028).** Las variantes de invocación de la misma
+herramienta (normal vs. permisos totales) NO son proveedores distintos: se
+declaran como `modes` del mismo agente y el click abre un menú para elegir
+(las peligrosas marcadas con `⚠ `). Ver el esquema en [AI.md](AI.md). Además el
+importador descarta entradas de `commands` que dupliquen un agente (mismo id o
+mismo comando), así que el catálogo no puede generar dos botones para el mismo
+CLI.
+
 Mapeo honesto del contrato sobre el adaptador v0: `listProviders` = sección
 `agents` del catálogo; `openConversation` = click en el widget (createBlock);
 `attachTerminalContext`/`streamResponse` programáticos = los provee el MCP del
@@ -68,7 +76,8 @@ Workbench (`get_terminal_output`, `run_command`) — ver [MCP.md](MCP.md).
 
 ### Qué falta desacoplar (backlog)
 
-- Selector de proveedor activo en UI (hoy: un widget por proveedor).
+- Selector de proveedor activo en UI (hoy: un widget por proveedor, con menú
+  de modos por widget — D-028).
 - Adaptador v1 con `getProviderStatus` (detectar CLI instalado/logueado) y
   `cancelExecution`.
 - Fabric adapter (API v1 del idp).

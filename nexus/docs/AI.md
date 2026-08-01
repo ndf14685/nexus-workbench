@@ -7,13 +7,68 @@ autentican por token). La forma soportada de usar las suscripciones es correr
 los **CLIs oficiales dentro de la app**: `claude` (Claude Code) y `codex`
 hacen su propio login OAuth con la suscripción.
 
-El importador genera botones "Claude Code" y "Codex" en la barra lateral
-(sección `agents:` del catálogo `environments.yaml`/`.json`): un click lanza
-el CLI en un bloque terminal, local o en un ambiente remoto (campo
+El importador genera **un** botón "Claude Code" y **un** botón "Codex" en la
+barra lateral (sección `agents:` del catálogo `environments.yaml`/`.json`): un
+click lanza el CLI en un bloque terminal, local o en un ambiente remoto (campo
 `environment`). Con el MCP (`nexus/docs/MCP.md`) registrado en esos CLIs
 (`claude mcp add nexus-workbench -- <exe> --environments <catálogo>`), el
 agente con tu suscripción **controla la app**: ambientes, terminales,
 archivos, con la gobernanza ADR-0004.
+
+### `modes:` — una herramienta, un botón (D-028)
+
+Una misma herramienta suele tener varias formas de invocarse (normal vs.
+permisos totales). Declararlas como agentes o comandos separados producía un
+botón por variante. En vez de eso, se declaran como **modos del mismo agente**:
+con 2 o más modos el click abre un menú para elegir, en lugar de crear el
+bloque directamente.
+
+Campos de cada modo: `id` (opcional, solo referencia), `label` (texto del
+menú; default = `id` o el comando), `command` (obligatorio) y `danger: true`
+(opcional) para marcar la variante peligrosa. Los menús nativos de Electron no
+admiten color por item, así que un modo `danger` se muestra con el prefijo
+**`⚠ `** — es la única marca honesta disponible en esa superficie.
+
+```yaml
+agents:
+    - id: claude
+      name: Claude Code
+      command: claude # comando por defecto (si se omite, gana el primer modo)
+      icon: robot
+      modes:
+          - id: normal
+            label: Claude Code
+            command: claude
+          - id: full
+            label: Claude Code (permisos totales)
+            command: claude --dangerously-skip-permissions
+            danger: true
+
+    - id: codex
+      name: Codex
+      command: codex
+      icon: microchip
+      modes:
+          - id: normal
+            label: Codex
+            command: codex
+          - id: full
+            label: Codex (permisos totales)
+            command: codex --yolo
+            danger: true
+```
+
+El importador proyecta eso a **un** widget `nexus-agent-<id>` cuyo
+`blockdef.meta` lleva `"nexus:modes"`. El `cmd` base sigue siendo el comando
+por defecto, así que cualquier consumidor que ignore los modos funciona igual.
+Sin `modes` (o con uno solo) el comportamiento es el de siempre: click = abrir
+el bloque.
+
+**Deduplicación automática:** si una entrada de `commands.yaml`/`.json`
+colisiona con un agente —mismo `id`, o mismo `command` aunque el id difiera—
+el importador **no** genera el widget `nexus-cmd-*` y avisa nombrando ambas
+entradas. Así el catálogo no puede volver a producir dos botones para la misma
+herramienta.
 
 ## Panel Wave AI con proveedores propios (requiere API key u Ollama)
 
