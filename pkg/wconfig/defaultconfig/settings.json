@@ -14,7 +14,7 @@
     "autoupdate:enabled": true,
     "autoupdate:installonquit": true,
     "autoupdate:intervalms": 3600000,
-    "conn:askbeforewshinstall": true,
+    "conn:askbeforewshinstall": false,
     "conn:wshenabled": true,
     "editor:minimapenabled": true,
     "web:defaulturl": "about:blank",

@@ -311,7 +311,11 @@ func (sc *ShellController) run(logCtx context.Context, bdata *waveobj.Block, blo
 			}
 			err := sc.DoRunShellCommand(logCtx, &RunShellOpts{TermSize: termSize}, bdata.Meta)
 			if err != nil {
-				debugLog(logCtx, "error running shell: %v\n", err)
+				// No usamos debugLog: su blocklogger.Infof depende de que el
+				// bloque tenga term:conndebug, y con el meta por defecto el
+				// usuario se quedaba con una terminal en blanco y sin motivo.
+				blocklogger.WriteErrorf(sc.BlockId, "error running shell: %v\n", err)
+				log.Printf("error running shell: %v\n", err)
 			}
 		}()
 	}

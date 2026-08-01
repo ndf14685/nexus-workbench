@@ -83,6 +83,18 @@ func Infof(ctx context.Context, format string, args ...any) {
 	writeLogf(logData.BlockId, format, args)
 }
 
+// WriteErrorf writes to the block's terminal unconditionally, without needing a
+// log context. Infof/Debugf are gated on term:conndebug because they carry
+// verbose connection progress; a hard failure ("cannot start the shell") is not
+// progress. Without this, the default block meta left the user staring at a
+// blank terminal with the reason only in the app log.
+func WriteErrorf(blockId string, format string, args ...any) {
+	if blockId == "" {
+		return
+	}
+	writeLogf(blockId, format, args)
+}
+
 func Debugf(ctx context.Context, format string, args ...interface{}) {
 	logData := getLogBlockData(ctx)
 	if logData == nil || !logData.Verbose {

@@ -131,13 +131,14 @@ export const ConnStatusOverlay = React.memo(
             jotai.useAtomValue(waveEnv.getConnConfigKeyAtom(connName, "conn:wshenabled")) ?? true;
         const [showWshError, setShowWshError] = React.useState(false);
 
+        // El motivo del error NO depende del ancho del bloque: con el gate de
+        // 250px, un bloque angosto mostraba "Disconnected from X" y se comía la
+        // causa. El texto envuelve y scrollea dentro de su contenedor, y el
+        // title lo deja legible completo aunque se trunque.
         React.useEffect(() => {
-            if (width) {
-                const hasError = !util.isBlank(connStatus.error);
-                const showError = hasError && width >= 250 && connStatus.status == "error";
-                setShowError(showError);
-            }
-        }, [width, connStatus, setShowError]);
+            const hasError = !util.isBlank(connStatus.error);
+            setShowError(hasError && connStatus.status == "error");
+        }, [connStatus, setShowError]);
 
         const handleTryReconnect = React.useCallback(() => {
             const prtn = waveEnv.rpc.ConnConnectCommand(
@@ -240,7 +241,7 @@ export const ConnStatusOverlay = React.memo(
                                     options={{ scrollbars: { autoHide: "leave" } }}
                                 >
                                     <CopyButton className="copy-button" onClick={handleCopy} title="Copy" />
-                                    {showError ? <div>error: {connStatus.error}</div> : null}
+                                    {showError ? <div title={connStatus.error}>error: {connStatus.error}</div> : null}
                                     {showWshError ? <div>unable to use wsh: {connStatus.wsherror}</div> : null}
                                 </OverlayScrollbarsComponent>
                             )}
