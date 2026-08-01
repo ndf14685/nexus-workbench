@@ -21,18 +21,8 @@
             }
         }
     },
-    "defwidget@web": {
-        "display:order": -3,
-        "icon": "globe",
-        "label": "web",
-        "blockdef": {
-            "meta": {
-                "view": "web"
-            }
-        }
-    },
     "defwidget@jarvis": {
-        "display:order": -2.5,
+        "display:order": -3,
         "icon": "robot",
         "label": "jarvis",
         "blockdef": {
@@ -51,8 +41,19 @@
             }
         }
     },
-    "defwidget@processviewer": {
+    "defwidget@web": {
         "display:order": -1,
+        "icon": "globe",
+        "label": "web",
+        "blockdef": {
+            "meta": {
+                "view": "web"
+            }
+        }
+    },
+    "defwidget@processviewer": {
+        "display:order": 0,
+        "display:hidden": true,
         "icon": "list-tree",
         "label": "processes",
         "blockdef": {

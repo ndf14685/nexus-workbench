@@ -361,15 +361,10 @@ if (linkCount > 0) {
     console.log(`links: ${linkCount} widgets web`);
 }
 
-// Jarvis Block: copiloto operativo del Workbench (view propia "jarvis")
-widgets["nexus-jarvis"] = {
-    "display:order": 90,
-    icon: "circle-notch",
-    color: "#7ee0e6",
-    label: "Jarvis",
-    description: "Jarvis — copiloto operativo (bloque nativo)",
-    blockdef: { meta: { view: "jarvis" } },
-};
+// Jarvis NO se genera acá: el widget default `defwidget@jarvis` viaja con la
+// app (defaultconfig/widgets.json) y no necesita que corra el importador. La
+// clave `nexus-jarvis` sigue en la limpieza de arriba para borrar el duplicado
+// que quedó en instalaciones donde este bloque sí llegó a correr.
 
 // Catálogo para el frontend (indicador de ambiente en la tab bar): se proyecta
 // como clave gestionada nexus:environments en settings.json. conn = clave de

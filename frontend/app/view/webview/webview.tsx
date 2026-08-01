@@ -395,7 +395,10 @@ export class WebViewModel implements ViewModel {
             url = "";
         }
 
-        if (/^(http|https|file):/.test(url)) {
+        // "about:" está en la lista para que about:blank (arranque neutro del
+        // fork, web:defaulturl) no caiga en la rama de búsqueda y termine
+        // buscando el literal "about:blank" en Google.
+        if (/^(http|https|file|about):/.test(url)) {
             // If the URL starts with http: or https:, return it as is
             return url;
         }
