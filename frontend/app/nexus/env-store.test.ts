@@ -26,6 +26,7 @@ import {
     clearedConnEntry,
     connEntryForEnv,
     connForForm,
+    declaredPort,
     deleteEnv,
     duplicateEnvForm,
     emptyEnvForm,
@@ -87,10 +88,27 @@ test("validación: el método clave exige una ruta de clave privada", () => {
 test("conn canónico: el puerto 22 se omite y los campos explícitos ganan al host", () => {
     assert.equal(connForForm(sshForm({ port: "22" })), "ndf@192.168.50.105");
     assert.equal(connForForm(sshForm({ port: "2222" })), "ndf@192.168.50.105:2222");
-    assert.equal(connForForm(sshForm({ host: "otro@host:9000", user: "ndf", port: "22" })), "ndf@host");
     assert.equal(connForForm(sshForm({ host: "alias-ssh", user: "", port: "22" })), "alias-ssh");
     assert.equal(connForForm({ ...emptyEnvForm(), kind: "wsl", host: "Ubuntu" }), "wsl://Ubuntu");
     assert.equal(connForForm({ ...emptyEnvForm(), kind: "local", host: "" }), "");
+});
+
+test("el 22 del formulario es default, no declaración: no pisa el puerto pegado en Host", () => {
+    // Pegar user@host:2222 con el campo Puerto en su default tiene que conservar 2222.
+    assert.equal(connForForm(sshForm({ host: "otro@host:2222", user: "ndf", port: "22" })), "ndf@host:2222");
+    // Un puerto escrito a mano sí manda.
+    assert.equal(connForForm(sshForm({ host: "otro@host:2222", user: "ndf", port: "9000" })), "ndf@host:9000");
+    assert.equal(declaredPort(sshForm({ port: "22" })), "");
+    assert.equal(declaredPort(sshForm({ port: "2222" })), "2222");
+});
+
+test("con puerto default NO se escribe ssh:port (si no, le ganaría a ~/.ssh/config)", () => {
+    const env = envFromForm(sshForm({ host: "alias-ssh", user: "", port: "22", auth: "agent" }));
+    assert.equal(env.port, undefined);
+    const entry = connEntryForEnv(env, 0, "");
+    assert.isNull(entry["ssh:port"]);
+    // Misma forma exacta que emite el importador para un catálogo sin 'port'.
+    assert.deepEqual(stripNulls(entry), { "display:order": 0, "term:theme": "dracula" });
 });
 
 test("envFromForm omite vacíos y solo guarda el opt-out de wsh", () => {
@@ -104,9 +122,9 @@ test("envFromForm omite vacíos y solo guarda el opt-out de wsh", () => {
         group: "Producción",
         initscript: "cd /srv",
         user: "ndf",
-        port: "22",
         identityfile: ["~/.ssh/id_ed25519"],
     });
+    assert.equal(envFromForm(sshForm({ port: "2222" })).port, "2222");
     assert.equal(envFromForm(sshForm({ wsh: true })).wsh, undefined);
     assert.equal(envFromForm(sshForm({ wsh: false })).wsh, false);
     assert.equal(envFromForm(sshForm({ auth: "password", identityfile: "x" })).identityfile, undefined);
@@ -200,7 +218,6 @@ test("payload: wsh true y clase desconocida no ensucian la entrada", () => {
         "display:order": 0,
         "term:theme": "default-dark",
         "ssh:user": "ndf",
-        "ssh:port": "22",
     });
 });
 

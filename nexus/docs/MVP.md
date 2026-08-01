@@ -15,7 +15,8 @@ archivos remotos + ambientes distinguibles y versionados.
 | 3 | PowerShell / WSL | motor Wave (`shellutil`, `pkg/wsl`) | PREPARADO (código presente; requiere Windows para probar) |
 | 4 | Archivos remotos (preview/Monaco) | motor Wave | FUNCIONA (heredado) |
 | 5 | Workspaces por ambiente | motor Wave (UI) | FUNCIONA (heredado); declarativo = backlog |
-| 6 | Catálogo de ambientes versionable | nexus | FUNCIONA (`environments.yaml` + importador) |
+| 6 | Catálogo de ambientes versionable | nexus | FUNCIONA (administrador en la app, D-030; `environments.yaml` + importador como bootstrap) |
+| 6b | Administrar servidores sin YAML + contraseñas guardadas | nexus | FUNCIONA (D-030; el round-trip del secret store requiere la app corriendo) |
 | 7 | Distinción visual por clase | nexus→config nativa | FUNCIONA (term:theme + bg presets) |
 | 8 | Branding Nexus Workbench | nexus | FUNCIONA (strings visibles) |
 | 9 | Autoupdate de Wave neutralizado | nexus | FUNCIONA (feed .invalid + default off) |

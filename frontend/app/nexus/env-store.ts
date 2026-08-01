@@ -147,11 +147,20 @@ export function connForForm(form: EnvFormValues): string {
     if (user !== "") {
         parts.user = user;
     }
+    // El 22 del formulario es el DEFAULT, no una declaración: escribirlo pinearía
+    // el puerto y le ganaría a un `Port 2222` de ~/.ssh/config (misma trampa que
+    // ssh:hostname). Como efecto secundario, pegar "user@host:2222" en Host
+    // funciona sin tener que copiar el puerto también al campo Puerto.
     const port = (form.port ?? "").trim();
-    if (port !== "") {
+    if (port !== "" && port !== DefaultSshPort) {
         parts.port = port;
     }
     return formatConnName(parts);
+}
+
+export function declaredPort(form: EnvFormValues): string {
+    const port = (form.port ?? "").trim();
+    return port === DefaultSshPort ? "" : port;
 }
 
 export function envFromForm(form: EnvFormValues): NexusEnvType {
@@ -175,7 +184,7 @@ export function envFromForm(form: EnvFormValues): NexusEnvType {
     put("initscript", form.initscript);
     if (form.kind === "ssh") {
         put("user", form.user);
-        put("port", form.port);
+        put("port", declaredPort(form));
         const identity = (form.identityfile ?? "").trim();
         if (form.auth === "key" && identity !== "") {
             env.identityfile = [identity];

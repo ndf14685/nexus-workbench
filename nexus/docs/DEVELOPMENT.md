@@ -33,6 +33,12 @@ Comandos individuales: `go vet ./...` · `go test ./...` · `npx tsc --noEmit` �
 
 ## Configuración propia (ambientes)
 
+> El camino primario para dar de alta servidores es el **administrador dentro de
+> la app** (sidebar → `+`), no este importador: ver
+> [ENVIRONMENTS.md](ENVIRONMENTS.md). El YAML queda como bootstrap opcional para
+> provisionar una máquina nueva desde un catálogo versionado. Los dos escriben la
+> misma forma y el importador preserva los ambientes creados desde la app (D-030).
+
 ```bash
 cp nexus/config/environments.example.yaml nexus/config/environments.yaml
 $EDITOR nexus/config/environments.yaml            # sin credenciales, solo alias

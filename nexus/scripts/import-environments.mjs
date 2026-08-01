@@ -516,15 +516,31 @@ if (linkCount > 0) {
 // conexión de Wave (host ssh, wsl://distro, o "" para local).
 const settingsPath = path.join(configDir, "settings.json");
 const settings = readJson(settingsPath);
-settings["nexus:environments"] = catalog.environments.map((env) => {
+const generatedEnvs = catalog.environments.map((env) => {
     const entry = { id: env.id, conn: connForEnv(env) };
     if (env.name) entry.name = env.name;
     if (env.class) entry.class = env.class;
     if (env.kind) entry.kind = env.kind;
     if (env.color) entry.color = env.color;
     if (env.icon) entry.icon = env.icon;
+    if (env.description) entry.description = env.description;
+    if (env.group) entry.group = env.group;
     return entry;
 });
+// El administrador de la app (frontend/app/nexus/env-store.ts) escribe en esta
+// MISMA clave. Asignar el .map() directamente borraba en silencio cada servidor
+// dado de alta desde la UI: el importador solo es dueño de los ids que declara
+// su catálogo, los demás se preservan tal cual.
+const previousEnvs = Array.isArray(settings["nexus:environments"]) ? settings["nexus:environments"] : [];
+const generatedIds = new Set(generatedEnvs.map((e) => e.id));
+const preservedEnvs = previousEnvs.filter((e) => e?.id && !generatedIds.has(e.id));
+settings["nexus:environments"] = [...generatedEnvs, ...preservedEnvs];
+if (preservedEnvs.length > 0) {
+    console.log(
+        `ambientes preservados (creados desde la app, fuera del catálogo): ${preservedEnvs.length} — ` +
+            preservedEnvs.map((e) => e.id).join(", ")
+    );
+}
 
 console.log(`catálogo: ${yamlPath} (${catalog.environments.length} ambientes, ${connChanges} conexiones, ${widgetCount} widgets)`);
 console.log(`config dir: ${configDir}`);

@@ -16,7 +16,7 @@
 ├────────────────────────────────────────────────────────────┤
 │ 2. Workbench Bridge  [ADR-0002, BRIDGE.md]                 │
 │    contrato estrecho sobre wshrpc + config nativa de Wave  │
-│    HOY: importador de config (import-environments.mjs)     │
+│    HOY: administrador en la app + importador (bootstrap)   │
 ├────────────────────────────────────────────────────────────┤
 │ 1. WaveTerm Engine (árbol upstream, diff mínimo)           │
 │    Electron/React · xterm.js · Monaco · SSH · wsh · SQLite │
