@@ -5,11 +5,13 @@ import { assert, test } from "vitest";
 import {
     clampSidebarWidth,
     colorForEnv,
+    connStateForConn,
     connStateForEnv,
     defaultIconForEnv,
     findEnvByConn,
     groupEnvironments,
     groupTitleForEnv,
+    planEnvOpen,
     SidebarDefaultWidth,
     SidebarMaxWidth,
     SidebarMinWidth,
@@ -93,4 +95,33 @@ test("toggleGroup expands and collapses groups persistably", () => {
     collapsed = toggleGroup(collapsed, "Servidores");
     assert.deepEqual(collapsed, ["Local"]);
     assert.deepEqual(toggleGroup(null, "X"), ["X"]);
+});
+
+test("planEnvOpen: sin bloque abierto se crea uno", () => {
+    assert.deepEqual(planEnvOpen(null, "disconnected"), { action: "create" });
+    assert.deepEqual(planEnvOpen("", "connected"), { action: "create" });
+});
+
+test("planEnvOpen: bloque vivo sobre conexión sana solo se reenfoca", () => {
+    assert.deepEqual(planEnvOpen("blk1", "connected"), { action: "focus", blockId: "blk1" });
+    assert.deepEqual(planEnvOpen("blk1", "connecting"), { action: "focus", blockId: "blk1" });
+    assert.deepEqual(planEnvOpen("blk1", "none"), { action: "focus", blockId: "blk1" });
+});
+
+test("planEnvOpen: bloque sobre conexión muerta se reconecta (el error queda cacheado si no)", () => {
+    assert.deepEqual(planEnvOpen("blk1", "error"), { action: "reconnect", blockId: "blk1" });
+    assert.deepEqual(planEnvOpen("blk1", "disconnected"), { action: "reconnect", blockId: "blk1" });
+});
+
+test("findEnvByConn compara en forma canónica, no byte a byte", () => {
+    assert.equal(findEnvByConn(catalog, "ndf@192.168.50.105:22")?.id, "rig3060");
+    assert.equal(findEnvByConn(catalog, "nexusos:22")?.id, "nexusos");
+    assert.equal(findEnvByConn(catalog, "wsl://Ubuntu")?.id, "wsl-ubuntu");
+});
+
+test("connStateForConn refleja el estado sin necesitar el env entero", () => {
+    assert.equal(connStateForConn("", null), "none");
+    assert.equal(connStateForConn("ndf@host", { status: "connected" } as ConnStatus), "connected");
+    assert.equal(connStateForConn("ndf@host", { status: "error" } as ConnStatus), "error");
+    assert.equal(connStateForConn("ndf@host", null), "disconnected");
 });

@@ -1,6 +1,8 @@
 // Copyright 2026, Nexus Workbench (fork extension)
 // SPDX-License-Identifier: Apache-2.0
 
+import { canonicalizeConnName } from "./conn-name";
+
 export const SidebarMinWidth = 160;
 export const SidebarMaxWidth = 480;
 export const SidebarDefaultWidth = 240;
@@ -46,7 +48,8 @@ export function findEnvByConn(envs: NexusEnvType[], conn: string): NexusEnvType 
     if (conn == null) {
         return null;
     }
-    return (envs ?? []).find((e) => (e.conn ?? "") === conn) ?? null;
+    const canon = canonicalizeConnName(conn);
+    return (envs ?? []).find((e) => canonicalizeConnName(e.conn ?? "") === canon) ?? null;
 }
 
 export function defaultIconForEnv(env: NexusEnvType): string {
@@ -78,7 +81,11 @@ export type EnvConnState = "connected" | "connecting" | "error" | "disconnected"
 // Local environments have no connection lifecycle: they are always usable, so
 // they get "none" instead of a fake "connected".
 export function connStateForEnv(env: NexusEnvType, connStatus: ConnStatus): EnvConnState {
-    if (!env.conn) {
+    return connStateForConn(env.conn, connStatus);
+}
+
+export function connStateForConn(conn: string, connStatus: ConnStatus): EnvConnState {
+    if (!conn) {
         return "none";
     }
     const status = connStatus?.status;
@@ -101,6 +108,27 @@ export const ConnStateColors: Record<EnvConnState, string> = {
     disconnected: "#6e7681",
     none: "transparent",
 };
+
+export type EnvOpenAction = "focus" | "reconnect" | "create";
+
+export type EnvOpenPlan = {
+    action: EnvOpenAction;
+    blockId?: string;
+};
+
+// Un click = terminal usable. Reenfocar un bloque cuya conexión está en error no
+// alcanza: `EnsureConnection` cachea el error para siempre y solo
+// ConnConnectCommand lo limpia (pkg/remote/conncontroller/conncontroller.go), así
+// que el bloque vivo sobre una conexión muerta necesita reconexión explícita.
+export function planEnvOpen(existingBlockId: string, connState: EnvConnState): EnvOpenPlan {
+    if (!existingBlockId) {
+        return { action: "create" };
+    }
+    if (connState === "error" || connState === "disconnected") {
+        return { action: "reconnect", blockId: existingBlockId };
+    }
+    return { action: "focus", blockId: existingBlockId };
+}
 
 export function clampSidebarWidth(width: number): number {
     if (width == null || isNaN(width) || width === 0) {

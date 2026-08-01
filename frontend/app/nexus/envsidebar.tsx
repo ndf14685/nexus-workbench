@@ -18,18 +18,26 @@ import {
 import { cn, fireAndForget, makeIconClass } from "@/util/util";
 import { atom, Atom, PrimitiveAtom, useAtomValue } from "jotai";
 import { memo, useCallback, useRef } from "react";
+import { canonicalizeConnName } from "./conn-name";
 import {
     clampSidebarWidth,
     colorForEnv,
-    connStateForEnv,
+    connStateForConn,
     ConnStateColors,
     defaultIconForEnv,
+    EnvConnState,
     findEnvByConn,
     groupEnvironments,
+    planEnvOpen,
     SidebarMaxWidth,
     SidebarMinWidth,
     toggleGroup,
 } from "./envsidebar-util";
+
+// Una conexión real (handshake + auth + posible instalación de wsh) tarda
+// bastante más que el timeout RPC default de 5s (pkg/wshutil/wshrpc.go): con el
+// default, cada "Conectar" fallaba por deadline aunque la conexión avanzara.
+const ConnectTimeoutMs = 60000;
 
 class EnvSidebarModel {
     private static instance: EnvSidebarModel = null;
@@ -40,6 +48,10 @@ class EnvSidebarModel {
     selectedEnvAtom: PrimitiveAtom<string>;
     focusedEnvIdAtom!: Atom<string>;
     activeEnvIdAtom!: Atom<string>;
+    // Un click rápido repetido (o el par click+dblclick) no debe abrir dos
+    // terminales sobre el mismo ambiente mientras createBlock está en vuelo.
+    openInFlight = new Set<string>();
+    connectInFlight = new Set<string>();
 
     private constructor() {
         this.widthAtom = atom(clampSidebarWidth(globalStore.get(getSettingsKeyAtom("nexus:sidebarwidth"))));
@@ -99,64 +111,138 @@ class EnvSidebarModel {
         this.persist({ "nexus:lastselectedenv": envId });
     }
 
-    findOpenBlockForEnv(env: NexusEnvType): string {
+    findOpenBlockForConn(conn: string): string {
         const tabId = globalStore.get(atoms.staticTabId);
         if (!tabId) {
             return null;
         }
+        const canon = canonicalizeConnName(conn);
         const tab = globalStore.get(WOS.getWaveObjectAtom<Tab>(WOS.makeORef("tab", tabId)));
         for (const blockId of tab?.blockids ?? []) {
             const block = globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", blockId)));
-            if (block?.meta?.view === "term" && (block.meta?.connection ?? "") === (env.conn ?? "")) {
+            if (block?.meta?.view !== "term") {
+                continue;
+            }
+            if (canonicalizeConnName(block.meta?.connection ?? "") === canon) {
                 return blockId;
             }
         }
         return null;
     }
 
+    connStateForConnName(conn: string): EnvConnState {
+        return connStateForConn(conn, globalStore.get(getConnStatusAtom(conn)));
+    }
+
     openEnv(env: NexusEnvType) {
+        if (this.openInFlight.has(env.id)) {
+            return;
+        }
+        this.openInFlight.add(env.id);
         this.selectEnv(env.id);
-        const existingBlockId = this.findOpenBlockForEnv(env);
-        if (existingBlockId != null) {
-            refocusNode(existingBlockId);
+        const conn = canonicalizeConnName(env.conn ?? "");
+        const plan = planEnvOpen(this.findOpenBlockForConn(conn), this.connStateForConnName(conn));
+        if (plan.action !== "create") {
+            refocusNode(plan.blockId);
+            if (plan.action === "reconnect") {
+                this.connectConn(conn, plan.blockId);
+            }
+            this.openInFlight.delete(env.id);
             return;
         }
         const meta: MetaType = { view: "term", controller: "shell" };
-        if (env.conn) {
-            meta.connection = env.conn;
+        if (conn) {
+            meta.connection = conn;
         }
-        fireAndForget(() => createBlock({ meta }));
+        // El bloque nuevo dispara ConnEnsure solo (blockframe.tsx), así que acá
+        // NO conectamos: hacerlo duplicaría el handshake sobre la misma conexión.
+        fireAndForget(async () => {
+            try {
+                await createBlock({ meta });
+            } finally {
+                this.openInFlight.delete(env.id);
+            }
+        });
+    }
+
+    connectConn(conn: string, logBlockId: string) {
+        if (!conn || this.connectInFlight.has(conn)) {
+            return;
+        }
+        this.connectInFlight.add(conn);
+        fireAndForget(async () => {
+            try {
+                await RpcApi.ConnConnectCommand(
+                    TabRpcClient,
+                    { host: conn, logblockid: logBlockId ?? undefined },
+                    { timeout: ConnectTimeoutMs }
+                );
+            } catch (e) {
+                console.log("nexus: error conectando", conn, e);
+            } finally {
+                this.connectInFlight.delete(conn);
+            }
+        });
+    }
+
+    disconnectConn(conn: string) {
+        if (!conn) {
+            return;
+        }
+        fireAndForget(async () => {
+            try {
+                await RpcApi.ConnDisconnectCommand(TabRpcClient, conn, { timeout: ConnectTimeoutMs });
+            } catch (e) {
+                console.log("nexus: error desconectando", conn, e);
+            }
+        });
+    }
+
+    reconnectConn(conn: string, logBlockId: string) {
+        if (!conn || this.connectInFlight.has(conn)) {
+            return;
+        }
+        this.connectInFlight.add(conn);
+        fireAndForget(async () => {
+            try {
+                await RpcApi.ConnDisconnectCommand(TabRpcClient, conn, { timeout: ConnectTimeoutMs });
+                await RpcApi.ConnConnectCommand(
+                    TabRpcClient,
+                    { host: conn, logblockid: logBlockId ?? undefined },
+                    { timeout: ConnectTimeoutMs }
+                );
+            } catch (e) {
+                console.log("nexus: error reconectando", conn, e);
+            } finally {
+                this.connectInFlight.delete(conn);
+            }
+        });
     }
 }
 
 function envContextMenu(model: EnvSidebarModel, env: NexusEnvType, connState: string): ContextMenuItem[] {
-    const menu: ContextMenuItem[] = [
-        { label: "Abrir terminal", click: () => model.openEnv(env) },
-    ];
-    if (env.conn) {
+    const menu: ContextMenuItem[] = [{ label: "Abrir terminal", click: () => model.openEnv(env) }];
+    const conn = canonicalizeConnName(env.conn ?? "");
+    if (conn) {
         if (connState !== "connected") {
             menu.push({
                 label: "Conectar",
-                click: () => fireAndForget(() => RpcApi.ConnConnectCommand(TabRpcClient, { host: env.conn })),
+                click: () => model.connectConn(conn, model.findOpenBlockForConn(conn)),
             });
         } else {
             menu.push({
                 label: "Reconectar",
-                click: () =>
-                    fireAndForget(async () => {
-                        await RpcApi.ConnDisconnectCommand(TabRpcClient, env.conn);
-                        await RpcApi.ConnConnectCommand(TabRpcClient, { host: env.conn });
-                    }),
+                click: () => model.reconnectConn(conn, model.findOpenBlockForConn(conn)),
             });
             menu.push({
                 label: "Desconectar",
-                click: () => fireAndForget(() => RpcApi.ConnDisconnectCommand(TabRpcClient, env.conn)),
+                click: () => model.disconnectConn(conn),
             });
         }
         menu.push({ type: "separator" });
         menu.push({
             label: "Copiar host",
-            click: () => fireAndForget(() => navigator.clipboard.writeText(env.conn)),
+            click: () => fireAndForget(() => navigator.clipboard.writeText(conn)),
         });
     }
     menu.push({ type: "separator" });
@@ -175,8 +261,9 @@ type EnvItemProps = {
 
 const EnvItem = memo(({ env, active, collapsed }: EnvItemProps) => {
     const model = EnvSidebarModel.getInstance();
-    const connStatus = useAtomValue(getConnStatusAtom(env.conn ?? ""));
-    const connState = connStateForEnv(env, connStatus);
+    const conn = canonicalizeConnName(env.conn ?? "");
+    const connStatus = useAtomValue(getConnStatusAtom(conn));
+    const connState = connStateForConn(conn, connStatus);
     const icon = env.icon ?? defaultIconForEnv(env);
     const color = colorForEnv(env);
 
@@ -204,7 +291,7 @@ const EnvItem = memo(({ env, active, collapsed }: EnvItemProps) => {
                 active ? "bg-hoverbg text-primary" : "text-secondary hover:bg-hoverbg hover:text-primary"
             )}
             style={{ color: active ? color : undefined }}
-            onClick={() => model.selectEnv(env.id)}
+            onClick={() => model.openEnv(env)}
             onDoubleClick={() => model.openEnv(env)}
             onKeyDown={(e) => e.key === "Enter" && model.openEnv(env)}
             onContextMenu={handleContextMenu}
@@ -221,7 +308,7 @@ const EnvItem = memo(({ env, active, collapsed }: EnvItemProps) => {
                     ? "bg-hoverbg text-primary border-l-accent"
                     : "text-secondary hover:bg-hoverbg hover:text-primary border-l-transparent"
             )}
-            onClick={() => model.selectEnv(env.id)}
+            onClick={() => model.openEnv(env)}
             onDoubleClick={() => model.openEnv(env)}
             onKeyDown={(e) => e.key === "Enter" && model.openEnv(env)}
             onContextMenu={handleContextMenu}
@@ -232,7 +319,7 @@ const EnvItem = memo(({ env, active, collapsed }: EnvItemProps) => {
             </span>
             <span className="flex flex-col min-w-0 flex-1">
                 <span className="text-sm truncate">{env.name ?? env.id}</span>
-                {env.conn ? <span className="text-xxs text-muted truncate">{env.conn}</span> : null}
+                {conn ? <span className="text-xxs text-muted truncate">{conn}</span> : null}
             </span>
             {statusDot}
         </button>
@@ -242,7 +329,7 @@ const EnvItem = memo(({ env, active, collapsed }: EnvItemProps) => {
         return inner;
     }
     return (
-        <Tooltip content={`${env.name ?? env.id}${env.conn ? ` (${env.conn})` : ""}`} placement="right">
+        <Tooltip content={`${env.name ?? env.id}${conn ? ` (${conn})` : ""}`} placement="right">
             {inner}
         </Tooltip>
     );
