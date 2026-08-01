@@ -189,10 +189,14 @@ type SettingsType struct {
 	NexusSidebarWidth           float64        `json:"nexus:sidebarwidth,omitempty"`
 	NexusSidebarCollapsedGroups []string       `json:"nexus:sidebarcollapsedgroups,omitempty"`
 	NexusLastSelectedEnv        string         `json:"nexus:lastselectedenv,omitempty"`
-	// nexus: jarvisd brain endpoint (ADR-0007). Empty url = MockJarvisRuntime.
+	// nexus: jarvisd brain endpoint (ADR-0007). Empty url falls back to the env
+	// vars and then to http://127.0.0.1:8770 (D-027): configuración cero.
 	// Token is plaintext here as an interim measure; target is the secret store (D-015).
-	NexusJarvisBrainUrl   string `json:"nexus:jarvisbrainurl,omitempty"`
-	NexusJarvisBrainToken string `json:"nexus:jarvisbraintoken,omitempty"`
+	// Enabled is a pointer so an explicit false survives marshalling to the
+	// frontend (a plain bool with omitempty would be dropped and read as true).
+	NexusJarvisBrainEnabled *bool  `json:"nexus:jarvisbrainenabled,omitempty"`
+	NexusJarvisBrainUrl     string `json:"nexus:jarvisbrainurl,omitempty"`
+	NexusJarvisBrainToken   string `json:"nexus:jarvisbraintoken,omitempty"`
 }
 
 // NexusEnvType is a Nexus Workbench extension: one entry of the environment

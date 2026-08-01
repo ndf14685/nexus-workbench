@@ -218,6 +218,17 @@ export class HttpJarvisRuntime implements JarvisRuntime {
         }
     }
 
+    // Sonda honesta de arranque/reconfiguración: si el cerebro efectivo no
+    // contesta, la vista queda en "disconnected" (nunca cae al mock). Cualquier
+    // respuesta HTTP — incluso 404 en cerebros sin /health — prueba que está vivo.
+    async probe(): Promise<void> {
+        try {
+            await this.request("GET", "/health");
+        } catch {
+            // request() ya reflejó el resultado en connectionAtom
+        }
+    }
+
     retryNow(): void {
         if (this.legacyMode) {
             void this.pollOnce();

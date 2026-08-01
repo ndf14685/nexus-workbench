@@ -138,6 +138,7 @@ const (
 	ConfigKey_NexusSidebarWidth              = "nexus:sidebarwidth"
 	ConfigKey_NexusSidebarCollapsedGroups    = "nexus:sidebarcollapsedgroups"
 	ConfigKey_NexusLastSelectedEnv           = "nexus:lastselectedenv"
+	ConfigKey_NexusJarvisBrainEnabled        = "nexus:jarvisbrainenabled"
 	ConfigKey_NexusJarvisBrainUrl            = "nexus:jarvisbrainurl"
 	ConfigKey_NexusJarvisBrainToken          = "nexus:jarvisbraintoken"
 )

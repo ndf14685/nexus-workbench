@@ -406,6 +406,9 @@
         "nexus:lastselectedenv": {
           "type": "string"
         },
+        "nexus:jarvisbrainenabled": {
+          "type": "boolean"
+        },
         "nexus:jarvisbrainurl": {
           "type": "string"
         },

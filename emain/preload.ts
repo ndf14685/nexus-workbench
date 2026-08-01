@@ -60,6 +60,7 @@ contextBridge.exposeInMainWorld("api", {
     onSpatialInit: (callback) => ipcRenderer.on("spatial-init", (_event, initOpts) => callback(initOpts)),
     getDisplays: () => ipcRenderer.invoke("get-displays"), // nexus: catálogo MonitorInfo (CONTRACTS §5)
     spatialToggleMaximize: () => ipcRenderer.send("spatial-toggle-maximize"), // nexus: maximize de ventana detached
+    getJarvisBrainEnv: () => ipcRenderer.invoke("get-jarvis-brain-env"), // nexus: solo url+token del cerebro (ADR-0007)
     sendLog: (log) => ipcRenderer.send("fe-log", log),
     onQuicklook: (filePath: string) => ipcRenderer.send("quicklook", filePath),
     openNativePath: (filePath: string) => ipcRenderer.send("open-native-path", filePath),

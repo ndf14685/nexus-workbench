@@ -48,6 +48,7 @@ const previewElectronApi: ElectronApi = {
     onSpatialInit: (_callback: (initOpts: SpatialInitOpts) => void) => {}, // nexus:
     getDisplays: () => Promise.resolve([]), // nexus:
     spatialToggleMaximize: () => {}, // nexus:
+    getJarvisBrainEnv: () => Promise.resolve({ url: "", token: "" }), // nexus:
     sendLog: (_log: string) => {},
     onQuicklook: (_filePath: string) => {},
     openNativePath: (_filePath: string) => {},

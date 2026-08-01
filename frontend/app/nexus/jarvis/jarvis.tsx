@@ -66,7 +66,7 @@ const DisconnectedView = memo(({ compact }: { compact: boolean }) => {
             <JarvisRing state="error" size={110} />
             <div className="text-sm text-error">Cerebro no conectado</div>
             <div className="text-xs text-muted text-center max-w-[320px]">
-                jarvisd (nexus:jarvisbrainurl) no responde. El bloque muestra el estado real del cerebro; sin
+                jarvisd no responde en {core.brainConfig?.url}. El bloque muestra el estado real del cerebro; sin
                 conexión no hay Jarvis que mostrar.
             </div>
             <button

@@ -144,3 +144,54 @@ fuente de verdad del alambre):
 - La gobernanza de cada invocación cerebro→cliente queda del lado del
   cerebro (PEP sobre `client.workbench.<capability>`); el Workbench ejecuta
   bajo su jurisdicción local y reporta resultado honesto.
+
+## Addendum M3 (2026-07-31) — Configuración cero y sin reinicio
+
+El swap de runtime se resolvía UNA sola vez, en el constructor privado de
+`JarvisCore`, y solo si `nexus:jarvisbrainurl` estaba escrita a mano. Eso
+imponía dos pasos manuales en cada instalación (editar el setting, reiniciar la
+app). Ambos desaparecen (D-027):
+
+### Precedencia del endpoint
+
+| Fuente | URL | Token | Gana sobre |
+|---|---|---|---|
+| Setting | `nexus:jarvisbrainurl` | `nexus:jarvisbraintoken` | todo |
+| Ambiente | `NEXUS_DESKTOP_BRAIN_URL` | `NEXUS_BRAIN_TOKEN` | el default |
+| Default | `http://127.0.0.1:8770` | (sin token) | — |
+
+Un valor en blanco no cuenta como valor: cae al siguiente escalón. Las
+variables de ambiente son las que el proyecto Jarvis ya usa, y las lee el
+proceso main (el renderer no tiene `process.env`): `emain` expone una API
+angosta `getJarvisBrainEnv()` que devuelve SOLO esas dos, nunca un getter
+genérico de ambiente. La resolución vive en `jarvis-brain-config.ts`, un módulo
+puro sin dependencias de Wave.
+
+**El caso local no requiere ningún paso**: jarvisd sin token bindea solo en
+loopback y no exige auth, así que con el daemon corriendo en la misma máquina
+el bloque se conecta solo.
+
+### Interruptor explícito
+
+`nexus:jarvisbrainenabled` (bool, default `true`) es la ÚNICA puerta al mock:
+en `false` el bloque vuelve al preview etiquetado. No hace falta un opt-out por
+string vacío. En Go es `*bool` a propósito: un `bool` con `omitempty` perdería
+el `false` al serializarse hacia el frontend y el opt-out sería inoperante.
+
+### Sin reinicio
+
+`JarvisCore.applyBrainConfig()` reemplaza el runtime en caliente cuando cambia
+la config efectiva: destruye el anterior (`dispose()` cierra SSE y cancela
+timers), construye el nuevo, repone los `attach` de las vistas montadas y
+conserva bus, store y atoms — la UI no parpadea ni pierde tareas. Se dispara
+desde tres lados: el arranque, la suscripción a las 3 claves de settings (el
+watcher de config ya las empuja en caliente) y la resolución asíncrona del
+ambiente. Si la config no cambió, es un no-op: nada de churn de reconexión.
+
+### Sonda honesta
+
+Al arrancar y en cada reconfiguración se sondea `GET /health`. Si el cerebro
+efectivo no contesta, el bloque queda en "cerebro no conectado" con Reintentar
+— **nunca** cae al mock: el mock es solo para `enabled=false`. Cualquier
+respuesta HTTP (incluso un 404 de un cerebro sin `/health`) prueba que está
+vivo, y el fallback legacy para cerebros pre-v1.1 sigue intacto.

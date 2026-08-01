@@ -281,6 +281,15 @@ export function initIpcHandlers() {
         event.returnValue = process.env[varName] ?? null;
     });
 
+    // nexus: ADR-0007 "configuración cero". Lista blanca de dos variables, no un
+    // getter genérico: el renderer nunca debe poder barrer el ambiente del main.
+    electron.ipcMain.handle("get-jarvis-brain-env", (): JarvisBrainEnv => {
+        return {
+            url: (process.env.NEXUS_DESKTOP_BRAIN_URL ?? "").trim(),
+            token: (process.env.NEXUS_BRAIN_TOKEN ?? "").trim(),
+        };
+    });
+
     electron.ipcMain.on("get-about-modal-details", (event) => {
         event.returnValue = getWaveVersion() as AboutModalDetails;
     });

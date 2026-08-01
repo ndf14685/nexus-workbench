@@ -8,22 +8,54 @@
 
 import { FocusManager } from "@/app/store/focusManager";
 import { globalStore } from "@/app/store/jotaiStore";
-import { atoms, getSettingsKeyAtom, WOS } from "@/store/global";
+import { atoms, getApi, getSettingsKeyAtom, WOS } from "@/store/global";
 import { findEnvByConn } from "../envsidebar-util";
+import { JarvisBrainConfig, JarvisBrainEnv, resolveBrainConfig } from "./jarvis-brain-config";
 import { JarvisBus } from "./jarvis-bus";
 import { WorkbenchContext } from "./jarvis-types";
 
+const BrainSettingKeys = ["nexus:jarvisbrainenabled", "nexus:jarvisbrainurl", "nexus:jarvisbraintoken"] as const;
+
+let cachedBrainEnv: JarvisBrainEnv = {};
+
+// El renderer no puede leer process.env: emain expone exactamente las dos
+// variables del cerebro (get-jarvis-brain-env). Se resuelve una vez al arranque
+// y queda cacheada; quien la pida antes ve {} y vuelve a resolver después.
+export async function loadJarvisBrainEnv(): Promise<JarvisBrainEnv> {
+    try {
+        const env = await getApi()?.getJarvisBrainEnv?.();
+        cachedBrainEnv = { url: env?.url ?? "", token: env?.token ?? "" };
+    } catch (e) {
+        console.error("jarvis-context: error reading brain env", e);
+    }
+    return cachedBrainEnv;
+}
+
 // Brain endpoint settings (ADR-0007). Read here — not in jarvis-core — because
 // this is the only Jarvis module allowed to import Wave internals (ADR-0005).
-export function getJarvisBrainConfig(): { url: string; token: string } {
+// La precedencia (setting > env > default) vive en jarvis-brain-config.
+export function getJarvisBrainConfig(): JarvisBrainConfig {
     try {
-        const url = globalStore.get(getSettingsKeyAtom("nexus:jarvisbrainurl")) ?? "";
-        const token = globalStore.get(getSettingsKeyAtom("nexus:jarvisbraintoken")) ?? "";
-        return { url: String(url).trim(), token: String(token).trim() };
+        return resolveBrainConfig(
+            {
+                enabled: globalStore.get(getSettingsKeyAtom("nexus:jarvisbrainenabled")),
+                url: globalStore.get(getSettingsKeyAtom("nexus:jarvisbrainurl")),
+                token: globalStore.get(getSettingsKeyAtom("nexus:jarvisbraintoken")),
+            },
+            cachedBrainEnv
+        );
     } catch (e) {
         console.error("jarvis-context: error reading brain settings", e);
-        return { url: "", token: "" };
+        return resolveBrainConfig({}, cachedBrainEnv);
     }
+}
+
+// El watcher de config ya empuja los settings al frontend (fullConfigAtom); acá
+// solo escuchamos las 3 claves del cerebro para no reconfigurar el runtime cada
+// vez que cambia cualquier otro setting.
+export function subscribeJarvisBrainSettings(onChange: () => void): () => void {
+    const unsubs = BrainSettingKeys.map((key) => globalStore.sub(getSettingsKeyAtom(key), onChange));
+    return () => unsubs.forEach((unsub) => unsub());
 }
 
 export class WorkbenchContextProvider {

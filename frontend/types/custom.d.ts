@@ -87,6 +87,13 @@ declare global {
         windowId: string;
     };
 
+    // nexus: las dos únicas variables de ambiente del proyecto Jarvis que el
+    // renderer puede leer (ADR-0007 "configuración cero")
+    type JarvisBrainEnv = {
+        url: string;
+        token: string;
+    };
+
     type ElectronApi = {
         getAuthKey(): string; // get-auth-key
         getIsDev(): boolean; // get-is-dev
@@ -133,6 +140,10 @@ declare global {
         onSpatialInit: (callback: (initOpts: SpatialInitOpts) => void) => void; // nexus: spatial-init
         getDisplays: () => Promise<MonitorInfo[]>; // nexus: get-displays (spatial CONTRACTS §5)
         spatialToggleMaximize: () => void; // nexus: spatial-toggle-maximize (ventana detached propia)
+        // nexus: get-jarvis-brain-env (ADR-0007 "configuración cero"). Devuelve SOLO
+        // NEXUS_DESKTOP_BRAIN_URL y NEXUS_BRAIN_TOKEN: un getter genérico de env
+        // expondría el ambiente entero del proceso main al renderer.
+        getJarvisBrainEnv: () => Promise<JarvisBrainEnv>; // nexus: get-jarvis-brain-env
         sendLog: (log: string) => void; // fe-log
         onQuicklook: (filePath: string) => void; // quicklook
         openNativePath(filePath: string): void; // open-native-path
