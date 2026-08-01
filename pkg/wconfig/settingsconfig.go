@@ -889,6 +889,27 @@ func convertJsonNumber(num json.Number, ctype reflect.Type) (interface{}, error)
 	return nil, fmt.Errorf("cannot convert number to %s", ctype)
 }
 
+// nexus: re-decodes a JSON-shaped value (slice/map/struct) into the type the
+// config key declares. Returns an error when the shape does not fit, so a
+// malformed write is rejected instead of silently persisting garbage.
+func convertJsonComposite(val any, ctype reflect.Type) (any, error) {
+	switch ctype.Kind() {
+	case reflect.Slice, reflect.Array, reflect.Map, reflect.Struct, reflect.Pointer, reflect.Interface:
+		// convertible below
+	default:
+		return nil, fmt.Errorf("type %s is not a composite", ctype)
+	}
+	barr, err := json.Marshal(val)
+	if err != nil {
+		return nil, err
+	}
+	ptr := reflect.New(ctype)
+	if err := json.Unmarshal(barr, ptr.Interface()); err != nil {
+		return nil, err
+	}
+	return ptr.Elem().Interface(), nil
+}
+
 func SetBaseConfigValue(toMerge waveobj.MetaMapType) error {
 	m, cerrs := ReadWaveHomeConfigFile(SettingsFile)
 	if len(cerrs) > 0 {
@@ -918,7 +939,15 @@ func SetBaseConfigValue(toMerge waveobj.MetaMapType) error {
 				if ctype == reflect.PointerTo(rtype) {
 					m[configKey] = &val
 				} else {
-					return fmt.Errorf("invalid value type for %s: %T", configKey, val)
+					// nexus: composite settings (slices/structs) arrive from the
+					// JSON decoder as []any / map[string]any, so the exact type
+					// comparison above can never match them. Re-decode into the
+					// declared type, which also validates the shape.
+					convertedVal, err := convertJsonComposite(val, ctype)
+					if err != nil {
+						return fmt.Errorf("invalid value type for %s: %T (%v)", configKey, val, err)
+					}
+					val = convertedVal
 				}
 			}
 			m[configKey] = val
