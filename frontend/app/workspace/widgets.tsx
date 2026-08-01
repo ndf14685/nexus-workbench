@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Tooltip } from "@/app/element/tooltip";
+import { buildModeMenuItems } from "@/app/nexus/widget-modes";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { useWaveEnv, WaveEnv, WaveEnvSubset } from "@/app/waveenv/waveenv";
 import { shouldIncludeWidgetForWorkspace } from "@/app/workspace/widgetfilter";
@@ -55,8 +56,14 @@ type WidgetPropsType = {
     env: WidgetsEnv;
 };
 
-async function handleWidgetSelect(widget: WidgetConfigType, env: WidgetsEnv) {
+async function handleWidgetSelect(widget: WidgetConfigType, env: WidgetsEnv, e: React.MouseEvent) {
     const blockDef = widget.blockdef;
+    // nexus: un widget con varios modos abre el menú en vez de crear el bloque
+    const modeItems = buildModeMenuItems(blockDef, (modeBlockDef) => env.createBlock(modeBlockDef, widget.magnified));
+    if (modeItems.length > 0) {
+        env.showContextMenu(modeItems, e);
+        return;
+    }
     env.createBlock(blockDef, widget.magnified);
 }
 
@@ -83,7 +90,7 @@ const Widget = memo(({ widget, mode, env }: WidgetPropsType) => {
                 mode === "supercompact" ? "text-sm" : "text-lg",
                 widget["display:hidden"] && "hidden"
             )}
-            divOnClick={() => handleWidgetSelect(widget, env)}
+            divOnClick={(e) => handleWidgetSelect(widget, env, e)}
         >
             <div style={{ color: widget.color }}>
                 <i className={makeIconClass(widget.icon, true, { defaultIcon: "browser" })}></i>

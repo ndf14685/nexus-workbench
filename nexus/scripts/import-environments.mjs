@@ -195,32 +195,78 @@ for (const env of catalog.environments) {
 
 // Agentes de IA por suscripción (Claude Code, Codex, etc.): widgets que lanzan
 // el CLI en un bloque terminal. El OAuth/login lo maneja el propio CLI.
+//
+// Un agente puede declarar `modes: [{id, label, command, danger}]`: en ese caso
+// se genera UN SOLO widget cuyo blockdef.meta lleva "nexus:modes" y el click
+// abre un menú para elegir la variante (ver nexus/docs/AI.md). Sin `modes` el
+// comportamiento es el de siempre.
+function normalizeModes(raw, ctx) {
+    if (raw == null) {
+        return [];
+    }
+    if (!Array.isArray(raw)) {
+        console.warn(`${ctx}: 'modes' debe ser una lista; ignorado`);
+        return [];
+    }
+    const modes = [];
+    for (const m of raw) {
+        if (!m || typeof m !== "object" || !m.command) {
+            console.warn(`${ctx}: modo omitido (requiere command): ${JSON.stringify(m)}`);
+            continue;
+        }
+        const mode = { label: String(m.label ?? m.id ?? m.command), command: String(m.command) };
+        if (m.danger === true) {
+            mode.danger = true;
+        }
+        modes.push(mode);
+    }
+    return modes;
+}
+
+const agentIds = new Set();
+const agentCommands = new Map();
 let agentCount = 0;
 for (const agent of catalog.agents ?? []) {
-    if (!agent.id || !agent.command) {
-        console.warn(`agente omitido (requiere id y command): ${JSON.stringify(agent)}`);
+    const modes = normalizeModes(agent.modes, `agente '${agent.id ?? "?"}'`);
+    const baseCommand = agent.command ?? modes[0]?.command;
+    if (!agent.id || !baseCommand) {
+        console.warn(`agente omitido (requiere id y command o modes): ${JSON.stringify(agent)}`);
         continue;
     }
     const meta = {
         view: "term",
         controller: "cmd",
-        cmd: agent.command,
+        cmd: baseCommand,
         "cmd:shell": true,
         "cmd:runonstart": true,
     };
+    if (modes.length > 0) {
+        meta["nexus:modes"] = modes;
+    }
     const envRef = agent.environment ? catalog.environments.find((e) => e.id === agent.environment) : null;
     if (envRef && (envRef.kind === "ssh" || envRef.kind === "wsl")) {
         meta.connection = envRef.kind === "wsl" ? `wsl://${envRef.distro}` : envRef.host;
     }
+    const label = agent.name ?? agent.id;
     widgets[`nexus-agent-${agent.id}`] = {
         "display:order": 200 + agentCount,
         icon: agent.icon ?? "robot",
         color: agent.color ?? "#d2a8ff",
-        label: agent.name ?? agent.id,
-        description: `${agent.command}${meta.connection ? " @ " + meta.connection : ""}`,
+        label,
+        description:
+            modes.length > 1
+                ? `${label} — ${modes.length} modos${meta.connection ? " @ " + meta.connection : ""}`
+                : `${baseCommand}${meta.connection ? " @ " + meta.connection : ""}`,
         blockdef: { meta },
     };
+    agentIds.add(agent.id);
+    for (const c of [baseCommand, ...modes.map((m) => m.command)]) {
+        agentCommands.set(c.trim(), agent.id);
+    }
     agentCount++;
+}
+if (agentCount > 0) {
+    console.log(`agentes: ${agentCount} widgets`);
 }
 
 // Comandos favoritos (nexus/config/commands.yaml|.json, opcional): widgets que
@@ -232,6 +278,7 @@ const cmdYaml = path.join(scriptDir, "..", "config", "commands.yaml");
 const cmdPath = fs.existsSync(cmdJson) ? cmdJson : fs.existsSync(cmdYaml) ? cmdYaml : null;
 let cmdCount = 0;
 let cmdSkipped = 0;
+let cmdDup = 0;
 if (cmdPath) {
     const { parsed: cmdCatalog } = parseCatalogFile(cmdPath);
     if (cmdCatalog?.version !== 1 || !Array.isArray(cmdCatalog.commands)) {
@@ -245,6 +292,24 @@ if (cmdPath) {
         }
         if (cmd.destructive || /<[^>]+>/.test(cmd.command)) {
             cmdSkipped++;
+            continue;
+        }
+        // Un botón por herramienta: si el comando ya lo cubre un agente (mismo
+        // id, o mismo comando incluso bajo otro id) no generamos un segundo
+        // widget que haga exactamente lo mismo.
+        if (agentIds.has(cmd.id)) {
+            console.warn(
+                `comando '${cmd.id}' OMITIDO: colisiona con el agente '${cmd.id}' (mismo id) — el widget nexus-agent-${cmd.id} ya cubre esa herramienta`
+            );
+            cmdDup++;
+            continue;
+        }
+        const dupAgentId = agentCommands.get(cmd.command.trim());
+        if (dupAgentId != null) {
+            console.warn(
+                `comando '${cmd.id}' OMITIDO: su comando (${cmd.command}) es idéntico al del agente '${dupAgentId}' — el widget nexus-agent-${dupAgentId} ya cubre esa herramienta`
+            );
+            cmdDup++;
             continue;
         }
         const meta = {
@@ -268,7 +333,9 @@ if (cmdPath) {
         };
         cmdCount++;
     }
-    console.log(`comandos: ${cmdPath} (${cmdCount} widgets, ${cmdSkipped} omitidos por destructive/placeholder)`);
+    console.log(
+        `comandos: ${cmdPath} (${cmdCount} widgets, ${cmdSkipped} omitidos por destructive/placeholder, ${cmdDup} omitidos por duplicar un agente)`
+    );
 }
 
 // Links web (repos, dashboards): abren en el navegador embebido del Workbench

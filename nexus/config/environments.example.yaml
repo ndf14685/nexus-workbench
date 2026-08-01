@@ -71,33 +71,39 @@ environments:
       criticality: high
       notes: sin credenciales; acceso vía bastion definido en ~/.ssh/config
 
-# Agentes de IA por suscripción: cada uno es un botón de la barra lateral que
-# lanza el CLI en un bloque terminal. El login OAuth (Claude Pro/Max, Codex)
+# Agentes de IA por suscripción: UN botón por herramienta en la barra lateral,
+# que lanza el CLI en un bloque terminal. El login OAuth (Claude Pro/Max, Codex)
 # lo maneja el CLI mismo — acá no va ninguna credencial.
 # Campos: id, name, command (obligatorios); icon, color, environment (opcional,
 # id de un ambiente ssh/wsl para correr el CLI en ese host).
+#
+# `modes` (opcional): variantes de invocación de la MISMA herramienta. Con 2 o
+# más modos el click abre un menú en vez de crear el bloque directo, así no hay
+# un botón por variante. `danger: true` marca el modo en el menú con "⚠ ".
+# Ver nexus/docs/AI.md.
 agents:
     - id: claude
       name: Claude Code
       command: claude
       icon: robot
+      modes:
+          - id: normal
+            label: Claude Code
+            command: claude
+          - id: full
+            label: Claude Code (permisos totales)
+            command: claude --dangerously-skip-permissions
+            danger: true
 
     - id: codex
       name: Codex
       command: codex
       icon: microchip
-
-    # Más adaptadores CLI (descomentá los que uses — ver docs/AI_PROVIDERS.md):
-    # - id: gemini
-    #   name: Gemini
-    #   command: gemini
-    #   icon: gem
-    # - id: ollama-llama
-    #   name: Llama (local)
-    #   command: ollama run llama3.2
-    #   icon: brain
-    # - id: ollama-rig
-    #   name: Llama (rig3060)
-    #   command: ollama run llama3.2
-    #   environment: rig3060
-    #   icon: brain
+      modes:
+          - id: normal
+            label: Codex
+            command: codex
+          - id: full
+            label: Codex (permisos totales)
+            command: codex --yolo
+            danger: true

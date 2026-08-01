@@ -9,7 +9,30 @@
         { "id": "work-example", "name": "Trabajo (ejemplo)", "kind": "ssh", "host": "work-bastion", "class": "work", "criticality": "high" }
     ],
     "agents": [
-        { "id": "claude", "name": "Claude Code", "command": "claude", "icon": "robot" },
-        { "id": "codex", "name": "Codex", "command": "codex", "icon": "microchip" }
+        {
+            "id": "claude",
+            "name": "Claude Code",
+            "command": "claude",
+            "icon": "robot",
+            "modes": [
+                { "id": "normal", "label": "Claude Code", "command": "claude" },
+                {
+                    "id": "full",
+                    "label": "Claude Code (permisos totales)",
+                    "command": "claude --dangerously-skip-permissions",
+                    "danger": true
+                }
+            ]
+        },
+        {
+            "id": "codex",
+            "name": "Codex",
+            "command": "codex",
+            "icon": "microchip",
+            "modes": [
+                { "id": "normal", "label": "Codex", "command": "codex" },
+                { "id": "full", "label": "Codex (permisos totales)", "command": "codex --yolo", "danger": true }
+            ]
+        }
     ]
 }
