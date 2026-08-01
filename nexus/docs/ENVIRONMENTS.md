@@ -39,13 +39,32 @@ a `connections.json` viaja **solo el nombre**:
     "display:order": 0,
     "term:theme": "dracula",
     "ssh:user": "ndf",
-    "ssh:passwordsecretname": "nexus_ssh_rig3060"   // ← el NOMBRE, no la clave
+    "ssh:passwordsecretname": "nexus_ssh_rig3060",  // ← el NOMBRE, no la clave
+    "ssh:pubkeyauthentication": false,
+    "ssh:preferredauthentications": ["password", "keyboard-interactive"]
 }
 ```
 
 `pkg/remote/sshclient.go` resuelve ese nombre contra el store en cada conexión.
 La contraseña **no** está en `settings.json`, **no** está en `connections.json`
 y **no** está en el catálogo de ambientes.
+
+**Por qué se apaga `publickey` (D-034).** Elegir Contraseña tiene que significar
+contraseña. Con los defaults de OpenSSH el orden es
+`publickey,keyboard-interactive,password`, así que el cliente probaba primero
+todas las identidades locales (`~/.ssh/id_*` y las del agente) y, si alguna
+tenía passphrase, abría el diálogo **"Enter passphrase for the SSH key"**: el
+servidor parecía ir por clave pese a tener la contraseña guardada. Además
+`keyboard-interactive` —el método que un sshd de Raspberry Pi OS ofrece antes
+que `password`— preguntaba siempre al usuario en vez de usar el secreto.
+Ahora el método Contraseña apaga `publickey` y pone `password` primero, y el
+challenge de `keyboard-interactive` responde con el secreto guardado la pregunta
+que **es** la contraseña (sin echo y con "password" en el texto). Un segundo
+factor (`Verification code:`) se sigue preguntando.
+
+> Los servidores dados de alta antes de D-034 no tienen esas dos claves: hay que
+> **abrir el servidor en el editor y guardarlo de nuevo** una vez para que se
+> escriban.
 
 Reglas de ciclo de vida:
 
@@ -67,7 +86,8 @@ construcción el regex del store (`^[A-Za-z][A-Za-z0-9_]*$`): prefijo fijo
 Estas son las claves **propias** de ambos caminos:
 
 `display:order` · `term:theme` · `ssh:user` · `ssh:port` · `ssh:identityfile` ·
-`ssh:passwordsecretname` · `conn:wshenabled` · `cmd:initscript`
+`ssh:passwordsecretname` · `ssh:pubkeyauthentication` ·
+`ssh:preferredauthentications` · `conn:wshenabled` · `cmd:initscript`
 
 Dos omisiones deliberadas, por la misma razón — en la cascada de keywords
 `connections.json` **le gana** a `~/.ssh/config`, así que escribir un default

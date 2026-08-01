@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -419,7 +420,15 @@ func createPasswordCallbackPrompt(connCtx context.Context, remoteDisplayName str
 	}
 }
 
-func createInteractiveKbdInteractiveChallenge(connCtx context.Context, remoteName string, debugInfo *ConnectionDebugInfo) func(name, instruction string, questions []string, echos []bool) (answers []string, err error) {
+// nexus: sshd de Raspberry Pi OS (y de cualquier OpenSSH moderno) ofrece
+// keyboard-interactive ANTES que password, y ese método preguntaba siempre al
+// usuario. Con una contraseña guardada en el almacén del SO el usuario la veía
+// pedir igual, como si no estuviera configurada. Solo se responde sola la
+// pregunta que ES la contraseña (sin echo y con "password" en el texto): un
+// segundo factor —"Verification code:"— se sigue preguntando.
+var kbdPasswordQuestionRe = regexp.MustCompile(`(?i)password`)
+
+func createInteractiveKbdInteractiveChallenge(connCtx context.Context, remoteName string, password *string, debugInfo *ConnectionDebugInfo) func(name, instruction string, questions []string, echos []bool) (answers []string, err error) {
 	return func(name, instruction string, questions []string, echos []bool) (answers []string, outErr error) {
 		defer func() {
 			panicErr := panichandler.PanicHandler("sshclient:kbdinteractive-callback", recover())
@@ -432,6 +441,11 @@ func createInteractiveKbdInteractiveChallenge(connCtx context.Context, remoteNam
 		}
 		for i, question := range questions {
 			echo := echos[i]
+			if password != nil && !echo && kbdPasswordQuestionRe.MatchString(question) {
+				blocklogger.Infof(connCtx, "[conndebug] answering keyboard-interactive password prompt from secret store\n")
+				answers = append(answers, *password)
+				continue
+			}
 			answer, err := promptChallengeQuestion(connCtx, question, echo, remoteName)
 			if err != nil {
 				return nil, ConnectionError{ConnectionDebugInfo: debugInfo, Err: utilds.MakeCodedError(ConnErrCode_UserCancelled, err)}
@@ -794,7 +808,7 @@ func createClientConfig(connCtx context.Context, sshKeywords *wconfig.ConnKeywor
 	}
 
 	publicKeyCallback := ssh.PublicKeysCallback(createPublicKeyCallback(connCtx, sshKeywords, authSockSigners, agentClient, debugInfo))
-	keyboardInteractive := ssh.KeyboardInteractive(createInteractiveKbdInteractiveChallenge(connCtx, remoteName, debugInfo))
+	keyboardInteractive := ssh.KeyboardInteractive(createInteractiveKbdInteractiveChallenge(connCtx, remoteName, sshPassword, debugInfo))
 	passwordCallback := ssh.PasswordCallback(createPasswordCallbackPrompt(connCtx, remoteName, sshPassword, debugInfo))
 
 	// exclude gssapi-with-mic and hostbased until implemented

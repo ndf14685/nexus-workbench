@@ -240,6 +240,19 @@ test("el nombre del secreto viaja a connections.json, la contraseña nunca", () 
     assert.notProperty(env, "password");
 });
 
+test("método contraseña: publickey apagado y password primero en el orden", () => {
+    const env = envFromForm(sshForm({ auth: "password", identityfile: "", password: "s3cr3t" }));
+    const entry = connEntryForEnv(env, 0, "nexus_ssh_rig3060");
+    assert.isFalse(entry["ssh:pubkeyauthentication"]);
+    assert.deepEqual(entry["ssh:preferredauthentications"], ["password", "keyboard-interactive"]);
+});
+
+test("método clave: no se toca la autenticación, las claves quedan anuladas", () => {
+    const entry = connEntryForEnv(envFromForm(sshForm({ auth: "key" })), 0, "");
+    assert.isNull(entry["ssh:pubkeyauthentication"]);
+    assert.isNull(entry["ssh:preferredauthentications"]);
+});
+
 test("claves propias anuladas al borrar (SetConnectionsConfig solo mergea)", () => {
     const cleared = clearedConnEntry();
     assert.deepEqual(Object.keys(cleared).sort(), [...OwnedConnKeys].sort());

@@ -308,9 +308,18 @@ export const OwnedConnKeys = [
     "ssh:port",
     "ssh:identityfile",
     "ssh:passwordsecretname",
+    "ssh:pubkeyauthentication",
+    "ssh:preferredauthentications",
     "conn:wshenabled",
     "cmd:initscript",
 ] as const;
+
+// Orden de autenticación cuando el método es Contraseña. Sin esto el default de
+// OpenSSH manda: publickey primero —que con una clave con passphrase abre el
+// diálogo "Enter passphrase for the SSH key" y el usuario ve que el servidor
+// "va por clave" pese a haber guardado la contraseña— y keyboard-interactive
+// antes que password.
+export const PasswordPreferredAuthentications = ["password", "keyboard-interactive"];
 
 export function themeForEnv(env: NexusEnvType): string {
     return ClassThemes[env?.class] ?? DefaultTermTheme;
@@ -346,6 +355,8 @@ export function connEntryForEnv(env: NexusEnvType, order: number, secretName: st
     }
     if ((secretName ?? "") !== "") {
         entry["ssh:passwordsecretname"] = secretName;
+        entry["ssh:pubkeyauthentication"] = false;
+        entry["ssh:preferredauthentications"] = [...PasswordPreferredAuthentications];
     }
     return entry;
 }
