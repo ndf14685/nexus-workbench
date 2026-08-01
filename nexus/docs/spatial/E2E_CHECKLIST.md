@@ -190,9 +190,10 @@ Matar el proceso de la ventana detached sin pasar por el cierre normal
 
 Guardar y recargar la escena completa por nombre:
 
+Guardar: menú contextual del header de cualquier bloque → "Guardar layout como perfil…" → nombre `Incident Response` → Guardar (sin DevTools; cargar también disponible vía "Cargar perfil ▸").
+
 ```js
 const wsid = window.globalStore.get(window.globalAtoms.workspaceId);
-await window.RpcApi.SpatialSaveProfileCommand(window.TabRpcClient, { name: "Incident Response", workspaceid: wsid });
 await window.RpcApi.SpatialListProfilesCommand(window.TabRpcClient); // → ["incident-response"]
 await window.RpcApi.SpatialLoadProfileCommand(window.TabRpcClient, { name: "Incident Response", workspaceid: wsid });
 ```

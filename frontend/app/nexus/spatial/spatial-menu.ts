@@ -3,7 +3,9 @@
 
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { modalsModel } from "@/store/modalmodel";
 import { fireAndForget } from "@/util/util";
+import { workspace } from "./spatial-api";
 import { hasFocusSnapshot, isDetachedModule, SpatialModel } from "./spatial-model";
 
 // Imports dinámicos en los click handlers: spatial-focus arrastra el grafo de
@@ -70,13 +72,45 @@ export function buildMonitorSubmenu(
     }));
 }
 
+// Helper puro (testeable sin RPC): un ítem por perfil existente; lista
+// vacía o ausente → único ítem deshabilitado "(sin perfiles)".
+export function buildProfileSubmenu(profiles: string[], onSelect: (name: string) => void): ContextMenuItem[] {
+    if (profiles == null || profiles.length === 0) {
+        return [{ label: "(sin perfiles)", enabled: false }];
+    }
+    return profiles.map((name) => ({ label: name, click: () => onSelect(name) }));
+}
+
+// Confirmación del modal de guardado (extraída del componente para poder
+// testear el flujo sin montar React).
+export async function saveProfileAs(name: string): Promise<void> {
+    await workspace.saveLayout(name);
+    console.log(`spatial: perfil '${name}' guardado`);
+}
+
+function makeProfileItems(profiles: string[]): ContextMenuItem[] {
+    return [
+        { type: "separator" },
+        {
+            label: "Guardar layout como perfil…",
+            click: () => modalsModel.pushModal("SpatialSaveProfileModal"),
+        },
+        {
+            label: "Cargar perfil",
+            type: "submenu",
+            submenu: buildProfileSubmenu(profiles, (name) => fireAndForget(() => workspace.loadLayout(name))),
+        },
+    ];
+}
+
 // Ítems espaciales del menú del block header (CONTRACTS §7). Visibilidad:
 // Pop Out solo con el módulo acoplado; Pop In (que en el MVP también cubre
 // "Move to Main Window") solo detached; Mover a monitor solo detached y con
 // catálogo disponible (se OMITE en vez de mostrarse deshabilitado). Cerrar
 // módulo (detached) usa SpatialCloseModuleCommand — cerrar la ventana sigue
 // siendo Pop In (R12); cerrar acoplado ya existe como "Close Block" estándar.
-export function buildSpatialMenuItems(blockId: string, monitors?: MonitorInfo[]): ContextMenuItem[] {
+// La sección de perfiles (guardar/cargar) va al final y es SIEMPRE visible.
+export function buildSpatialMenuItems(blockId: string, monitors?: MonitorInfo[], profiles?: string[]): ContextMenuItem[] {
     if (!isDetachedModule(blockId)) {
         return [
             {
@@ -87,6 +121,7 @@ export function buildSpatialMenuItems(blockId: string, monitors?: MonitorInfo[])
                     }),
             },
             ...makeFocusItems(blockId, false),
+            ...makeProfileItems(profiles),
         ];
     }
     const items: ContextMenuItem[] = [
@@ -117,6 +152,7 @@ export function buildSpatialMenuItems(blockId: string, monitors?: MonitorInfo[])
                 await RpcApi.SpatialCloseModuleCommand(TabRpcClient, { moduleid: blockId });
             }),
     });
+    items.push(...makeProfileItems(profiles));
     return items;
 }
 
@@ -142,12 +178,17 @@ function pruneConsecutiveSeparators(menu: ContextMenuItem[]): ContextMenuItem[] 
 
 // Punto único de entrada para el hook del block header: agrega los ítems
 // espaciales y, si el módulo está detached, poda las acciones no aplicables.
-export function applySpatialMenu(menu: ContextMenuItem[], blockId: string, monitors?: MonitorInfo[]): ContextMenuItem[] {
+export function applySpatialMenu(
+    menu: ContextMenuItem[],
+    blockId: string,
+    monitors?: MonitorInfo[],
+    profiles?: string[]
+): ContextMenuItem[] {
     let base = menu;
     if (isDetachedModule(blockId)) {
         base = base.filter((item) => !NonApplicableWhenDetached.has(item.label));
     }
-    const spatialItems = buildSpatialMenuItems(blockId, monitors);
+    const spatialItems = buildSpatialMenuItems(blockId, monitors, profiles);
     if (spatialItems.length === 0) {
         return pruneConsecutiveSeparators(base);
     }
@@ -155,7 +196,9 @@ export function applySpatialMenu(menu: ContextMenuItem[], blockId: string, monit
 }
 
 // Variante para el hook real: el submenu de monitores necesita el catálogo
-// (RPC al cache del engine); si la RPC falla el menú sale sin submenu.
+// (RPC al cache del engine) y el de perfiles la lista persistida; si una
+// RPC falla el menú sale sin ese submenu ("(sin perfiles)" en el caso de
+// perfiles).
 export async function applySpatialMenuAsync(menu: ContextMenuItem[], blockId: string): Promise<ContextMenuItem[]> {
     let monitors: MonitorInfo[] = null;
     if (isDetachedModule(blockId)) {
@@ -165,5 +208,11 @@ export async function applySpatialMenuAsync(menu: ContextMenuItem[], blockId: st
             console.error("spatial-menu: listing monitors failed", e);
         }
     }
-    return applySpatialMenu(menu, blockId, monitors);
+    let profiles: string[] = null;
+    try {
+        profiles = await workspace.listLayouts();
+    } catch (e) {
+        console.error("spatial-menu: listing profiles failed", e);
+    }
+    return applySpatialMenu(menu, blockId, monitors, profiles);
 }

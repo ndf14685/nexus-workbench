@@ -256,12 +256,16 @@ existente del header):
 
 Pop Out · Pop In · Move to Monitor ▸ (submenu dinámico `listMonitors()`) ·
 Move to Main Window · Focus · Return to Previous Position ·
-Maximize Module · Minimize Module · Close Module
+Maximize Module · Minimize Module · Close Module ·
+Save Layout as Profile… ("Guardar layout como perfil…", modal
+`SpatialSaveProfileModal`) · Load Profile ▸ ("Cargar perfil ▸", submenu
+dinámico `listProfiles()`; lista vacía → "(sin perfiles)" deshabilitado)
 
 Visibilidad condicional: Pop In / Move to Main Window solo si detached;
 Pop Out solo si acoplado; Return solo si hay `FocusSnapshot` o `PrevDock`.
 Close delega en el flujo estándar (`uxCloseBlock`). Maximize acoplado =
-magnify; detached = maximize de ventana.
+magnify; detached = maximize de ventana. La sección de perfiles (guardar/
+cargar) es siempre visible, acoplado o detached, tras un separador.
 
 ## 8. Perfiles — lista blanca de persistencia
 

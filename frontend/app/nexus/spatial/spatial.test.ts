@@ -2,9 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { globalStore } from "@/app/store/jotaiStore";
+import { RpcApi } from "@/app/store/wshclientapi";
+import { modalsModel } from "@/store/modalmodel";
 import { assert, beforeEach, test } from "vitest";
 import { getSpatialBus, resetSpatialBus, SpatialBus } from "./spatial-bus";
-import { applySpatialMenu, buildMonitorSubmenu, buildSpatialMenuItems } from "./spatial-menu";
+import {
+    applySpatialMenu,
+    applySpatialMenuAsync,
+    buildMonitorSubmenu,
+    buildProfileSubmenu,
+    buildSpatialMenuItems,
+    saveProfileAs,
+} from "./spatial-menu";
 import { makeSurfaceNodeModel } from "./surface-node-model";
 import {
     decideDockedFocusAction,
@@ -36,7 +45,23 @@ function makeSurface(id: string): Surface {
 beforeEach(() => {
     SpatialModel.resetInstance();
     resetSpatialBus();
+    RpcApi.setMockRpcClient(null);
 });
+
+function installRpcRecorder(profileList: string[] = []): [string, any][] {
+    const calls: [string, any][] = [];
+    RpcApi.setMockRpcClient({
+        mockWshRpcCall: (_client, command, data) => {
+            calls.push([command, data]);
+            if (command === "spatiallistprofiles") {
+                return Promise.resolve(profileList);
+            }
+            return Promise.resolve(null);
+        },
+        mockWshRpcStream: null,
+    });
+    return calls;
+}
 
 test("bus delivers typed events and unsubscribes cleanly", () => {
     const bus = new SpatialBus();
@@ -169,22 +194,21 @@ function detachModuleForTest(moduleId: string, surfaceId: string) {
 
 const DockedBaseLabels = ["Desacoplar (Pop Out)", "Enfocar módulo", "Maximizar módulo"];
 const DetachedBaseLabels = ["Acoplar a ventana principal", "Enfocar módulo", "Maximizar módulo", "Minimizar módulo", "Cerrar módulo"];
+const ProfileTailLabels = ["|", "Guardar layout como perfil…", "Cargar perfil"];
+
+function labelOf(it: ContextMenuItem): string {
+    return it.label ?? "|";
+}
 
 test("spatial menu: docked shows Pop Out + Focus + Maximize", () => {
     const items = buildSpatialMenuItems("blk-docked");
-    assert.deepEqual(
-        items.map((it) => it.label),
-        DockedBaseLabels
-    );
+    assert.deepEqual(items.map(labelOf), [...DockedBaseLabels, ...ProfileTailLabels]);
 });
 
 test("spatial menu: detached shows Pop In, Focus, Maximize, Minimize, Close", () => {
     detachModuleForTest("blk-1", "surf-1");
     const items = buildSpatialMenuItems("blk-1");
-    assert.deepEqual(
-        items.map((it) => it.label),
-        DetachedBaseLabels
-    );
+    assert.deepEqual(items.map(labelOf), [...DetachedBaseLabels, ...ProfileTailLabels]);
 });
 
 function makeMonitor(monitorid: string, label: string, primary: boolean): MonitorInfo {
@@ -204,10 +228,15 @@ test("spatial menu: detached with monitor catalog shows Move to Monitor submenu"
     detachModuleForTest("blk-1", "surf-1");
     const monitors = [makeMonitor("A|1920x1080@1", "A", true), makeMonitor("B|1920x1080@1", "B", false)];
     const items = buildSpatialMenuItems("blk-1", monitors);
-    assert.deepEqual(
-        items.map((it) => it.label),
-        ["Acoplar a ventana principal", "Mover a monitor", "Enfocar módulo", "Maximizar módulo", "Minimizar módulo", "Cerrar módulo"]
-    );
+    assert.deepEqual(items.map(labelOf), [
+        "Acoplar a ventana principal",
+        "Mover a monitor",
+        "Enfocar módulo",
+        "Maximizar módulo",
+        "Minimizar módulo",
+        "Cerrar módulo",
+        ...ProfileTailLabels,
+    ]);
     const submenu = items.find((it) => it.label === "Mover a monitor");
     assert.equal(submenu.type, "submenu");
     assert.equal(submenu.submenu.length, 2);
@@ -259,10 +288,7 @@ test("spatial menu: visibility flips after attach", () => {
     detachModuleForTest("blk-1", "surf-1");
     SpatialModel.getInstance().handleWpsEvent(makeUpdateEvent({ type: "module.attached", moduleid: "blk-1" }));
     const items = buildSpatialMenuItems("blk-1");
-    assert.deepEqual(
-        items.map((it) => it.label),
-        DockedBaseLabels
-    );
+    assert.deepEqual(items.map(labelOf), [...DockedBaseLabels, ...ProfileTailLabels]);
 });
 
 test("spatial menu: Restore appears only while a focus snapshot exists", () => {
@@ -276,13 +302,19 @@ test("spatial menu: Restore appears only while a focus snapshot exists", () => {
         })
     );
     assert.equal(hasFocusSnapshot("blk-1"), true);
-    let labels = buildSpatialMenuItems("blk-1").map((it) => it.label);
-    assert.deepEqual(labels, ["Desacoplar (Pop Out)", "Enfocar módulo", "Restaurar posición anterior", "Maximizar módulo"]);
+    let labels = buildSpatialMenuItems("blk-1").map(labelOf);
+    assert.deepEqual(labels, [
+        "Desacoplar (Pop Out)",
+        "Enfocar módulo",
+        "Restaurar posición anterior",
+        "Maximizar módulo",
+        ...ProfileTailLabels,
+    ]);
 
     model.handleWpsEvent(makeUpdateEvent({ type: "module.focusReleased", moduleid: "blk-1" }));
     assert.equal(hasFocusSnapshot("blk-1"), false);
-    labels = buildSpatialMenuItems("blk-1").map((it) => it.label);
-    assert.deepEqual(labels, DockedBaseLabels);
+    labels = buildSpatialMenuItems("blk-1").map(labelOf);
+    assert.deepEqual(labels, [...DockedBaseLabels, ...ProfileTailLabels]);
 });
 
 test("focus snapshot delta also works for detached modules", () => {
@@ -296,7 +328,7 @@ test("focus snapshot delta also works for detached modules", () => {
         })
     );
     assert.equal(hasFocusSnapshot("blk-1"), true);
-    const labels = buildSpatialMenuItems("blk-1").map((it) => it.label);
+    const labels = buildSpatialMenuItems("blk-1").map(labelOf);
     assert.deepEqual(labels, [
         "Acoplar a ventana principal",
         "Enfocar módulo",
@@ -304,6 +336,7 @@ test("focus snapshot delta also works for detached modules", () => {
         "Maximizar módulo",
         "Minimizar módulo",
         "Cerrar módulo",
+        ...ProfileTailLabels,
     ]);
     // focusReleased de un detached conserva la entrada del módulo
     model.handleWpsEvent(makeUpdateEvent({ type: "module.focusReleased", moduleid: "blk-1" }));
@@ -347,8 +380,8 @@ test("applySpatialMenu appends items to a docked header menu", () => {
     ];
     const menu = applySpatialMenu(base, "blk-docked");
     assert.deepEqual(
-        menu.map((it) => it.label ?? "|"),
-        ["Magnify Block", "|", "Close Block", "|", ...DockedBaseLabels]
+        menu.map(labelOf),
+        ["Magnify Block", "|", "Close Block", "|", ...DockedBaseLabels, ...ProfileTailLabels]
     );
 });
 
@@ -363,8 +396,8 @@ test("applySpatialMenu prunes tab-centric actions when detached (R11)", () => {
     ];
     const menu = applySpatialMenu(base, "blk-1");
     assert.deepEqual(
-        menu.map((it) => it.label ?? "|"),
-        ["Copy BlockId", "|", ...DetachedBaseLabels]
+        menu.map(labelOf),
+        ["Copy BlockId", "|", ...DetachedBaseLabels, ...ProfileTailLabels]
     );
 });
 
@@ -386,4 +419,71 @@ test("synthetic surface NodeModel satisfies the interface without a LayoutModel"
     assert.doesNotThrow(() => nm.addEphemeralNodeToLayout());
     assert.doesNotThrow(() => nm.onClose());
     assert.notEqual(nm.displayContainerRef, null);
+});
+
+test("buildProfileSubmenu: one item per profile, click selects", () => {
+    const selected: string[] = [];
+    const items = buildProfileSubmenu(["trabajo", "incident-response"], (name) => selected.push(name));
+    assert.deepEqual(
+        items.map((it) => it.label),
+        ["trabajo", "incident-response"]
+    );
+    items[1].click();
+    assert.deepEqual(selected, ["incident-response"]);
+});
+
+test("buildProfileSubmenu: empty or null list yields disabled '(sin perfiles)'", () => {
+    assert.deepEqual(buildProfileSubmenu([], () => {}), [{ label: "(sin perfiles)", enabled: false }]);
+    assert.deepEqual(buildProfileSubmenu(null, () => {}), [{ label: "(sin perfiles)", enabled: false }]);
+});
+
+test("spatial menu: load submenu built from the profile list, docked and detached", () => {
+    let load = buildSpatialMenuItems("blk-docked", null, ["trabajo", "demo"]).find((it) => it.label === "Cargar perfil");
+    assert.equal(load.type, "submenu");
+    assert.deepEqual(
+        load.submenu.map((it) => it.label),
+        ["trabajo", "demo"]
+    );
+
+    detachModuleForTest("blk-1", "surf-1");
+    load = buildSpatialMenuItems("blk-1").find((it) => it.label === "Cargar perfil");
+    assert.deepEqual(load.submenu, [{ label: "(sin perfiles)", enabled: false }]);
+});
+
+test("spatial menu: save item opens SpatialSaveProfileModal", () => {
+    const pushed: [string, any][] = [];
+    const origPush = modalsModel.pushModal;
+    modalsModel.pushModal = (displayName: string, props?: any) => pushed.push([displayName, props]);
+    try {
+        buildSpatialMenuItems("blk-docked").find((it) => it.label === "Guardar layout como perfil…").click();
+    } finally {
+        modalsModel.pushModal = origPush;
+    }
+    assert.deepEqual(pushed, [["SpatialSaveProfileModal", undefined]]);
+});
+
+test("saveProfileAs sends SpatialSaveProfileCommand with the entered name", async () => {
+    const calls = installRpcRecorder();
+    SpatialModel.getInstance().workspaceId = "ws-1";
+    await saveProfileAs("trabajo");
+    assert.deepEqual(calls, [["spatialsaveprofile", { name: "trabajo", workspaceid: "ws-1" }]]);
+});
+
+test("load submenu click sends SpatialLoadProfileCommand", async () => {
+    const calls = installRpcRecorder();
+    SpatialModel.getInstance().workspaceId = "ws-1";
+    const load = buildSpatialMenuItems("blk-docked", null, ["trabajo"]).find((it) => it.label === "Cargar perfil");
+    load.submenu[0].click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(calls, [["spatialloadprofile", { name: "trabajo", workspaceid: "ws-1" }]]);
+});
+
+test("applySpatialMenuAsync fetches the profile list when the menu opens", async () => {
+    installRpcRecorder(["incident-response"]);
+    const menu = await applySpatialMenuAsync([], "blk-docked");
+    const load = menu.find((it) => it.label === "Cargar perfil");
+    assert.deepEqual(
+        load.submenu.map((it) => it.label),
+        ["incident-response"]
+    );
 });

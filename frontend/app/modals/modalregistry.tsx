@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { MessageModal } from "@/app/modals/messagemodal";
+import { SpatialSaveProfileModal } from "@/app/nexus/spatial/spatial-profile-modal"; // nexus:
 import { NewInstallOnboardingModal } from "@/app/onboarding/onboarding";
 import { UpgradeOnboardingModal } from "@/app/onboarding/onboarding-upgrade";
 import { UpgradeOnboardingPatch } from "@/app/onboarding/onboarding-upgrade-patch";
@@ -21,6 +22,7 @@ const modalRegistry: { [key: string]: React.ComponentType<any> } = {
     [RenameFileModal.displayName || "RenameFileModal"]: RenameFileModal,
     [DeleteFileModal.displayName || "DeleteFileModal"]: DeleteFileModal,
     [SetSecretDialog.displayName || "SetSecretDialog"]: SetSecretDialog,
+    [SpatialSaveProfileModal.displayName || "SpatialSaveProfileModal"]: SpatialSaveProfileModal, // nexus:
 };
 
 export const getModalComponent = (key: string): React.ComponentType<any> | undefined => {
