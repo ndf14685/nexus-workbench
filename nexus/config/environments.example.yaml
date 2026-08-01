@@ -5,71 +5,81 @@
 #   node nexus/scripts/import-environments.mjs [--dev] [--dry-run]
 #
 # REGLAS DE SEGURIDAD:
-# - NUNCA credenciales, claves, passphrases ni tokens acá.
-# - Los hosts SSH referencian alias de ~/.ssh/config; la autenticación la
-#   resuelven ssh-agent / claves del sistema (ver nexus/docs/SECURITY.md).
+# - NUNCA credenciales, claves, passphrases ni tokens acá. El importador aborta
+#   si los detecta.
+# - `identityfile` es una RUTA a la clave (no la clave): eso sí es válido.
+# - Para SSH con contraseña, guardala en el secret store cifrado
+#   (`wsh secret set MI_PASS`) y referenciala con `ssh:passwordsecretname` en
+#   connections.json. Así no hay ni un prompt ni una credencial en disco claro.
 #
 # Campos:
 #   id            identificador estable (kebab-case)
 #   name          nombre humano
 #   kind          local | wsl | ssh
-#   host          (ssh) alias de ~/.ssh/config o user@host
-#   distro        (wsl) nombre de la distro (wsl -l)
+#   host          (ssh, OBLIGATORIO) alias de ~/.ssh/config, o user@host[:port]
+#   user          (ssh, opcional) usuario de login — ver AVISO de abajo
+#   port          (ssh, opcional) puerto; 22 se omite del nombre canónico
+#   identityfile  (ssh, opcional) ruta (o lista de rutas) a la clave privada
+#   wsh           (ssh, opcional) true = integración wsh (default);
+#                 false = shell remota pelada, estilo WinSSHterm
+#   distro        (wsl, OBLIGATORIO) nombre de la distro (`wsl -l`)
 #   class         lab | personal | work | prod   → define tema/color por defecto
 #   criticality   low | medium | high            → informativo; high ⇒ confirmar
 #   theme         (opcional) override de term:theme de Wave
 #   icon          (opcional) icono FontAwesome del widget (default por kind)
 #   notes         texto libre
 #
-# El importador genera además un widget por ambiente en la barra lateral
-# (equivalente a la lista de conexiones guardadas de WinSSHterm): click en el
-# widget = terminal nueva en esa conexión, coloreado por clase.
+# AVISO SOBRE `user`: si no lo ponés y ~/.ssh/config no define `User` para ese
+# host, Wave cae a `user.Current()`. En Windows eso es "MAQUINA\usuario", que se
+# manda tal cual como login SSH y la autenticación falla sin explicar por qué.
+# En Windows, poné `user:` explícito.
+#
+# `wsh: true` (default) instala un helper en el servidor y habilita el bloque
+# gráfico completo (archivos, edición remota, `wsh` en la terminal remota).
+# `wsh: false` es modo WinSSHterm puro: NO instala nada en el servidor y abre una
+# shell y nada más — más rápido de arrancar y sin huella, pero sin integración.
+# Elegí `false` para equipos chicos/ARM o donde no querés escribir nada.
+#
+# El orden de la lista define `display:order`: lo primero es lo más prominente.
+#
+# HOSTS Y USUARIOS DE ABAJO SON PLACEHOLDERS. El catálogo real
+# (nexus/config/environments.yaml) está gitignored: no se versiona.
 version: 1
 
 environments:
-    - id: local-windows
-      name: Local Windows
+    - id: rig-ubuntu
+      name: Rig Ubuntu
+      kind: ssh
+      host: 192.0.2.10 # PLACEHOLDER: IP o alias de ~/.ssh/config
+      user: usuario # PLACEHOLDER
+      class: lab
+      criticality: medium
+      notes: wsh habilitado (default) — integración completa de bloques
+
+    - id: raspberry
+      name: Raspberry
+      kind: ssh
+      host: 192.0.2.20 # PLACEHOLDER: IP o alias de ~/.ssh/config
+      user: pi # PLACEHOLDER
+      wsh: false # ARM chico: shell pelada estilo WinSSHterm, sin instalar nada
+      class: personal
+      criticality: low
+
+    - id: local
+      name: PC Local
       kind: local
       class: personal
       criticality: low
-      notes: PowerShell 7 por defecto (term:localshellpath en settings.json si hace falta)
+      notes: shell local (term:localshellpath en settings.json para elegir cuál)
 
-    - id: wsl-ubuntu
-      name: WSL Ubuntu
+    # Último a propósito: WSL queda con el display:order más alto (menos
+    # prominente) porque no es un ambiente de uso diario.
+    - id: wsl
+      name: WSL
       kind: wsl
-      distro: Ubuntu
+      distro: Ubuntu # PLACEHOLDER: salida de `wsl -l`
       class: personal
       criticality: low
-
-    - id: nexusos
-      name: NexusOS
-      kind: ssh
-      host: nexusos
-      class: lab
-      criticality: medium
-      notes: alias definido en ~/.ssh/config
-
-    - id: raspi-media
-      name: Raspberry Media Center
-      kind: ssh
-      host: raspi-media
-      class: personal
-      criticality: low
-
-    - id: rig3060
-      name: rig3060
-      kind: ssh
-      host: rig3060
-      class: lab
-      criticality: medium
-
-    - id: work-example
-      name: Trabajo (ejemplo)
-      kind: ssh
-      host: work-bastion
-      class: work
-      criticality: high
-      notes: sin credenciales; acceso vía bastion definido en ~/.ssh/config
 
 # Agentes de IA por suscripción: UN botón por herramienta en la barra lateral,
 # que lanza el CLI en un bloque terminal. El login OAuth (Claude Pro/Max, Codex)

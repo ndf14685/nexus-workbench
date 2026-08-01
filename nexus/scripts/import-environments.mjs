@@ -7,7 +7,10 @@
 //   por clase de ambiente, y presets de fondo de tab en <configDir>/presets.json.
 // - Merge NO destructivo: preserva claves existentes; solo crea/actualiza las
 //   claves gestionadas. Hace backup timestampeado antes de escribir.
-// - No maneja credenciales: los hosts deben resolverse vía ~/.ssh/config.
+// - Identidad SÍ, credenciales NO: escribe ssh:user / ssh:port /
+//   ssh:identityfile (rutas) para que el backend no tenga que adivinar el
+//   usuario, y aborta si detecta material sensible. Contraseñas: secret store
+//   (`wsh secret set` + ssh:passwordsecretname), nunca el catálogo.
 
 import fs from "node:fs";
 import os from "node:os";
@@ -44,6 +47,34 @@ const defaultJson = path.join(scriptDir, "..", "config", "environments.json");
 // preferimos .json: no requiere dependencias (el .yaml necesita el paquete "yaml")
 const yamlPath =
     args.find((a) => !a.startsWith("--")) ?? (fs.existsSync(defaultJson) ? defaultJson : defaultYaml);
+
+// Nombre canónico de conexión: replica ParseOpts (pkg/remote/connutil.go) +
+// SSHOpts.String() (pkg/remote/sshclient.go), que es la clave REAL con la que el
+// backend indexa la conexión. Emitir "ndf@host:22" cuando el backend dice
+// "ndf@host" hace que el punto de estado de la sidebar y la búsqueda de bloques
+// abiertos nunca coincidan. Espejo de frontend/app/nexus/conn-name.ts (no se
+// puede importar TS desde este script sin build).
+const UserHostRe = /^([a-zA-Z0-9][a-zA-Z0-9._@\\-]*@)?([a-zA-Z0-9][a-zA-Z0-9.-]*)(?::([0-9]+))?$/;
+
+function parseHostSpec(spec) {
+    const m = UserHostRe.exec(String(spec ?? "").trim());
+    if (m == null) {
+        return null;
+    }
+    return { user: (m[1] ?? "").replace(/@+$/, ""), host: m[2], port: m[3] ?? "" };
+}
+
+function formatConn(parts) {
+    let rtn = "";
+    if (parts.user) {
+        rtn += parts.user + "@";
+    }
+    rtn += parts.host;
+    if (parts.port && parts.port !== "22") {
+        rtn += ":" + parts.port;
+    }
+    return rtn;
+}
 
 const ClassThemes = {
     lab: "dracula",
@@ -104,14 +135,107 @@ if (catalog?.version !== 1 || !Array.isArray(catalog.environments)) {
     process.exit(1);
 }
 
-const forbidden = /password|passphrase|token|secret|private[_-]?key|BEGIN (RSA|OPENSSH)/i;
+// Guarda de credenciales. Se separa en dos porque `identityfile` es una RUTA a
+// una clave, no material de clave: un path perfectamente legítimo como
+// ~/.ssh/mi_private_key dispararía el patrón `private[_-]?key` y abortaría el
+// import sin motivo. Se enmascara SOLO el valor de identityfile (hasta la coma o
+// el fin de línea, para no tapar otra clave escrita en la misma línea) y solo
+// frente a los patrones por NOMBRE. El cuerpo PEM se sigue buscando sobre el
+// texto completo: una clave embebida nunca es aceptable, ni en identityfile.
+const forbiddenNames = /password|passphrase|token|secret|private[_-]?key/i;
+const forbiddenMaterial = /BEGIN (RSA|DSA|EC|OPENSSH|ENCRYPTED)?\s*PRIVATE KEY|BEGIN (RSA|OPENSSH)/i;
 const rawSansComments = raw
     .split("\n")
     .map((l) => l.replace(/(^|\s)#.*$/, ""))
     .join("\n");
-if (forbidden.test(rawSansComments)) {
+const rawSansIdentityPaths = rawSansComments.replace(/(["']?identityfile["']?\s*:\s*)([^,\n]*)/gi, "$1<ruta>");
+if (forbiddenMaterial.test(rawSansComments) || forbiddenNames.test(rawSansIdentityPaths)) {
     console.error("ABORTADO: el catálogo parece contener material sensible (password/token/clave).");
+    console.error("Para SSH con contraseña usá el secret store: `wsh secret set` + ssh:passwordsecretname.");
     process.exit(2);
+}
+
+// Validación + resolución del catálogo ANTES de escribir nada. Un ssh sin host
+// producía `conn: ""` en silencio, y el sidebar/widget abría una shell LOCAL
+// haciéndose pasar por el servidor; un wsl sin distro producía "wsl://" que no
+// resuelve a ninguna distro. Los dos casos ahora abortan el import.
+const resolved = new Map();
+const catalogErrors = [];
+const seenIds = new Set();
+for (const env of catalog.environments) {
+    const label = env?.id ?? JSON.stringify(env);
+    if (!env?.id) {
+        catalogErrors.push(`ambiente sin 'id': ${JSON.stringify(env)}`);
+        continue;
+    }
+    if (seenIds.has(env.id)) {
+        catalogErrors.push(`id duplicado '${env.id}': los ids deben ser únicos`);
+        continue;
+    }
+    seenIds.add(env.id);
+    if (env.kind === "wsl") {
+        if (!env.distro) {
+            catalogErrors.push(`'${label}': kind "wsl" requiere 'distro' (ver \`wsl -l\`)`);
+            continue;
+        }
+        resolved.set(env.id, { conn: `wsl://${String(env.distro).trim()}` });
+        continue;
+    }
+    if (env.kind !== "ssh") {
+        resolved.set(env.id, { conn: "" });
+        continue;
+    }
+    if (!env.host) {
+        catalogErrors.push(`'${label}': kind "ssh" requiere 'host' (alias de ~/.ssh/config, o user@host[:port])`);
+        continue;
+    }
+    // Aviso, no error: el host puede volverse válido si el usuario define un
+    // alias en ~/.ssh/config, y un host raro no debe bloquear el resto del
+    // catálogo. Pero tal como está, ParseOpts lo rechaza y la conexión falla.
+    const rawHost = String(env.host).trim();
+    const parts = parseHostSpec(rawHost) ?? { user: "", host: rawHost, port: "" };
+    if (parseHostSpec(rawHost) == null) {
+        const motivo = /_/.test(rawHost) ? "tiene guion bajo" : "parece un literal IPv6 u otro formato no soportado";
+        console.warn(
+            `AVISO '${label}': el host ${JSON.stringify(rawHost)} ${motivo} y ParseOpts lo RECHAZA ` +
+                `(pkg/remote/connutil.go): la conexión va a fallar con "invalid format of user@host argument". ` +
+                `Definí un alias en ~/.ssh/config y usalo como host.`
+        );
+    }
+    if (env.user != null) {
+        parts.user = String(env.user).trim();
+    }
+    if (env.port != null) {
+        const port = String(env.port).trim();
+        if (!/^[0-9]+$/.test(port)) {
+            catalogErrors.push(`'${label}': port inválido ${JSON.stringify(env.port)} (debe ser numérico)`);
+            continue;
+        }
+        parts.port = port;
+    }
+    if (env.wsh != null && typeof env.wsh !== "boolean") {
+        catalogErrors.push(`'${label}': 'wsh' debe ser true o false`);
+        continue;
+    }
+    const identityFile = env.identityfile == null ? [] : [].concat(env.identityfile).map((f) => String(f));
+    resolved.set(env.id, { conn: formatConn(parts), ssh: parts, identityFile, wsh: env.wsh });
+    if (!parts.user) {
+        console.warn(
+            `AVISO '${label}': sin 'user' — en Windows, si ~/.ssh/config no define User para '${parts.host}', ` +
+                `Wave manda user.Current() ("MAQUINA\\usuario") y la autenticación falla. Agregá 'user:'.`
+        );
+    }
+}
+if (catalogErrors.length > 0) {
+    console.error("ABORTADO: el catálogo tiene errores:");
+    for (const e of catalogErrors) {
+        console.error(`  - ${e}`);
+    }
+    process.exit(3);
+}
+
+function connForEnv(env) {
+    return resolved.get(env?.id)?.conn ?? "";
 }
 
 const configDir = getConfigDir();
@@ -124,17 +248,41 @@ for (const env of catalog.environments) {
     if (env.kind !== "ssh" && env.kind !== "wsl") {
         continue;
     }
-    const key = env.kind === "wsl" ? `wsl://${env.distro}` : env.host;
-    if (!key) {
-        console.warn(`omitido ${env.id}: falta ${env.kind === "wsl" ? "distro" : "host"}`);
-        continue;
-    }
+    const info = resolved.get(env.id);
+    const key = info.conn;
     const theme = env.theme ?? ClassThemes[env.class] ?? "default-dark";
-    connections[key] = {
+    const entry = {
         ...connections[key],
         "display:order": catalog.environments.indexOf(env),
         "term:theme": theme,
     };
+    if (env.kind === "ssh") {
+        // Identidad explícita: sin esto, cuando ~/.ssh/config no define User,
+        // sshclient.go cae a user.Current() — en Windows "MAQUINA\usuario", que
+        // se manda tal cual como login SSH y la autenticación falla sin decir
+        // por qué. Nunca va acá una credencial: usuario, host, puerto y RUTAS.
+        if (info.ssh.user) {
+            entry["ssh:user"] = info.ssh.user;
+        }
+        // NO se emite ssh:hostname: solo podría valer lo mismo que el nombre de
+        // la conexión, que es exactamente lo que el backend ya deriva por
+        // defecto (findSshConfigKeywords usa hostPattern cuando HostName está
+        // vacío). Escribirlo no agrega información y sí rompe algo: en la
+        // cascada de keywords, connections.json le gana a ~/.ssh/config, así que
+        // un alias con `HostName 10.0.0.5` quedaría clavado al literal del alias.
+        // Solo se escribe lo que el usuario declaró explícitamente.
+        if (env.port != null) {
+            entry["ssh:port"] = info.ssh.port;
+        }
+        if (info.identityFile.length > 0) {
+            entry["ssh:identityfile"] = info.identityFile;
+        }
+        // wsh: false = modo WinSSHterm puro (shell remota sin instalar nada).
+        if (env.wsh === false) {
+            entry["conn:wshenabled"] = false;
+        }
+    }
+    connections[key] = entry;
     connChanges++;
 }
 
@@ -175,11 +323,8 @@ for (const key of Object.keys(widgets)) {
 let widgetCount = 0;
 for (const env of catalog.environments) {
     const meta = { view: "term", controller: "shell" };
-    if (env.kind === "ssh" || env.kind === "wsl") {
-        const conn = env.kind === "wsl" ? `wsl://${env.distro}` : env.host;
-        if (!conn) {
-            continue;
-        }
+    const conn = connForEnv(env);
+    if (conn) {
         meta.connection = conn;
     }
     widgets[`nexus-env-${env.id}`] = {
@@ -244,8 +389,8 @@ for (const agent of catalog.agents ?? []) {
         meta["nexus:modes"] = modes;
     }
     const envRef = agent.environment ? catalog.environments.find((e) => e.id === agent.environment) : null;
-    if (envRef && (envRef.kind === "ssh" || envRef.kind === "wsl")) {
-        meta.connection = envRef.kind === "wsl" ? `wsl://${envRef.distro}` : envRef.host;
+    if (envRef && connForEnv(envRef)) {
+        meta.connection = connForEnv(envRef);
     }
     const label = agent.name ?? agent.id;
     widgets[`nexus-agent-${agent.id}`] = {
@@ -320,8 +465,8 @@ if (cmdPath) {
             "cmd:runonstart": true,
         };
         const envRef = cmd.environment ? catalog.environments.find((e) => e.id === cmd.environment) : null;
-        if (envRef && (envRef.kind === "ssh" || envRef.kind === "wsl")) {
-            meta.connection = envRef.kind === "wsl" ? `wsl://${envRef.distro}` : envRef.host;
+        if (envRef && connForEnv(envRef)) {
+            meta.connection = connForEnv(envRef);
         }
         widgets[`nexus-cmd-${cmd.id}`] = {
             "display:order": 300 + cmdCount,
@@ -372,8 +517,7 @@ if (linkCount > 0) {
 const settingsPath = path.join(configDir, "settings.json");
 const settings = readJson(settingsPath);
 settings["nexus:environments"] = catalog.environments.map((env) => {
-    const conn = env.kind === "wsl" ? `wsl://${env.distro ?? ""}` : env.kind === "ssh" ? (env.host ?? "") : "";
-    const entry = { id: env.id, conn };
+    const entry = { id: env.id, conn: connForEnv(env) };
     if (env.name) entry.name = env.name;
     if (env.class) entry.class = env.class;
     if (env.kind) entry.kind = env.kind;

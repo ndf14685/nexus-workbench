@@ -1,12 +1,38 @@
 {
+    "_readme": "Ver environments.example.yaml para la documentación completa de los campos. HOSTS Y USUARIOS ACÁ SON PLACEHOLDERS: copiá este archivo a environments.json (gitignored) y editalo. El orden de la lista define display:order (lo primero es lo más prominente). En Windows poné 'user' explícito: sin él, y sin User en ~/.ssh/config, Wave manda user.Current() ('MAQUINA\\usuario') y la autenticación falla.",
     "version": 1,
     "environments": [
-        { "id": "local-windows", "name": "Local Windows", "kind": "local", "class": "personal", "criticality": "low" },
-        { "id": "wsl-ubuntu", "name": "WSL Ubuntu", "kind": "wsl", "distro": "Ubuntu", "class": "personal", "criticality": "low" },
-        { "id": "nexusos", "name": "NexusOS", "kind": "ssh", "host": "nexusos", "class": "lab", "criticality": "medium" },
-        { "id": "raspi-media", "name": "Raspberry Media Center", "kind": "ssh", "host": "raspi-media", "class": "personal", "criticality": "low" },
-        { "id": "rig3060", "name": "rig3060", "kind": "ssh", "host": "rig3060", "class": "lab", "criticality": "medium" },
-        { "id": "work-example", "name": "Trabajo (ejemplo)", "kind": "ssh", "host": "work-bastion", "class": "work", "criticality": "high" }
+        {
+            "id": "rig-ubuntu",
+            "name": "Rig Ubuntu",
+            "kind": "ssh",
+            "host": "192.0.2.10",
+            "user": "usuario",
+            "class": "lab",
+            "criticality": "medium",
+            "notes": "PLACEHOLDER. wsh habilitado (default): integración completa de bloques"
+        },
+        {
+            "id": "raspberry",
+            "name": "Raspberry",
+            "kind": "ssh",
+            "host": "192.0.2.20",
+            "user": "pi",
+            "wsh": false,
+            "class": "personal",
+            "criticality": "low",
+            "notes": "PLACEHOLDER. wsh:false = shell pelada estilo WinSSHterm, no instala nada en el equipo"
+        },
+        { "id": "local", "name": "PC Local", "kind": "local", "class": "personal", "criticality": "low" },
+        {
+            "id": "wsl",
+            "name": "WSL",
+            "kind": "wsl",
+            "distro": "Ubuntu",
+            "class": "personal",
+            "criticality": "low",
+            "notes": "PLACEHOLDER (`wsl -l`). Último de la lista a propósito: display:order más alto, menos prominente"
+        }
     ],
     "agents": [
         {
