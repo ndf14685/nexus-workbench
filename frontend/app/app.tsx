@@ -19,6 +19,7 @@ import { getLayoutModelForStaticTab } from "@/layout/index";
 import { ContextMenuModel } from "@/store/contextmenu";
 import { atoms, createBlock, getSettingsPrefixAtom, refocusNode } from "@/store/global";
 import { appHandleKeyDown, keyboardMouseDownHandler } from "@/store/keymodel";
+import { dispatchWorkbenchCommandShortcut } from "@/app/nexus/commands/command-dispatcher";
 import { getElemAsStr } from "@/util/focusutil";
 import * as keyutil from "@/util/keyutil";
 import { PLATFORM } from "@/util/platformutil";
@@ -283,7 +284,12 @@ const MacOSFirstClickHandler = () => {
 
 const AppKeyHandlers = () => {
     useEffect(() => {
-        const staticKeyDownHandler = keyutil.keydownWrapper(appHandleKeyDown);
+        const staticKeyDownHandler = keyutil.keydownWrapper((waveEvent) => {
+            if (dispatchWorkbenchCommandShortcut(waveEvent, (waveEvent as any).nativeEvent?.target)) {
+                return true;
+            }
+            return appHandleKeyDown(waveEvent);
+        });
         const staticMouseDownHandler = (e: MouseEvent) => {
             keyboardMouseDownHandler(e);
             GlobalModel.getInstance().setIsActive();

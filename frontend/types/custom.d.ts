@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { WaveEnv } from "@/app/waveenv/waveenv";
+import type { SitePermissionRecord, WorkbenchPermission } from "@/app/nexus/permissions/permission-types";
 import { type Placement } from "@floating-ui/react";
 import type * as jotai from "jotai";
 import type * as rxjs from "rxjs";
@@ -124,8 +125,14 @@ declare global {
         onQuicklook: (filePath: string) => void; // quicklook
         openNativePath(filePath: string): void; // open-native-path
         captureScreenshot(rect: Electron.Rectangle): Promise<string>; // capture-screenshot
+        toggleFullScreen: () => void; // toggle-fullscreen
         setKeyboardChordMode: () => void; // set-keyboard-chord-mode
         clearWebviewStorage: (webContentsId: number) => Promise<void>; // clear-webview-storage
+        listSitePermissions: () => Promise<SitePermissionRecord[]>; // nexus-permissions-list
+        setSitePermission: (record: SitePermissionRecord) => Promise<SitePermissionRecord[]>; // nexus-permissions-set
+        revokeSitePermission: (origin: string, permission: WorkbenchPermission) => Promise<SitePermissionRecord[]>; // nexus-permissions-revoke
+        revokeAllSitePermissions: (permission?: WorkbenchPermission) => Promise<SitePermissionRecord[]>; // nexus-permissions-revoke-all
+        ensureWebSession: (partition: string) => void; // ensure-web-session
         setWaveAIOpen: (isOpen: boolean) => void; // set-waveai-open
         closeBuilderWindow: () => void; // close-builder-window
         incrementTermCommands: (opts?: { isRemote?: boolean; isWsl?: boolean; isDurable?: boolean }) => void; // increment-term-commands

@@ -32,6 +32,7 @@ const USER_AGENT_ANDROID =
     "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.43 Mobile Safari/537.36";
 
 let webviewPreloadUrl = null;
+const ensuredWebPartitions = new Set<string>();
 
 function getWebviewPreloadUrl(env: WebViewEnv) {
     if (webviewPreloadUrl == null) {
@@ -42,6 +43,14 @@ function getWebviewPreloadUrl(env: WebViewEnv) {
         return null;
     }
     return "file://" + webviewPreloadUrl;
+}
+
+function ensureWebPartition(env: WebViewEnv, partition?: string) {
+    if (!partition || !partition.startsWith("persist:") || ensuredWebPartitions.has(partition)) {
+        return;
+    }
+    ensuredWebPartitions.add(partition);
+    env.electron.ensureWebSession(partition);
 }
 
 export class WebViewModel implements ViewModel {
@@ -857,6 +866,7 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
     const metaPartition = useAtomValue(env.getBlockMetaKeyAtom(model.blockId, "web:partition"));
     const webPartition = partitionOverride || metaPartition || undefined;
     const userAgentType = useAtomValue(model.userAgentType) || "default";
+    ensureWebPartition(env, webPartition);
 
     // Determine user agent string based on type
     let userAgent: string | undefined = undefined;

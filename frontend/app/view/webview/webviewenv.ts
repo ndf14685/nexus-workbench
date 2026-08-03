@@ -10,6 +10,7 @@ export type WebViewEnv = WaveEnvSubset<{
         clearWebviewStorage: WaveEnv["electron"]["clearWebviewStorage"];
         getConfigDir: WaveEnv["electron"]["getConfigDir"];
         setWebviewFocus: WaveEnv["electron"]["setWebviewFocus"];
+        ensureWebSession: WaveEnv["electron"]["ensureWebSession"];
     };
     rpc: {
         FetchSuggestionsCommand: WaveEnv["rpc"]["FetchSuggestionsCommand"];

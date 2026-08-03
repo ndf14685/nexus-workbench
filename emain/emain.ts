@@ -29,6 +29,7 @@ import {
 import { initIpcHandlers } from "./emain-ipc";
 import { log } from "./emain-log";
 import { initMenuEventSubscriptions, makeAndSetAppMenu, makeDockTaskbar } from "./emain-menu";
+import { initPermissionIpc, initPermissionStore, installSessionPermissionHandlers } from "./emain-permissions"; // nexus:
 import {
     checkIfRunningUnderARM64Translation,
     getElectronAppBasePath,
@@ -399,6 +400,9 @@ async function appMain() {
     console.log("wavesrv ready signal received", ready, Date.now() - startTs, "ms");
     await electronApp.whenReady();
     configureAuthKeyRequestInjection(electron.session.defaultSession);
+    initPermissionStore(waveConfigDir); // nexus: permisos web persistentes y revocables por origen
+    initPermissionIpc(); // nexus: Configuración > Privacidad y permisos
+    installSessionPermissionHandlers(electron.session.defaultSession, { moduleId: "browser" }); // nexus: webviews sin partición propia
     initIpcHandlers();
 
     await sleep(10); // wait a bit for wavesrv to be ready

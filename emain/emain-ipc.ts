@@ -20,6 +20,7 @@ import {
     setWasActive,
 } from "./emain-activity";
 import { createBuilderWindow, getAllBuilderWindows, getBuilderWindowByWebContentsId } from "./emain-builder";
+import { installSessionPermissionHandlers } from "./emain-permissions";
 import { callWithOriginalXdgCurrentDesktopAsync, unamePlatform } from "./emain-platform";
 import { getWaveTabViewByWebContentsId } from "./emain-tabview";
 import { handleCtrlShiftState } from "./emain-util";
@@ -31,6 +32,7 @@ const electronApp = electron.app;
 
 let webviewFocusId: number = null;
 let webviewKeys: string[] = [];
+const permissionHandlerPartitions = new Set<string>();
 
 export function openBuilderWindow(appId?: string) {
     const normalizedAppId = appId || "";
@@ -336,6 +338,26 @@ export function initIpcHandlers() {
         event.returnValue = null;
         const tabView = getWaveTabViewByWebContentsId(event.sender.id);
         tabView?.setKeyboardChordMode(true);
+    });
+
+    electron.ipcMain.on("toggle-fullscreen", (event) => {
+        const win = electron.BrowserWindow.fromWebContents(event.sender);
+        if (win) {
+            win.setFullScreen(!win.isFullScreen());
+        }
+    });
+
+    electron.ipcMain.on("ensure-web-session", (_event, partition: string) => {
+        if (typeof partition !== "string" || !partition.startsWith("persist:") || partition.length > 128) {
+            console.log("[permissions] module=web partition=invalid result=blocked reason=invalid-partition");
+            return;
+        }
+        if (permissionHandlerPartitions.has(partition)) {
+            return;
+        }
+        permissionHandlerPartitions.add(partition);
+        installSessionPermissionHandlers(electron.session.fromPartition(partition), { partition, moduleId: "web" });
+        console.log(`[permissions] module=web partition=${partition} result=ready reason=session-handler-installed`);
     });
 
     electron.ipcMain.handle("set-is-active", () => {

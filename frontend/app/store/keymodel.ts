@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { WaveAIModel } from "@/app/aipanel/waveai-model";
+import { dispatchWorkbenchCommandShortcut, getRegisteredShortcutKeys } from "@/app/nexus/commands/command-dispatcher";
 import { FocusManager } from "@/app/store/focusManager";
 import {
     atoms,
@@ -479,6 +480,9 @@ function registerControlShiftStateUpdateHandler() {
 
 function registerElectronReinjectKeyHandler() {
     getApi().onReinjectKey((event: WaveKeyboardEvent) => {
+        if (dispatchWorkbenchCommandShortcut(event)) {
+            return;
+        }
         appHandleKeyDown(event);
     });
 }
@@ -745,7 +749,7 @@ function registerGlobalKeys() {
         WorkspaceLayoutModel.getInstance().setAIPanelVisible(!currentVisible);
         return true;
     });
-    const allKeys = Array.from(globalKeyMap.keys());
+    const allKeys = Array.from(new Set([...globalKeyMap.keys(), ...getRegisteredShortcutKeys()]));
     // special case keys, handled by web view
     allKeys.push("Cmd:l", "Cmd:r", "Cmd:ArrowRight", "Cmd:ArrowLeft", "Cmd:o");
     getApi().registerGlobalWebviewKeys(allKeys);

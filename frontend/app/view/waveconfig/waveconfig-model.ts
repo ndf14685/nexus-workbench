@@ -7,6 +7,8 @@ import type { TabModel } from "@/app/store/tab-model";
 import { makeORef } from "@/app/store/wos";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { SecretsContent } from "@/app/view/waveconfig/secretscontent";
+import { PermissionsSettings } from "@/app/nexus/permissions/permissions-settings";
+import { KeyboardShortcutsSettings } from "@/app/nexus/commands/keyboard-shortcuts-settings";
 import { WaveConfigView } from "@/app/view/waveconfig/waveconfig";
 import type { WaveConfigEnv } from "@/app/view/waveconfig/waveconfigenv";
 import { base64ToString, stringToBase64 } from "@/util/util";
@@ -95,6 +97,20 @@ function makeConfigFiles(isWindows: boolean): ConfigFile[] {
             language: "json",
             docsUrl: "https://docs.waveterm.dev/tab-backgrounds",
             hasJsonView: true,
+        },
+        {
+            name: "Atajos de teclado",
+            path: "nexus-shortcuts",
+            description: "Comandos y atajos del Workbench",
+            hasJsonView: false,
+            visualComponent: KeyboardShortcutsSettings,
+        },
+        {
+            name: "Privacidad y permisos",
+            path: "nexus-permissions",
+            description: "Micrófono, cámara, notificaciones y pantalla",
+            hasJsonView: false,
+            visualComponent: PermissionsSettings,
         },
         {
             name: "Secrets",
@@ -286,6 +302,18 @@ export class WaveConfigViewModel implements ViewModel {
         globalStore.set(this.isLoadingAtom, true);
         globalStore.set(this.errorMessageAtom, null);
         globalStore.set(this.hasEditedAtom, false);
+
+        if (file.visualComponent && !file.hasJsonView && !file.isSecrets) {
+            globalStore.set(this.selectedFileAtom, file);
+            globalStore.set(this.fileContentAtom, "");
+            globalStore.set(this.originalContentAtom, "");
+            this.env.rpc.SetMetaCommand(TabRpcClient, {
+                oref: makeORef("block", this.blockId),
+                meta: { file: file.path },
+            });
+            globalStore.set(this.isLoadingAtom, false);
+            return;
+        }
 
         if (file.isSecrets) {
             globalStore.set(this.selectedFileAtom, file);
