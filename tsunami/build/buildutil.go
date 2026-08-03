@@ -219,6 +219,26 @@ func isDirOrNotFoundFS(fsys fs.FS, path string) error {
 	return nil // It's a directory, which is OK
 }
 
+func localDestinationPath(destDir, relPath string) (string, error) {
+	if !filepath.IsLocal(relPath) {
+		return "", fmt.Errorf("refusing non-local relative path %q", relPath)
+	}
+
+	basePath, err := filepath.Abs(destDir)
+	if err != nil {
+		return "", fmt.Errorf("resolving destination directory: %w", err)
+	}
+	destPath := filepath.Join(basePath, relPath)
+	containedPath, err := filepath.Rel(basePath, destPath)
+	if err != nil {
+		return "", fmt.Errorf("checking destination path: %w", err)
+	}
+	if !filepath.IsLocal(containedPath) {
+		return "", fmt.Errorf("destination path escapes %q", destDir)
+	}
+	return destPath, nil
+}
+
 func copyDirFromFS(fsys fs.FS, srcDir, destDir string, forceCreateDestDir bool) (int, error) {
 	fileCount := 0
 
@@ -252,7 +272,10 @@ func copyDirFromFS(fsys fs.FS, srcDir, destDir string, forceCreateDestDir bool) 
 		if err != nil {
 			return err
 		}
-		destPath := filepath.Join(destDir, relPath)
+		destPath, err := localDestinationPath(destDir, relPath)
+		if err != nil {
+			return err
+		}
 
 		if d.IsDir() {
 			// Create directory with standard permissions (0755) regardless of source permissions
