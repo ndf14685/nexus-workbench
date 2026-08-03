@@ -61,6 +61,10 @@ export class Updater {
         // Only update the release channel if it's specified, otherwise use the one configured in the updater.
         autoUpdater.channel = getUpdateChannel(settings);
         autoUpdater.allowDowngrade = false;
+        // GitHub omits prereleases from its normal latest endpoint. Nexus beta
+        // installs therefore need this enabled while on the beta channel.
+        autoUpdater.allowPrerelease = autoUpdater.channel !== "latest";
+        console.log("Allow prerelease:", autoUpdater.allowPrerelease);
 
         autoUpdater.removeAllListeners();
 

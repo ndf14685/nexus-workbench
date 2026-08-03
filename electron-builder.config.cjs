@@ -97,6 +97,10 @@ const config = {
     },
     win: {
         target: ["nsis", "msi", "zip"],
+        // The Nexus beta installer is intentionally unsigned until a signing
+        // certificate is provisioned. electron-updater must not reject its own
+        // downloaded NSIS artifact on an Authenticode check.
+        verifyUpdateCodeSignature: false,
         signtoolOptions: windowsShouldSign && {
             signingHashAlgorithms: ["sha256"],
             publisherName: "Command Line Inc",
@@ -119,12 +123,13 @@ const config = {
     },
     publish: {
         // Nexus Workbench: the update feed is OUR GitHub Releases, never Wave's servers.
-        // electron-updater only sees published (non-draft) releases, so the gate is:
-        // tag v* -> CI builds a DRAFT release (candidate) -> manual publish = stable.
+        // Betas are published prereleases. Stable releases remain a manual
+        // promotion gate; the beta channel can consume either one.
         // See nexus/docs/UPSTREAM_SYNC.md.
         provider: "github",
         owner: "ndf14685",
         repo: "nexus-workbench",
+        channel: "beta",
     },
     afterPack: (context) => {
         // This is a workaround to restore file permissions to the wavesrv binaries on macOS after packaging the universal binary.

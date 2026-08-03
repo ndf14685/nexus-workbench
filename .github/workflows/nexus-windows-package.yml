@@ -1,9 +1,8 @@
 # Nexus Workbench: genera el instalador Windows (sin firma).
 # - workflow_dispatch: build suelto, artefactos solo en el run (canal dev/candidate).
-# - push de tag vX.Y.Z: además crea una GitHub Release en BORRADOR con el
-#   instalador + latest.yml. El "Check for Updates" de la app (electron-updater,
-#   provider github) solo ve releases PUBLICADAS: publicar el borrador a mano
-#   es la promoción candidate -> stable (ver nexus/docs/UPSTREAM_SYNC.md).
+# - push de tag beta: publica un prerelease con el instalador + beta.yml para
+#   que el auto-update de las instalaciones beta lo pueda resolver.
+# - push de tag estable: deja un borrador para promoción manual.
 name: Nexus Windows Package
 
 on:
@@ -65,24 +64,25 @@ jobs:
                       make/*.exe
                       make/*.msi
                       make/*.zip
-                      make/latest.yml
+                      make/*.yml
                       make/nexus-workbench-mcp.exe
                   retention-days: 30
-            - name: Create draft release (candidate)
+            - name: Create release (beta publicada, estable candidato)
               if: startsWith(github.ref, 'refs/tags/v')
               uses: softprops/action-gh-release@v2
               with:
-                  draft: true
-                  name: Nexus Workbench ${{ github.ref_name }} (candidate)
+                  draft: ${{ !contains(github.ref_name, '-beta.') }}
+                  prerelease: ${{ contains(github.ref_name, '-beta.') }}
+                  name: >-
+                      Nexus Workbench ${{ github.ref_name }}${{ contains(github.ref_name, '-beta.') && ' (beta)' || ' (candidate)' }}
                   files: |
                       make/*.exe
                       make/*.msi
                       make/*.zip
-                      make/latest.yml
+                      make/*.yml
                       make/nexus-workbench-mcp.exe
                   body: |
-                      Candidato sin publicar. Probarlo y, si está OK, publicar esta release
-                      para promoverla a **stable**: recién entonces "Check for Updates" la ofrece.
+                      ${{ contains(github.ref_name, '-beta.') && 'Beta publicada: disponible para auto-update del canal beta.' || 'Candidato sin publicar. Probarlo y publicarlo para promoverlo a stable.' }}
             - name: Prune old releases (keep newest 4)
               if: startsWith(github.ref, 'refs/tags/v')
               shell: bash
