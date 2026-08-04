@@ -7,7 +7,12 @@ import type {
     SitePermissionRecord,
     WorkbenchPermission,
 } from "@/app/nexus/permissions/permission-types";
-import { buildPermissionContext, isAutoAllowedPermission, validatePermissionRequest } from "@/app/nexus/permissions/permission-policy";
+import {
+    buildPermissionCheckContext,
+    buildPermissionContext,
+    isAutoAllowedPermission,
+    validatePermissionRequest,
+} from "@/app/nexus/permissions/permission-policy";
 import * as electron from "electron";
 import fs from "fs";
 import path from "path";
@@ -247,15 +252,16 @@ export function installSessionPermissionHandlers(sess: Electron.Session, opts: {
             });
     });
 
-    sess.setPermissionCheckHandler((wc, electronPermission, _origin, details) => {
-        const ctx = buildPermissionContext(electronPermission, details as any, {
+    sess.setPermissionCheckHandler((wc, electronPermission, origin, details) => {
+        const ctx = buildPermissionCheckContext(electronPermission, details as any, {
             partition: opts.partition,
             moduleId: opts.moduleId,
-            fallbackUrl: wc?.getURL?.(),
+            fallbackUrl: origin || wc?.getURL?.(),
         });
-        if (!ctx || validatePermissionRequest(ctx)) {
+        if (!ctx || !ctx.secure) {
             return isAutoAllowedPermission(electronPermission);
         }
-        return getPermissionStore().get(ctx.origin, ctx.permission)?.decision === "allow";
+        const store = getPermissionStore();
+        return ctx.permissions.some((permission) => store.get(ctx.origin, permission)?.decision === "allow");
     });
 }

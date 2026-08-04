@@ -1,6 +1,7 @@
 // Copyright 2026, Nexus Workbench (fork extension)
 // SPDX-License-Identifier: Apache-2.0
 
+import { normalizeOrigin } from "@/app/nexus/permissions/permission-policy";
 import type { SitePermissionRecord, WorkbenchPermission } from "@/app/nexus/permissions/permission-types";
 import { useWaveEnv } from "@/app/waveenv/waveenv";
 import { useEffect, useMemo, useState } from "react";
@@ -28,6 +29,8 @@ export function PermissionsSettings() {
     const [records, setRecords] = useState<SitePermissionRecord[]>([]);
     const [filter, setFilter] = useState("");
     const [error, setError] = useState<string | null>(null);
+    const [newOrigin, setNewOrigin] = useState("");
+    const [newPermission, setNewPermission] = useState<WorkbenchPermission>("microphone");
 
     const refresh = () => {
         env.electron
@@ -60,6 +63,25 @@ export function PermissionsSettings() {
         setRecords(next);
     };
 
+    const grantNewOrigin = async () => {
+        setError(null);
+        const raw = newOrigin.trim();
+        const origin = normalizeOrigin(raw.includes("://") ? raw : `https://${raw}`);
+        if (!origin) {
+            setError("Ingresá un sitio válido, por ejemplo chatgpt.com o https://meet.google.com");
+            return;
+        }
+        const next = await env.electron.setSitePermission({
+            origin,
+            permission: newPermission,
+            decision: "allow",
+            moduleId: "manual",
+            updatedAt: Date.now(),
+        });
+        setRecords(next);
+        setNewOrigin("");
+    };
+
     const revokeAll = async (permission?: WorkbenchPermission) => {
         setError(null);
         const next = await env.electron.revokeAllSitePermissions(permission);
@@ -89,6 +111,32 @@ export function PermissionsSettings() {
                     onClick={() => revokeAll("microphone")}
                 >
                     Revocar micrófonos
+                </button>
+            </div>
+            <div className="flex flex-wrap gap-2 items-center">
+                <input
+                    value={newOrigin}
+                    onChange={(e) => setNewOrigin(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && grantNewOrigin()}
+                    placeholder="Conceder a un sitio (ej: chatgpt.com)"
+                    className="bg-panel border border-border rounded px-3 py-1.5 text-sm min-w-64"
+                />
+                <select
+                    value={newPermission}
+                    onChange={(e) => setNewPermission(e.target.value as WorkbenchPermission)}
+                    className="bg-panel border border-border rounded px-3 py-1.5 text-sm cursor-pointer"
+                >
+                    {Object.entries(PermissionLabels).map(([value, label]) => (
+                        <option key={value} value={value}>
+                            {label}
+                        </option>
+                    ))}
+                </select>
+                <button
+                    className="bg-accent/80 text-primary rounded px-3 py-1.5 text-sm hover:bg-accent transition-colors cursor-pointer"
+                    onClick={grantNewOrigin}
+                >
+                    Permitir
                 </button>
             </div>
             {error && <div className="text-error text-sm">{error}</div>}

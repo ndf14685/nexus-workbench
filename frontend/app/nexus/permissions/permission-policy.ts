@@ -80,6 +80,35 @@ export function permissionFromElectron(permission: string, details?: ElectronPer
     return null;
 }
 
+// navigator.permissions.query() and Chromium's generic media checks reach the check handler as a
+// bare "media" permission with mediaType absent or "unknown", so the concrete capture device cannot
+// be resolved. Answering "denied" there makes sites hide their mic button and never call
+// getUserMedia, so the request handler never runs and the user never gets a prompt.
+export function permissionsForCheck(permission: string, details?: ElectronPermissionDetails): WorkbenchPermission[] {
+    if (!PermissionNames.has(permission)) {
+        return [];
+    }
+    const resolved = permissionFromElectron(permission, details);
+    if (resolved) {
+        return [resolved];
+    }
+    return permission === "media" ? ["microphone", "camera"] : [];
+}
+
+export function buildPermissionCheckContext(
+    electronPermission: string,
+    details: ElectronPermissionDetails | undefined,
+    opts: { partition?: string; moduleId?: string; fallbackUrl?: string }
+): { origin: string; secure: boolean; permissions: WorkbenchPermission[] } | null {
+    const permissions = permissionsForCheck(electronPermission, details);
+    const url = details?.requestingUrl ?? details?.securityOrigin ?? details?.embeddingOrigin ?? opts.fallbackUrl;
+    const origin = normalizeOrigin(url);
+    if (permissions.length === 0 || !origin) {
+        return null;
+    }
+    return { origin, secure: isSecurePermissionUrl(url), permissions };
+}
+
 export function buildPermissionContext(
     electronPermission: string,
     details: ElectronPermissionDetails | undefined,
