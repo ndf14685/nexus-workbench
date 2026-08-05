@@ -17,6 +17,13 @@
 #   distro        (wsl) nombre de la distro (wsl -l)
 #   class         lab | personal | work | prod   → define tema/color por defecto
 #   criticality   low | medium | high            → informativo; high ⇒ confirmar
+#   env           (opcional) variables para las terminales de ese ambiente.
+#                 El VALOR puede ser literal o una referencia ${secret:NOMBRE}
+#                 al almacén cifrado (wsh secret set NOMBRE). La referencia la
+#                 resuelve wavesrv al arrancar el proceso: el valor no queda en
+#                 este archivo, no pasa por una línea de comando (ps) ni por el
+#                 servidor MCP ni por la auditoría. Nombres del almacén:
+#                 [A-Za-z][A-Za-z0-9_]*
 #   theme         (opcional) override de term:theme de Wave
 #   icon          (opcional) icono FontAwesome del widget (default por kind)
 #   notes         texto libre
@@ -70,6 +77,12 @@ environments:
       class: work
       criticality: high
       notes: sin credenciales; acceso vía bastion definido en ~/.ssh/config
+      # las terminales de este ambiente arrancan con el perfil y el cluster
+      # correctos, sin exportar nada a mano y sin que el valor viva acá
+      env:
+          AWS_REGION: us-east-1
+          AWS_PROFILE: ${secret:WORK_AWS_PROFILE}
+          KUBECONFIG: ${secret:WORK_KUBECONFIG_PATH}
 
 # Agentes de IA por suscripción: cada uno es un botón de la barra lateral que
 # lanza el CLI en un bloque terminal. El login OAuth (Claude Pro/Max, Codex)

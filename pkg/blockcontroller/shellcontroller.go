@@ -795,7 +795,7 @@ func resolveEnvMap(blockId string, blockMeta waveobj.MetaMapType, connName strin
 		}
 		rtn[k] = v
 	}
-	return rtn, nil
+	return ResolveEnvSecretRefs(rtn)
 }
 
 func getCustomInitScriptKeyCascade(shellType string) []string {

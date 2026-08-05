@@ -37,13 +37,14 @@ func TestGateMessageKeepsConfirmToken(t *testing.T) {
 
 func TestAuditRedactsSecretsInDetail(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "audit.jsonl")
-	MakeAuditor(path).Log("run_command", "prod", "export GITHUB_TOKEN=ghp_016BfW4i4SbYhh41TKWuJxyrQQQQQQQQQQQQ", "executed")
+	pat := "ghp_" + strings.Repeat("z", 36)
+	MakeAuditor(path).Log("run_command", "prod", "export GITHUB_TOKEN="+pat, "executed")
 
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(raw), "ghp_016BfW4i4SbYhh41TKWuJxyrQQQQQQQQQQQQ") {
+	if strings.Contains(string(raw), pat) {
 		t.Fatalf("el secreto quedó escrito en el audit: %s", raw)
 	}
 	var rec map[string]any

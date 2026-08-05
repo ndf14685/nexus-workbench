@@ -135,6 +135,19 @@ for (const env of catalog.environments) {
         "display:order": catalog.environments.indexOf(env),
         "term:theme": theme,
     };
+    // Las variables del ambiente pueden referenciar secretos con ${secret:NOMBRE};
+    // el valor lo resuelve wavesrv contra el almacén cifrado al arrancar el
+    // proceso, así nunca vive en este archivo ni en una línea de comando.
+    if (env.env && typeof env.env === "object") {
+        const literalSecret = Object.entries(env.env).find(
+            ([, value]) => typeof value === "string" && /(?:password|secret|token|api[_-]?key)/i.test(value) && !value.includes("${secret:")
+        );
+        if (literalSecret) {
+            console.warn(`omitido cmd:env de ${env.id}: ${literalSecret[0]} parece traer un valor sensible literal; usá \${secret:NOMBRE}`);
+        } else {
+            connections[key]["cmd:env"] = { ...(connections[key]["cmd:env"] ?? {}), ...env.env };
+        }
+    }
     connChanges++;
 }
 

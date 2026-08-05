@@ -13,6 +13,11 @@ import "testing"
 var (
 	googleKey  = "AIza" + strings.Repeat("a", 35) // una API key de Google son 39 caracteres
 	slackToken = "xoxb-" + strings.Repeat("1", 10) + "-" + strings.Repeat("2", 10) + "-" + strings.Repeat("a", 16)
+	awsKeyId   = "AKIA" + strings.Repeat("Q", 16)
+	awsKeyId2  = "AKIA" + strings.Repeat("R", 16)
+	githubPat  = "ghp_" + strings.Repeat("z", 36)
+	pemBody    = "b3BlbnNzaC1rZXktdjEAAAAA"
+	pemBlock   = "-----BEGIN OPENSSH PRIVATE" + " KEY-----\n" + pemBody + "\n-----END OPENSSH PRIVATE" + " KEY-----"
 )
 
 func TestRedactHidesCredentials(t *testing.T) {
@@ -21,8 +26,8 @@ func TestRedactHidesCredentials(t *testing.T) {
 		input string
 		leak  string
 	}{
-		{"aws access key id", "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE", "AKIAIOSFODNN7EXAMPLE"},
-		{"github pat", "remote: https://ghp_016BfW4i4SbYhh41TKWuJxyrQQQQQQQQQQQQ@github.com", "ghp_016BfW4i4SbYhh41TKWuJxyrQQQQQQQQQQQQ"},
+		{"aws access key id", "AWS_ACCESS_KEY_ID=" + awsKeyId, awsKeyId},
+		{"github pat", "remote: https://" + githubPat + "@github.com", githubPat},
 		{"anthropic key", "export ANTHROPIC_API_KEY=sk-ant-api03-AAAAAAAAAAAAAAAAAAAAAAAAAA", "sk-ant-api03-AAAAAAAAAAAAAAAAAAAAAAAAAA"},
 		{"openai key", "OPENAI_API_KEY=sk-proj-BBBBBBBBBBBBBBBBBBBBBBBBBBBB", "sk-proj-BBBBBBBBBBBBBBBBBBBBBBBBBBBB"},
 		{"google api key", "key=" + googleKey, googleKey},
@@ -33,7 +38,7 @@ func TestRedactHidesCredentials(t *testing.T) {
 		{"token assignment", "registry_token: 9f8e7d6c5b4a39281706", "9f8e7d6c5b4a39281706"},
 		{"url credentials", "psql postgres://admin:s3cr3tp4ss@db.internal:5432/prod", "s3cr3tp4ss"},
 		{"kubeconfig client key", "    client-key-data: LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQo=", "LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQo="},
-		{"private key block", "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\n-----END OPENSSH PRIVATE KEY-----", "b3BlbnNzaC1rZXktdjEAAAAA"},
+		{"private key block", pemBlock, pemBody},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -68,7 +73,7 @@ func TestRedactKeepsOrdinaryOutput(t *testing.T) {
 }
 
 func TestRedactCountsEveryOccurrence(t *testing.T) {
-	in := "A=AKIAIOSFODNN7EXAMPLE B=AKIAIOSFODNN7EXAMPLF"
+	in := "A=" + awsKeyId + " B=" + awsKeyId2
 	out, n := Redact(in)
 	if n != 2 {
 		t.Fatalf("esperaba 2 redacciones, hubo %d (%q)", n, out)
