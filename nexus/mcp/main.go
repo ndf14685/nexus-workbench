@@ -119,6 +119,10 @@ type TerminalOutputArgs struct {
 	StartLine   int    `json:"start_line,omitempty" jsonschema:"línea inicial (0 = principio)"`
 }
 
+type LaunchAgentArgs struct {
+	Id string `json:"id" jsonschema:"id del agente del catálogo (list_agents)"`
+}
+
 type NotifyArgs struct {
 	Message string `json:"message" jsonschema:"texto de la notificación de escritorio"`
 	Title   string `json:"title,omitempty" jsonschema:"título opcional"`
@@ -323,6 +327,66 @@ func main() {
 			return textResult("ERROR: " + err.Error())
 		}
 		return redactedResult(out)
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "list_agents",
+		Description: "Lista los agentes de IA del catálogo con su cadena de reemplazo por si se agota la cuota.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args EmptyArgs) (*mcp.CallToolResult, any, error) {
+		if len(app.catalog.Agents) == 0 {
+			return textResult("el catálogo no declara agentes")
+		}
+		var b strings.Builder
+		for _, a := range app.catalog.Agents {
+			fmt.Fprintf(&b, "%s — %s (command=%s)", a.Id, a.Name, a.Command)
+			if len(a.Fallbacks) > 0 {
+				fmt.Fprintf(&b, " reemplazos: %s", strings.Join(a.Fallbacks, " -> "))
+			}
+			b.WriteString("\n")
+		}
+		return textResult(b.String())
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "launch_agent",
+		Description: "Lanza un agente de IA en un bloque terminal. Si el CLI reporta cuota agotada o no esta disponible, " +
+			"cae automaticamente al siguiente de su cadena de reemplazo y avisa cual quedo corriendo.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args LaunchAgentArgs) (*mcp.CallToolResult, any, error) {
+		chain, err := app.catalog.AgentChain(args.Id)
+		if err != nil {
+			return textResult("ERROR: " + err.Error())
+		}
+		tabId, err := app.tabId()
+		if err != nil {
+			return textResult("ERROR: " + err.Error())
+		}
+		var tried []string
+		for _, agent := range chain {
+			env, envErr := app.resolveEnv(agent.Environment)
+			if envErr != nil {
+				tried = append(tried, fmt.Sprintf("%s (ambiente invalido: %v)", agent.Id, envErr))
+				continue
+			}
+			blockId, runErr := app.wave.RunWsh(ctx, env.ConnName(), tabId, "run", "-c", agent.Command)
+			if runErr != nil {
+				tried = append(tried, fmt.Sprintf("%s (no arranco: %v)", agent.Id, runErr))
+				app.audit.Log("launch_agent", env.Id, agent.Id, "error: "+runErr.Error())
+				continue
+			}
+			out := app.agentStartupOutput(ctx, tabId, blockId)
+			if failover, reason := ShouldFailover(out); failover {
+				tried = append(tried, fmt.Sprintf("%s (%s)", agent.Id, reason))
+				app.audit.Log("launch_agent", env.Id, agent.Id, "failover: "+reason)
+				continue
+			}
+			app.audit.Log("launch_agent", env.Id, agent.Id, "executed")
+			msg := fmt.Sprintf("corriendo %s (%s) en el bloque %s", agent.Name, agent.Id, strings.TrimSpace(blockId))
+			if len(tried) > 0 {
+				msg += "\nse descartaron antes: " + strings.Join(tried, ", ")
+			}
+			return textResult(msg)
+		}
+		return textResult("ningun agente de la cadena quedo utilizable: " + strings.Join(tried, ", "))
 	})
 
 	mcp.AddTool(server, &mcp.Tool{

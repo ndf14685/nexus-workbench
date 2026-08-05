@@ -88,14 +88,25 @@ environments:
 # lanza el CLI en un bloque terminal. El login OAuth (Claude Pro/Max, Codex)
 # lo maneja el CLI mismo — acá no va ninguna credencial.
 # Campos: id, name, command (obligatorios); icon, color, environment (opcional,
-# id de un ambiente ssh/wsl para correr el CLI en ese host).
+# id de un ambiente ssh/wsl para correr el CLI en ese host) y fallbacks: la
+# cadena de reemplazo. Si el CLI arranca diciendo que se agotó la cuota o que no
+# está disponible, launch_agent cae al siguiente y avisa cuál quedó corriendo.
+# Sin fallbacks, quedarse sin cuota corta el trabajo a la mitad.
 agents:
     - id: claude
       name: Claude Code
       command: claude
       icon: robot
+      fallbacks: [codex, ollama-local]
 
     - id: codex
       name: Codex
       command: codex
       icon: microchip
+      fallbacks: [claude, ollama-local]
+
+    - id: ollama-local
+      name: Ollama local
+      command: ollama run qwen2.5-coder
+      icon: server
+      environment: rig3060

@@ -65,6 +65,7 @@ func (e *Environment) NeedsConfirmation() bool {
 type Catalog struct {
 	Version      int           `yaml:"version"`
 	Environments []Environment `yaml:"environments"`
+	Agents       []Agent       `yaml:"agents"`
 }
 
 func LoadCatalog(path string) (*Catalog, error) {
