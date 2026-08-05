@@ -5,6 +5,7 @@ import { BlockNodeModel } from "@/app/block/blocktypes";
 import type { TabModel } from "@/app/store/tab-model";
 import { AiFileDiffViewModel } from "@/app/view/aifilediff/aifilediff";
 import { LauncherViewModel } from "@/app/view/launcher/launcher";
+import { NexusAuditViewModel } from "@/app/view/nexusaudit/nexusaudit";
 import { PreviewModel } from "@/app/view/preview/preview-model";
 import { ProcessViewerViewModel } from "@/app/view/processviewer/processviewer";
 import { SysinfoViewModel } from "@/app/view/sysinfo/sysinfo";
@@ -35,6 +36,7 @@ BlockRegistry.set("tsunami", TsunamiViewModel);
 BlockRegistry.set("aifilediff", AiFileDiffViewModel);
 BlockRegistry.set("waveconfig", WaveConfigViewModel);
 BlockRegistry.set("processviewer", ProcessViewerViewModel);
+BlockRegistry.set("nexusaudit", NexusAuditViewModel); // nexus: auditoría del MCP
 
 function makeDefaultViewModel(viewType: string): ViewModel {
     const viewModel: ViewModel = {
