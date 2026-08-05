@@ -24,6 +24,7 @@ const ServerVersion = "0.1.0"
 type App struct {
 	wave      *WaveAccess
 	catalog   *Catalog
+	runbooks  *RunbookCatalog
 	confirmer *Confirmer
 	audit     *Auditor
 	ctxGuard  *ContextDetector
@@ -51,9 +52,19 @@ func (app *App) gate(tool string, env *Environment, detail string, confirmToken 
 // gateWithContext suma al gate el contexto efectivo del shell: un ambiente
 // marcado lab cuyo kubeconfig apunta a producción tiene que escalar igual.
 func (app *App) gateWithContext(tool string, env *Environment, detail string, confirmToken string, effective EffectiveContext) (blockedMsg string) {
+	return app.gateFull(tool, env, detail, confirmToken, effective, false)
+}
+
+// gateFull agrega forceConfirm para lo que el catálogo declara sensible aunque
+// ningún patrón lo detecte: quien escribió el runbook sabe algo que el regex no.
+func (app *App) gateFull(tool string, env *Environment, detail string, confirmToken string, effective EffectiveContext, forceConfirm bool) (blockedMsg string) {
 	needs := env.NeedsConfirmation()
 	reason := fmt.Sprintf("ambiente %s (class=%s)", env.Id, env.Class)
-	if tool == "run_command" && IsDestructive(detail) {
+	if forceConfirm {
+		needs = true
+		reason = "la acción está declarada como destructiva en el catálogo"
+	}
+	if IsDestructive(detail) {
 		needs = true
 		reason = "comando detectado como destructivo"
 		if env.NeedsConfirmation() {
@@ -119,6 +130,14 @@ type TerminalOutputArgs struct {
 	StartLine   int    `json:"start_line,omitempty" jsonschema:"línea inicial (0 = principio)"`
 }
 
+type RunRunbookArgs struct {
+	Id           string            `json:"id" jsonschema:"id del runbook del catálogo (list_runbooks)"`
+	Environment  string            `json:"environment,omitempty" jsonschema:"ambiente donde ejecutarlo (default: el del runbook o local)"`
+	Params       map[string]string `json:"params,omitempty" jsonschema:"valores de los placeholders <nombre> del runbook"`
+	DryRun       bool              `json:"dry_run,omitempty" jsonschema:"mostrar el comando final resuelto sin ejecutarlo"`
+	ConfirmToken string            `json:"confirm_token,omitempty" jsonschema:"token devuelto por una llamada previa que requirió confirmación"`
+}
+
 type LaunchAgentArgs struct {
 	Id string `json:"id" jsonschema:"id del agente del catálogo (list_agents)"`
 }
@@ -129,12 +148,13 @@ type NotifyArgs struct {
 }
 
 func main() {
-	var dataDir, wshPath, envsPath, auditPath, workspace string
+	var dataDir, wshPath, envsPath, auditPath, workspace, runbooksPath string
 	var dev bool
 	flag.StringVar(&dataDir, "data-dir", "", "data dir de la app (default: autodetectar)")
 	flag.StringVar(&wshPath, "wsh", "", "ruta al binario wsh (default: autodetectar)")
 	flag.StringVar(&envsPath, "environments", "", "ruta a environments.yaml (default: <configdir-guess>)")
 	flag.StringVar(&auditPath, "audit", "", "ruta del log de auditoría JSONL")
+	flag.StringVar(&runbooksPath, "runbooks", "", "ruta a commands.yaml (runbooks ejecutables)")
 	flag.StringVar(&workspace, "workspace", "", "nombre del workspace destino (default: primero activo)")
 	flag.BoolVar(&dev, "dev", false, "usar los directorios waveterm-dev")
 	flag.Parse()
@@ -164,9 +184,21 @@ func main() {
 		auditPath = filepath.Join(resolvedData, "nexus-mcp-audit.jsonl")
 	}
 
+	if runbooksPath == "" {
+		runbooksPath = os.Getenv("NEXUS_COMMANDS_FILE")
+	}
+	var runbooks *RunbookCatalog
+	if runbooksPath != "" {
+		runbooks, err = LoadRunbooks(runbooksPath)
+		if err != nil {
+			log.Fatalf("runbooks: %v", err)
+		}
+	}
+
 	app := &App{
 		wave:      wave,
 		catalog:   catalog,
+		runbooks:  runbooks,
 		confirmer: MakeConfirmer(),
 		audit:     MakeAuditor(auditPath),
 		ctxGuard:  MakeContextDetector(wave),
@@ -326,6 +358,79 @@ func main() {
 		if err != nil {
 			return textResult("ERROR: " + err.Error())
 		}
+		return redactedResult(out)
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "list_runbooks",
+		Description: "Lista los runbooks del catálogo con los parámetros que espera cada uno y si son destructivos.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args EmptyArgs) (*mcp.CallToolResult, any, error) {
+		if app.runbooks == nil || len(app.runbooks.Commands) == 0 {
+			return textResult("no hay catálogo de runbooks cargado (--runbooks apuntando a commands.yaml)")
+		}
+		var b strings.Builder
+		for _, rb := range app.runbooks.Commands {
+			fmt.Fprintf(&b, "%s — %s", rb.Id, rb.Name)
+			if params := RunbookParams(rb.Command); len(params) > 0 {
+				fmt.Fprintf(&b, " params: %s", strings.Join(params, ", "))
+			}
+			if rb.Destructive {
+				b.WriteString(" [DESTRUCTIVO]")
+			}
+			b.WriteString("\n")
+		}
+		return textResult(b.String())
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "run_runbook",
+		Description: "Ejecuta un runbook del catálogo resolviendo sus parámetros. Con dry_run=true devuelve el comando " +
+			"final sin ejecutarlo. Los runbooks destructivos, los ambientes prod/work y los contextos de producción " +
+			"requieren confirmación en dos fases.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args RunRunbookArgs) (*mcp.CallToolResult, any, error) {
+		if app.runbooks == nil {
+			return textResult("ERROR: no hay catálogo de runbooks cargado")
+		}
+		rb, err := app.runbooks.Get(args.Id)
+		if err != nil {
+			return textResult("ERROR: " + err.Error())
+		}
+		resolved, err := ResolveRunbook(rb, args.Params)
+		if err != nil {
+			return textResult("ERROR: " + err.Error())
+		}
+		envId := args.Environment
+		if envId == "" {
+			envId = rb.Environment
+		}
+		env, err := app.resolveEnv(envId)
+		if err != nil {
+			return textResult("ERROR: " + err.Error())
+		}
+		if args.DryRun {
+			app.audit.Log("run_runbook", env.Id, resolved, "dry_run")
+			return textResult(fmt.Sprintf("DRY RUN — no se ejecutó nada.\nrunbook: %s (%s)\nambiente: %s (class=%s)\ncomando: %s",
+				rb.Id, rb.Name, env.Id, env.Class, resolved))
+		}
+		tabId, err := app.tabId()
+		if err != nil {
+			return textResult("ERROR: " + err.Error())
+		}
+		var effective EffectiveContext
+		if kind := CommandContextKind(resolved); kind != "" {
+			effective = app.ctxGuard.Detect(ctx, env, tabId, kind)
+		}
+		// un runbook marcado destructive escala aunque el comando resuelto no
+		// dispare ningún patrón: el que lo escribió sabe algo que el regex no
+		if msg := app.gateFull("run_runbook", env, resolved, args.ConfirmToken, effective, rb.Destructive); msg != "" {
+			return textResult(msg)
+		}
+		out, err := app.wave.RunWsh(ctx, env.ConnName(), tabId, "run", "-c", resolved)
+		if err != nil {
+			app.audit.Log("run_runbook", env.Id, resolved, "error: "+err.Error())
+			return textResult("ERROR: " + err.Error())
+		}
+		app.audit.Log("run_runbook", env.Id, resolved, "executed")
 		return redactedResult(out)
 	})
 
