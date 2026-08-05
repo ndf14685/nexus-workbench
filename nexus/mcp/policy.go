@@ -155,12 +155,18 @@ func MakeAuditor(path string) *Auditor {
 func (a *Auditor) Log(tool string, env string, detail string, decision string) {
 	a.lock.Lock()
 	defer a.lock.Unlock()
+	// el detail es el comando tal cual lo mandó el agente y puede traer un
+	// secreto embebido; el audit es un archivo plano en disco
+	safeDetail, redacted := Redact(detail)
 	rec := map[string]any{
 		"ts":       time.Now().Format(time.RFC3339),
 		"tool":     tool,
 		"env":      env,
-		"detail":   detail,
+		"detail":   safeDetail,
 		"decision": decision,
+	}
+	if redacted > 0 {
+		rec["redacted"] = redacted
 	}
 	line, _ := json.Marshal(rec)
 	f, err := os.OpenFile(a.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)

@@ -72,6 +72,15 @@ func textResult(s string) (*mcp.CallToolResult, any, error) {
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: s}}}, nil, nil
 }
 
+// redactedResult es la salida para todo lo que viene del ambiente (scrollback,
+// stdout, metadata de bloques): texto arbitrario que puede traer credenciales.
+// Los mensajes que genera la propia app (gate, status, catálogo) usan
+// textResult: el confirm_token es un control de seguridad que el agente
+// necesita recibir intacto, y la redacción genérica lo taparía.
+func redactedResult(s string) (*mcp.CallToolResult, any, error) {
+	return textResult(RedactForAgent(s))
+}
+
 // --- tool args ---
 
 type EmptyArgs struct{}
@@ -195,7 +204,7 @@ func main() {
 			return textResult("ERROR: " + err.Error())
 		}
 		app.audit.Log("run_command", env.Id, args.Command, "executed")
-		return textResult(out)
+		return redactedResult(out)
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -277,9 +286,9 @@ func main() {
 			if ferr != nil {
 				return textResult("ERROR: " + err.Error())
 			}
-			return textResult(tailLines(stripAnsi(raw), 200))
+			return redactedResult(tailLines(stripAnsi(raw), 200))
 		}
-		return textResult(out)
+		return redactedResult(out)
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -294,7 +303,7 @@ func main() {
 		if err != nil {
 			return textResult("ERROR: " + err.Error())
 		}
-		return textResult(out)
+		return redactedResult(out)
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
