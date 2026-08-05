@@ -46,9 +46,11 @@ export function dispatchWorkbenchCommandShortcut(waveEvent: WaveKeyboardEvent, t
 
 export function getRegisteredShortcutKeys(): string[] {
     registerWorkbenchCommands();
+    // chords are left out on purpose: registering their parts would swallow a bare Ctrl+K or Ctrl+S
+    // from the embedded page, and ChatGPT binds Ctrl+K itself
     return commandRegistry
         .list()
         .map((cmd) => shortcutManager.getShortcut(cmd))
-        .filter(Boolean)
-        .flatMap((shortcut) => shortcut.split(/\s+/).map((part) => part.replace(/\+/g, ":")));
+        .filter((shortcut) => shortcut && !/\s/.test(shortcut))
+        .map((shortcut) => shortcut.replace(/\+/g, ":"));
 }

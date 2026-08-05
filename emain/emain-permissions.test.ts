@@ -68,63 +68,64 @@ function installHandlers() {
 
 describe("session permission handlers", () => {
     const wc = { getURL: () => "https://chatgpt.com/" } as any;
+    // shape captured from Electron 41 for a <webview> guest: the origin argument and requestingUrl
+    // are empty strings, only embeddingOrigin carries the site
+    const guestDetails = (mediaType?: string) => ({
+        embeddingOrigin: "https://chatgpt.com/",
+        requestingUrl: "",
+        isMainFrame: true,
+        ...(mediaType ? { mediaType } : {}),
+    });
 
-    it("reports granted for navigator.permissions.query when the origin is allowed", () => {
+    it("does not report the microphone as denied before the user was ever asked", () => {
         initPermissionStore(tmp());
         const { check } = installHandlers();
-        check(wc, "media", "https://chatgpt.com", {
-            securityOrigin: "https://chatgpt.com",
-            requestingUrl: "https://chatgpt.com/",
-            isMainFrame: true,
-            mediaType: "audio",
+        expect(check(wc, "media", "", guestDetails("audio"))).toBe(true);
+        expect(check(wc, "media", "", guestDetails())).toBe(true);
+    });
+
+    it("keeps reporting granted once the microphone was allowed", () => {
+        initPermissionStore(tmp());
+        const { check } = installHandlers();
+        getPermissionStore().set("https://chatgpt.com", "microphone", "allow", "browser");
+        expect(check(wc, "media", "", guestDetails("audio"))).toBe(true);
+    });
+
+    it("reports denied only after an explicit denial", () => {
+        initPermissionStore(tmp());
+        const { check } = installHandlers();
+        getPermissionStore().set("https://chatgpt.com", "microphone", "deny", "browser");
+        expect(check(wc, "media", "", guestDetails("audio"))).toBe(false);
+        getPermissionStore().set("https://chatgpt.com", "microphone", "block", "browser");
+        expect(check(wc, "media", "", guestDetails("audio"))).toBe(false);
+    });
+
+    it("keeps camera and microphone denials independent", () => {
+        initPermissionStore(tmp());
+        const { check } = installHandlers();
+        getPermissionStore().set("https://chatgpt.com", "camera", "block", "browser");
+        expect(check(wc, "media", "", guestDetails("video"))).toBe(false);
+        expect(check(wc, "media", "", guestDetails("audio"))).toBe(true);
+    });
+
+    it("denies insecure origins outright", () => {
+        initPermissionStore(tmp());
+        const { check } = installHandlers();
+        expect(check(wc, "media", "", { embeddingOrigin: "http://example.com/", requestingUrl: "", mediaType: "audio" })).toBe(false);
+    });
+
+    it("still gates the actual capture through the request handler", async () => {
+        initPermissionStore(tmp());
+        const { request } = installHandlers();
+        getPermissionStore().set("https://chatgpt.com", "microphone", "block", "browser");
+        const allowed = await new Promise((resolve) => {
+            request(wc, "media", resolve, {
+                securityOrigin: "https://chatgpt.com/",
+                requestingUrl: "https://chatgpt.com/",
+                isMainFrame: true,
+                mediaTypes: ["audio"],
+            });
         });
-        // permissions.query() reaches Electron as a bare "media" check with no mediaType
-        expect(
-            check(wc, "media", "https://chatgpt.com", {
-                securityOrigin: "https://chatgpt.com",
-                requestingUrl: "https://chatgpt.com/",
-                isMainFrame: true,
-            })
-        ).toBe(false);
-
-        initPermissionStore(tmp());
-        const granted = installHandlers();
-        // grant the microphone the same way the prompt would
-        getPermissionStore().set("https://chatgpt.com", "microphone", "allow", "browser");
-        expect(
-            granted.check(wc, "media", "https://chatgpt.com", {
-                securityOrigin: "https://chatgpt.com",
-                requestingUrl: "https://chatgpt.com/",
-                isMainFrame: true,
-            })
-        ).toBe(true);
-    });
-
-    it("still answers a typed audio check from the stored decision", () => {
-        initPermissionStore(tmp());
-        const { check } = installHandlers();
-        const details = {
-            securityOrigin: "https://chatgpt.com",
-            requestingUrl: "https://chatgpt.com/",
-            isMainFrame: true,
-            mediaType: "audio",
-        };
-        expect(check(wc, "media", "https://chatgpt.com", details)).toBe(false);
-        getPermissionStore().set("https://chatgpt.com", "microphone", "allow", "browser");
-        expect(check(wc, "media", "https://chatgpt.com", details)).toBe(true);
-    });
-
-    it("does not report camera as granted when only the microphone was allowed", () => {
-        initPermissionStore(tmp());
-        const { check } = installHandlers();
-        getPermissionStore().set("https://chatgpt.com", "microphone", "allow", "browser");
-        expect(
-            check(wc, "media", "https://chatgpt.com", {
-                securityOrigin: "https://chatgpt.com",
-                requestingUrl: "https://chatgpt.com/",
-                isMainFrame: true,
-                mediaType: "video",
-            })
-        ).toBe(false);
+        expect(allowed).toBe(false);
     });
 });

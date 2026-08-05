@@ -19,6 +19,7 @@ import {
     shFrameNavHandler,
     shNavHandler,
 } from "./emain-util";
+import { installWebviewContextMenu } from "./emain-webview-menu";
 import { ElectronWshClient } from "./emain-wsh";
 
 function handleWindowsMenuAccelerators(
@@ -315,6 +316,7 @@ export async function getOrCreateWebViewForTab(waveWindowId: string, tabId: stri
     tabView.webContents.on("will-navigate", shNavHandler);
     tabView.webContents.on("will-frame-navigate", shFrameNavHandler);
     tabView.webContents.on("did-attach-webview", (event, wc) => {
+        installWebviewContextMenu(wc); // nexus: sin esto no hay "Copiar" con click derecho en un módulo web
         wc.setWindowOpenHandler((details) => {
             if (wc == null || wc.isDestroyed() || tabView.webContents == null || tabView.webContents.isDestroyed()) {
                 return { action: "deny" };

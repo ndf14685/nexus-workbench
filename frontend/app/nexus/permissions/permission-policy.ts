@@ -12,10 +12,22 @@ export type ElectronPermissionDetails = {
 };
 
 const PermissionNames = new Set(["media", "audioCapture", "videoCapture", "notifications", "display-capture"]);
-const AutoAllowedPermissions = new Set(["clipboard-sanitized-write", "fullscreen", "storage-access", "top-level-storage-access"]);
+const AutoAllowedPermissions = new Set([
+    "clipboard-read",
+    "clipboard-sanitized-write",
+    "fullscreen",
+    "storage-access",
+    "top-level-storage-access",
+]);
 
 export function isAutoAllowedPermission(permission: string): boolean {
     return AutoAllowedPermissions.has(permission);
+}
+
+// Electron fills the unused url fields of a <webview> guest request with "" rather than leaving them
+// out, so "??" would stop at the empty string and never reach the field that actually carries the site.
+function firstUrl(...candidates: (string | undefined)[]): string | undefined {
+    return candidates.find((candidate) => typeof candidate === "string" && candidate !== "");
 }
 
 export function normalizeOrigin(rawUrl?: string): string | null {
@@ -101,7 +113,7 @@ export function buildPermissionCheckContext(
     opts: { partition?: string; moduleId?: string; fallbackUrl?: string }
 ): { origin: string; secure: boolean; permissions: WorkbenchPermission[] } | null {
     const permissions = permissionsForCheck(electronPermission, details);
-    const url = details?.requestingUrl ?? details?.securityOrigin ?? details?.embeddingOrigin ?? opts.fallbackUrl;
+    const url = firstUrl(details?.requestingUrl, details?.securityOrigin, details?.embeddingOrigin, opts.fallbackUrl);
     const origin = normalizeOrigin(url);
     if (permissions.length === 0 || !origin) {
         return null;
@@ -115,7 +127,7 @@ export function buildPermissionContext(
     opts: { partition?: string; moduleId?: string; fallbackUrl?: string }
 ): PermissionRequestContext | null {
     const permission = permissionFromElectron(electronPermission, details);
-    const url = details?.requestingUrl ?? details?.securityOrigin ?? details?.embeddingOrigin ?? opts.fallbackUrl;
+    const url = firstUrl(details?.requestingUrl, details?.securityOrigin, details?.embeddingOrigin, opts.fallbackUrl);
     const origin = normalizeOrigin(url);
     if (!permission || !origin) {
         return null;

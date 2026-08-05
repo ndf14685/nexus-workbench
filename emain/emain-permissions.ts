@@ -175,6 +175,10 @@ export function initPermissionIpc() {
     });
 }
 
+function isDenial(decision?: PermissionDecision): boolean {
+    return decision === "deny" || decision === "block";
+}
+
 function safeLog(parts: Record<string, string | undefined>) {
     console.log(
         `[permissions] module=${parts.moduleId ?? "web"} origin=${parts.origin ?? "unknown"} permission=${parts.permission ?? "unknown"} result=${parts.result ?? "unknown"} reason=${parts.reason ?? ""}`
@@ -258,10 +262,17 @@ export function installSessionPermissionHandlers(sess: Electron.Session, opts: {
             moduleId: opts.moduleId,
             fallbackUrl: origin || wc?.getURL?.(),
         });
-        if (!ctx || !ctx.secure) {
+        if (!ctx) {
             return isAutoAllowedPermission(electronPermission);
         }
+        if (!ctx.secure) {
+            return false;
+        }
+        // Electron's check handler is boolean, so it cannot express Chromium's "prompt" state. A false
+        // here reads as a terminal denial: sites hide their mic button and never call getUserMedia, so
+        // the request handler below never runs and the user is never asked. Answering no only for an
+        // explicit denial keeps the real gate on the request handler, which still prompts and persists.
         const store = getPermissionStore();
-        return ctx.permissions.some((permission) => store.get(ctx.origin, permission)?.decision === "allow");
+        return !ctx.permissions.every((permission) => isDenial(store.get(ctx.origin, permission)?.decision));
     });
 }
