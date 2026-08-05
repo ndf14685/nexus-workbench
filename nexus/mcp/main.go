@@ -26,6 +26,7 @@ type App struct {
 	catalog   *Catalog
 	confirmer *Confirmer
 	audit     *Auditor
+	ctxGuard  *ContextDetector
 	workspace string
 }
 
@@ -44,6 +45,12 @@ func (app *App) resolveEnv(id string) (*Environment, error) {
 // gate aplica la política: ambientes prod/work/criticality-high y comandos
 // destructivos requieren confirmación en dos fases.
 func (app *App) gate(tool string, env *Environment, detail string, confirmToken string) (blockedMsg string) {
+	return app.gateWithContext(tool, env, detail, confirmToken, EffectiveContext{})
+}
+
+// gateWithContext suma al gate el contexto efectivo del shell: un ambiente
+// marcado lab cuyo kubeconfig apunta a producción tiene que escalar igual.
+func (app *App) gateWithContext(tool string, env *Environment, detail string, confirmToken string, effective EffectiveContext) (blockedMsg string) {
 	needs := env.NeedsConfirmation()
 	reason := fmt.Sprintf("ambiente %s (class=%s)", env.Id, env.Class)
 	if tool == "run_command" && IsDestructive(detail) {
@@ -52,6 +59,11 @@ func (app *App) gate(tool string, env *Environment, detail string, confirmToken 
 		if env.NeedsConfirmation() {
 			reason += fmt.Sprintf(" en ambiente %s (class=%s)", env.Id, env.Class)
 		}
+	}
+	if effective.LooksProduction() {
+		needs = true
+		reason = fmt.Sprintf("el %s activo es %q, que parece producción (el ambiente %s está declarado class=%s)",
+			effective.Kind, effective.Name, env.Id, env.Class)
 	}
 	if !needs {
 		return ""
@@ -153,6 +165,7 @@ func main() {
 		catalog:   catalog,
 		confirmer: MakeConfirmer(),
 		audit:     MakeAuditor(auditPath),
+		ctxGuard:  MakeContextDetector(wave),
 		workspace: workspace,
 	}
 
@@ -186,12 +199,18 @@ func main() {
 		if strings.TrimSpace(args.Command) == "" {
 			return textResult("ERROR: command vacío")
 		}
-		if msg := app.gate("run_command", env, args.Command, args.ConfirmToken); msg != "" {
-			return textResult(msg)
-		}
 		tabId, err := app.tabId()
 		if err != nil {
 			return textResult("ERROR: " + err.Error())
+		}
+		// sólo interrogamos el shell si el destino real del comando lo decide un
+		// contexto ambiental (kubectl, aws, gcloud, terraform)
+		var effective EffectiveContext
+		if kind := CommandContextKind(args.Command); kind != "" {
+			effective = app.ctxGuard.Detect(ctx, env, tabId, kind)
+		}
+		if msg := app.gateWithContext("run_command", env, args.Command, args.ConfirmToken, effective); msg != "" {
+			return textResult(msg)
 		}
 		wshArgs := []string{"run"}
 		if args.Cwd != "" {

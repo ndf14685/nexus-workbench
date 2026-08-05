@@ -72,3 +72,32 @@ func TestAuditKeepsOrdinaryCommandIntact(t *testing.T) {
 		t.Fatalf("marcó redacción donde no había secretos: %v", rec)
 	}
 }
+
+// El accidente que esto evita: el catálogo dice lab, el kubeconfig dice prod.
+func TestGateEscalatesWhenEffectiveContextIsProduction(t *testing.T) {
+	app := &App{confirmer: MakeConfirmer(), audit: MakeAuditor(filepath.Join(t.TempDir(), "audit.jsonl"))}
+	lab := &Environment{Id: "rig3060", Name: "rig", Kind: "ssh", Class: "lab", Criticality: "low"}
+
+	if msg := app.gate("run_command", lab, "kubectl get pods", ""); msg != "" {
+		t.Fatalf("un comando inocuo en lab no debería pedir confirmación: %s", msg)
+	}
+
+	prodCtx := EffectiveContext{Kind: "kubernetes", Name: "prod-eks", Available: true}
+	msg := app.gateWithContext("run_command", lab, "kubectl get pods", "", prodCtx)
+	if msg == "" {
+		t.Fatal("un contexto de producción tiene que exigir confirmación aunque el ambiente sea lab")
+	}
+	if !strings.Contains(msg, "prod-eks") {
+		t.Fatalf("el mensaje tiene que decir CUÁL es el contexto peligroso: %s", msg)
+	}
+}
+
+// Si el probe no pudo determinar el contexto no inventamos una escalada.
+func TestGateDoesNotEscalateOnUnknownContext(t *testing.T) {
+	app := &App{confirmer: MakeConfirmer(), audit: MakeAuditor(filepath.Join(t.TempDir(), "audit.jsonl"))}
+	lab := &Environment{Id: "rig3060", Kind: "ssh", Class: "lab", Criticality: "low"}
+	unknown := EffectiveContext{Kind: "kubernetes", Name: "prod-eks", Available: false}
+	if msg := app.gateWithContext("run_command", lab, "kubectl get pods", "", unknown); msg != "" {
+		t.Fatalf("un contexto indeterminado no debería escalar: %s", msg)
+	}
+}
