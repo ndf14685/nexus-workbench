@@ -14,13 +14,10 @@
 # Uso (PowerShell COMO ADMINISTRADOR, para poder escribir en LocalMachine\Root):
 #   .\nexus\scripts\new-signing-cert.ps1 -Subject "Nestor Fleitas"
 #
-# Después:
-#   1. Guardá el .pfx y la contraseña en tu gestor de contraseñas.
-#   2. Cargá en GitHub → Settings → Secrets and variables → Actions:
-#        secret   WIN_CSC_LINK          = el base64 que imprime este script
-#        secret   WIN_CSC_KEY_PASSWORD  = la contraseña
-#        variable NEXUS_PUBLISHER_NAME  = el mismo -Subject que usaste acá
-#   3. Borrá el .pfx del disco si no lo vas a usar para firmar localmente.
+# Si el gh CLI está autenticado, carga solo los secrets en el repo y el próximo
+# tag sale firmado. Con -SkipGitHub sólo imprime los valores para cargarlos a
+# mano. Guardá el .pfx y su contraseña: sin ellos no podés volver a firmar
+# actualizaciones que las instalaciones existentes acepten.
 
 [CmdletBinding()]
 param(
@@ -33,7 +30,12 @@ param(
 
     # Sin -TrustLocally el certificado se genera pero no se confía: útil para
     # producirlo en una máquina que no es la que va a instalar la app.
-    [switch]$SkipTrust
+    [switch]$SkipTrust,
+
+    [string]$Repo = "ndf14685/nexus-workbench",
+
+    # Con -SkipGitHub sólo imprime los valores en vez de cargarlos con gh.
+    [switch]$SkipGitHub
 )
 
 $ErrorActionPreference = "Stop"
@@ -89,17 +91,50 @@ if (-not $SkipTrust) {
 
 $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($pfxPath))
 
+# Se cargan con gh en vez de imprimirlos: el base64 de una clave privada no
+# tiene por qué quedar en el scrollback de la consola, y copiarlo a mano es
+# largo y propenso a error.
+$uploaded = $false
+if (-not $SkipGitHub) {
+    $gh = Get-Command gh -ErrorAction SilentlyContinue
+    if (-not $gh) {
+        Write-Warning "gh CLI no encontrado; los valores se imprimen abajo para cargarlos a mano."
+    }
+    else {
+        try {
+            $b64 | gh secret set WIN_CSC_LINK --repo $Repo
+            $plainPassword | gh secret set WIN_CSC_KEY_PASSWORD --repo $Repo
+            gh variable set NEXUS_PUBLISHER_NAME --repo $Repo --body $Subject
+            if ($LASTEXITCODE -ne 0) { throw "gh devolvio $LASTEXITCODE" }
+            $uploaded = $true
+            Write-Host ""
+            Write-Host "Secrets y variable cargados en $Repo." -ForegroundColor Green
+            Write-Host "El proximo tag va a salir firmado." -ForegroundColor Green
+        }
+        catch {
+            Write-Warning "No se pudieron cargar con gh ($_). Cargalos a mano con los valores de abajo."
+        }
+    }
+}
+
+if (-not $uploaded) {
+    Write-Host ""
+    Write-Host "=== Cargá esto en GitHub (Settings > Secrets and variables > Actions) ===" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "secret   WIN_CSC_KEY_PASSWORD:" -ForegroundColor Yellow
+    Write-Host $plainPassword
+    Write-Host ""
+    Write-Host "variable NEXUS_PUBLISHER_NAME:" -ForegroundColor Yellow
+    Write-Host $Subject
+    Write-Host ""
+    Write-Host "secret   WIN_CSC_LINK (base64 del .pfx, tambien en $pfxPath):" -ForegroundColor Yellow
+    Write-Host $b64
+}
+
 Write-Host ""
-Write-Host "=== Cargá esto en GitHub (Settings > Secrets and variables > Actions) ===" -ForegroundColor Yellow
-Write-Host ""
-Write-Host "secret   WIN_CSC_KEY_PASSWORD:" -ForegroundColor Yellow
+Write-Host "Contraseña del .pfx (guardala en tu gestor de contraseñas):" -ForegroundColor Yellow
 Write-Host $plainPassword
 Write-Host ""
-Write-Host "variable NEXUS_PUBLISHER_NAME:" -ForegroundColor Yellow
-Write-Host $Subject
-Write-Host ""
-Write-Host "secret   WIN_CSC_LINK (base64 del .pfx, guardado tambien en $pfxPath):" -ForegroundColor Yellow
-Write-Host $b64
-Write-Host ""
-Write-Host "El .pfx contiene tu clave privada. Guardalo en el gestor de contraseñas y" -ForegroundColor Red
-Write-Host "borralo del disco si no vas a firmar localmente. NO lo commitees." -ForegroundColor Red
+Write-Host "El .pfx en $pfxPath contiene tu clave privada." -ForegroundColor Red
+Write-Host "Sin el, perdes la posibilidad de firmar actualizaciones que las instalaciones" -ForegroundColor Red
+Write-Host "existentes acepten: respaldalo. Esta gitignoreado, NO lo commitees." -ForegroundColor Red

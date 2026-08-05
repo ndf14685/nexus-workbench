@@ -42,7 +42,7 @@ En PowerShell **como Administrador**, en la máquina donde se usa el Workbench:
 ```
 
 Eso genera el certificado, lo confía en esa máquina (`Root` y
-`TrustedPublisher`) y escupe lo que hay que cargar en GitHub:
+`TrustedPublisher`) y —si el `gh` CLI está autenticado— carga solo en el repo:
 
 | dónde | nombre | qué es |
 |---|---|---|
@@ -50,8 +50,13 @@ Eso genera el certificado, lo confía en esa máquina (`Root` y
 | secret | `WIN_CSC_KEY_PASSWORD` | la contraseña del `.pfx` |
 | variable | `NEXUS_PUBLISHER_NAME` | el mismo `-Subject` |
 
-Se cargan en **Settings → Secrets and variables → Actions**. Desde el próximo
-tag, el instalador sale firmado y con verificación de update prendida.
+Desde el próximo tag el instalador sale firmado y con verificación de update
+prendida. Con `-SkipGitHub` los imprime para cargarlos a mano en
+**Settings → Secrets and variables → Actions**.
+
+**Guardá el `.pfx` y su contraseña.** Si los perdés no podés volver a firmar con
+ese certificado, y las instalaciones que ya confían en él van a rechazar toda
+actualización firmada con uno nuevo hasta que confíes la nueva raíz a mano.
 
 `NEXUS_PUBLISHER_NAME` **tiene que coincidir** con el subject del certificado:
 `electron-updater` compara ambos y, si difieren, rechaza todas las
