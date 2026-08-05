@@ -1,4 +1,6 @@
-# Nexus Workbench: genera el instalador Windows (sin firma).
+# Nexus Workbench: genera el instalador Windows.
+# Firma si existen los secrets WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD; si no, sale
+# sin firmar y con la verificación de update apagada (nexus/docs/SIGNING.md).
 # - workflow_dispatch: build suelto, artefactos solo en el run (canal dev/candidate).
 # - push de tag beta: publica un prerelease con el instalador + beta.yml para
 #   que el auto-update de las instalaciones beta lo pueda resolver.
@@ -20,7 +22,7 @@ permissions:
 
 jobs:
     package-windows:
-        name: Package Nexus Workbench (Windows, unsigned)
+        name: Package Nexus Workbench (Windows)
         runs-on: windows-latest
         steps:
             - uses: actions/checkout@v6
@@ -50,7 +52,35 @@ jobs:
               run: task package
               env:
                   CSC_IDENTITY_AUTO_DISCOVERY: false
+                  # Vacíos mientras no existan los secrets: ahí electron-builder
+                  # no firma y verifyUpdateCodeSignature queda apagado solo.
+                  # Ver nexus/docs/SIGNING.md.
+                  WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+                  WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+                  NEXUS_PUBLISHER_NAME: ${{ vars.NEXUS_PUBLISHER_NAME }}
               shell: powershell
+            # El contexto secrets no se puede usar en un `if` de step, sólo en `env`.
+            - name: Verificar la firma del instalador
+              shell: powershell
+              env:
+                  SIGNING_ENABLED: ${{ secrets.WIN_CSC_LINK != '' }}
+                  EXPECTED_PUBLISHER: ${{ vars.NEXUS_PUBLISHER_NAME }}
+              run: |
+                  if ($env:SIGNING_ENABLED -ne 'true') {
+                      Write-Host "sin certificado configurado: instalador sin firmar (ver nexus/docs/SIGNING.md)"
+                      exit 0
+                  }
+                  $exe = Get-ChildItem make\*.exe | Select-Object -First 1
+                  $sig = Get-AuthenticodeSignature -LiteralPath $exe.FullName
+                  Write-Host "status: $($sig.Status)  subject: $($sig.SignerCertificate.Subject)"
+                  # En el runner la raíz autofirmada no está confiada, así que el
+                  # status no va a ser Valid; acá se valida que la firma exista y
+                  # traiga el subject esperado. La cadena la valida Windows en la
+                  # máquina donde el certificado sí está confiado.
+                  if ($sig.Status -eq 'NotSigned') { throw "el instalador salio sin firmar" }
+                  if ($env:EXPECTED_PUBLISHER -and $sig.SignerCertificate.Subject -notlike "*$($env:EXPECTED_PUBLISHER)*") {
+                      throw "el subject firmado no coincide con NEXUS_PUBLISHER_NAME; el updater rechazaria cada actualizacion"
+                  }
             - name: Build MCP server
               run: cd nexus/mcp; go build -ldflags="-s -w" -o ../../make/nexus-workbench-mcp.exe .
               env:
@@ -103,7 +133,9 @@ jobs:
                   body: |
                       ${{ contains(github.ref_name, '-beta.') && 'Beta publicada: disponible para auto-update del canal beta.' || 'Candidato sin publicar. Probarlo y publicarlo para promoverlo a stable.' }}
 
-                      **Instalador sin firmar.** Verificá lo que instalás antes de ejecutarlo:
+                      ${{ secrets.WIN_CSC_LINK != '' && 'Instalador **firmado**. Windows valida la firma si el certificado está confiado en la máquina (ver `nexus/docs/SIGNING.md`).' || '**Instalador sin firmar** — no hay certificado configurado (ver `nexus/docs/SIGNING.md`).' }}
+
+                      Verificá lo que instalás antes de ejecutarlo:
 
                       ```powershell
                       # el hash del .exe tiene que coincidir con el de SHA256SUMS.txt

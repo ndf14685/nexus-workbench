@@ -3,7 +3,15 @@ const pkg = require("./package.json");
 const fs = require("fs");
 const path = require("path");
 
-const windowsShouldSign = !!process.env.SM_CODE_SIGNING_CERT_SHA1_HASH;
+// Firma de Windows. Dos vías: un .pfx (autofirmado o comprado) vía WIN_CSC_LINK,
+// o un certificado del almacén por thumbprint (DigiCert KeyLocker, heredado de
+// upstream). El publisher NO puede quedar hardcodeado: electron-updater compara
+// el subject del certificado con publisherName y, si no coinciden, rechaza cada
+// actualización. Ver nexus/docs/SIGNING.md.
+const windowsCertFile = process.env.WIN_CSC_LINK || process.env.CSC_LINK;
+const windowsCertSha1 = process.env.SM_CODE_SIGNING_CERT_SHA1_HASH;
+const windowsShouldSign = !!(windowsCertFile || windowsCertSha1);
+const windowsPublisher = process.env.NEXUS_PUBLISHER_NAME || "Nexus Workbench";
 
 /**
  * @type {import('electron-builder').Configuration}
@@ -97,16 +105,22 @@ const config = {
     },
     win: {
         target: ["nsis", "msi", "zip"],
-        // The Nexus beta installer is intentionally unsigned until a signing
-        // certificate is provisioned. electron-updater must not reject its own
-        // downloaded NSIS artifact on an Authenticode check.
-        verifyUpdateCodeSignature: false,
-        signtoolOptions: windowsShouldSign && {
-            signingHashAlgorithms: ["sha256"],
-            publisherName: "Command Line Inc",
-            certificateSubjectName: "Command Line Inc",
-            certificateSha1: process.env.SM_CODE_SIGNING_CERT_SHA1_HASH,
-        },
+        // Sin firma hay que apagarlo: el updater rechazaría su propio artefacto
+        // en el chequeo de Authenticode y ninguna actualización se instalaría.
+        // Con firma se prende solo, y ahí sí verifica que la actualización la
+        // haya firmado quien dice publisherName antes de ejecutarla.
+        verifyUpdateCodeSignature: windowsShouldSign,
+        signtoolOptions: windowsShouldSign
+            ? {
+                  signingHashAlgorithms: ["sha256"],
+                  publisherName: windowsPublisher,
+                  // El .pfx lo resuelve electron-builder desde WIN_CSC_LINK /
+                  // WIN_CSC_KEY_PASSWORD; por thumbprint hay que nombrar el subject.
+                  ...(windowsCertFile
+                      ? {}
+                      : { certificateSubjectName: windowsPublisher, certificateSha1: windowsCertSha1 }),
+              }
+            : undefined,
     },
     appImage: {
         license: "LICENSE",

@@ -54,3 +54,8 @@ nexus/config/commands.yaml
 nexus/config/commands.json
 nexus/config/waveai.json
 nexus/reports/*.local.md
+
+# Material de firma de código: el .pfx tiene la clave privada (nexus/docs/SIGNING.md)
+.signing/
+*.pfx
+*.p12
