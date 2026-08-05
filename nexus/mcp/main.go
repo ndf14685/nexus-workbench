@@ -183,6 +183,17 @@ type RunRunbookArgs struct {
 	ConfirmToken string            `json:"confirm_token,omitempty" jsonschema:"token devuelto por una llamada previa que requirió confirmación"`
 }
 
+type ShowLogsArgs struct {
+	Environment string `json:"environment,omitempty" jsonschema:"ambiente donde seguir los logs (default: local)"`
+	Kind        string `json:"kind" jsonschema:"origen: kubernetes | systemd | journal | docker | file | wazuh"`
+	Target      string `json:"target,omitempty" jsonschema:"pod/deployment, unit de systemd, contenedor o ruta (wazuh tiene ruta por defecto)"`
+	Namespace   string `json:"namespace,omitempty" jsonschema:"namespace de kubernetes"`
+	Container   string `json:"container,omitempty" jsonschema:"contenedor dentro del pod"`
+	Lines       int    `json:"lines,omitempty" jsonschema:"cuántas líneas de historia (default 200)"`
+	Follow      bool   `json:"follow,omitempty" jsonschema:"seguir en vivo"`
+	Grep        string `json:"grep,omitempty" jsonschema:"filtrar por texto"`
+}
+
 type CheckApprovalArgs struct {
 	Id string `json:"id" jsonschema:"id de la solicitud devuelto por una llamada que requirió aprobación humana"`
 }

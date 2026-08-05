@@ -24,7 +24,9 @@ var placeholderPattern = regexp.MustCompile(`<([a-zA-Z][a-zA-Z0-9_-]*)>`)
 
 // Un valor de parámetro no puede introducir estructura de shell: el runbook lo
 // escribe el usuario, pero quien lo invoca con parámetros puede ser un agente.
-var unsafeParamPattern = regexp.MustCompile("[;&|`$><\\n\\r\\\\]|\\$\\(|\\|\\|")
+// Las comillas van incluidas: sin ellas, un valor puede cerrar el entrecomillado
+// que puso quien armó el comando y quedar fuera.
+var unsafeParamPattern = regexp.MustCompile("[;&|`$><\\n\\r\\\\'\"]|\\$\\(|\\|\\|")
 
 type Runbook struct {
 	Id          string   `yaml:"id" json:"id"`
