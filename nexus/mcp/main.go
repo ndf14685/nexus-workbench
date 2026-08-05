@@ -25,6 +25,7 @@ type App struct {
 	wave      *WaveAccess
 	catalog   *Catalog
 	runbooks  *RunbookCatalog
+	approvals *ApprovalBroker
 	confirmer *Confirmer
 	audit     *Auditor
 	ctxGuard  *ContextDetector
@@ -79,6 +80,11 @@ func (app *App) gateFull(tool string, env *Environment, detail string, confirmTo
 	if !needs {
 		return ""
 	}
+	// Con el broker activo la aprobación sale de la conversación: el agente no
+	// recibe un token que pueda decidir usar por su cuenta.
+	if app.approvals != nil && app.requiresHumanApproval(env, effective, forceConfirm, detail) {
+		return app.requestHumanApproval(tool, env, detail, confirmToken, reason)
+	}
 	if confirmToken != "" && app.confirmer.Check(confirmToken, tool, env.Id, detail) {
 		app.audit.Log(tool, env.Id, detail, "confirmed")
 		return ""
@@ -89,6 +95,45 @@ func (app *App) gateFull(tool string, env *Environment, detail string, confirmTo
 		"CONFIRMACIÓN REQUERIDA (%s). Mostrale al usuario la acción exacta [%s en %s: %s] y, "+
 			"solo con su aprobación explícita, repetí la llamada con confirm_token=%q (expira en 2 minutos).",
 		reason, tool, env.Id, detail, token)
+}
+
+// requiresHumanApproval delimita qué sale de la conversación. No es todo lo que
+// pide confirmación: un ambiente work de rutina sigue con el flujo en dos
+// fases. Sale lo irreversible o lo que toca producción.
+func (app *App) requiresHumanApproval(env *Environment, effective EffectiveContext, forceConfirm bool, detail string) bool {
+	return env.Class == "prod" || effective.LooksProduction() || forceConfirm || IsDestructive(detail)
+}
+
+// requestHumanApproval publica la solicitud o consume una aprobación ya dada.
+// El "token" que trae el agente acá es sólo el id de la solicitud: sirve para
+// consultar, no para autorizar.
+func (app *App) requestHumanApproval(tool string, env *Environment, detail string, requestId string, reason string) string {
+	if requestId != "" {
+		state, _ := app.approvals.State(requestId)
+		switch state {
+		case ApprovalApproved:
+			app.approvals.Resolve(requestId)
+			app.audit.Log(tool, env.Id, detail, "human_approved")
+			return ""
+		case ApprovalDenied:
+			app.approvals.Resolve(requestId)
+			app.audit.Log(tool, env.Id, detail, "human_denied")
+			return fmt.Sprintf("RECHAZADO por el usuario (solicitud %s). No reintentes esta acción.", requestId)
+		case ApprovalPending:
+			return fmt.Sprintf("La solicitud %s sigue esperando la aprobación del usuario. Esperá y volvé a consultar con check_approval.", requestId)
+		case ApprovalExpired:
+			app.approvals.Resolve(requestId)
+			app.audit.Log(tool, env.Id, detail, "approval_expired")
+			return fmt.Sprintf("La solicitud %s expiró sin respuesta. Si sigue haciendo falta, pedila de nuevo.", requestId)
+		}
+	}
+	id := app.confirmer.Request(tool, env.Id, detail)
+	if err := app.approvals.Publish(id, ApprovalRequest{Tool: tool, Env: env.Id, Class: env.Class, Detail: detail, Reason: reason}); err != nil {
+		app.audit.Log(tool, env.Id, detail, "approval_publish_error: "+err.Error())
+		return "ERROR: no se pudo publicar la solicitud de aprobación: " + err.Error()
+	}
+	app.audit.Log(tool, env.Id, detail, "human_approval_required")
+	return ApprovalInstructions(id, reason, detail)
 }
 
 func textResult(s string) (*mcp.CallToolResult, any, error) {
@@ -138,6 +183,10 @@ type RunRunbookArgs struct {
 	ConfirmToken string            `json:"confirm_token,omitempty" jsonschema:"token devuelto por una llamada previa que requirió confirmación"`
 }
 
+type CheckApprovalArgs struct {
+	Id string `json:"id" jsonschema:"id de la solicitud devuelto por una llamada que requirió aprobación humana"`
+}
+
 type LaunchAgentArgs struct {
 	Id string `json:"id" jsonschema:"id del agente del catálogo (list_agents)"`
 }
@@ -148,13 +197,14 @@ type NotifyArgs struct {
 }
 
 func main() {
-	var dataDir, wshPath, envsPath, auditPath, workspace, runbooksPath string
+	var dataDir, wshPath, envsPath, auditPath, workspace, runbooksPath, approvalsDir string
 	var dev bool
 	flag.StringVar(&dataDir, "data-dir", "", "data dir de la app (default: autodetectar)")
 	flag.StringVar(&wshPath, "wsh", "", "ruta al binario wsh (default: autodetectar)")
 	flag.StringVar(&envsPath, "environments", "", "ruta a environments.yaml (default: <configdir-guess>)")
 	flag.StringVar(&auditPath, "audit", "", "ruta del log de auditoría JSONL")
 	flag.StringVar(&runbooksPath, "runbooks", "", "ruta a commands.yaml (runbooks ejecutables)")
+	flag.StringVar(&approvalsDir, "approvals", "", "directorio de aprobación fuera de banda; habilitado, el agente no recibe confirm_token para acciones de alto riesgo")
 	flag.StringVar(&workspace, "workspace", "", "nombre del workspace destino (default: primero activo)")
 	flag.BoolVar(&dev, "dev", false, "usar los directorios waveterm-dev")
 	flag.Parse()
@@ -199,6 +249,7 @@ func main() {
 		wave:      wave,
 		catalog:   catalog,
 		runbooks:  runbooks,
+		approvals: MakeApprovalBroker(approvalsDir),
 		confirmer: MakeConfirmer(),
 		audit:     MakeAuditor(auditPath),
 		ctxGuard:  MakeContextDetector(wave),
@@ -359,6 +410,28 @@ func main() {
 			return textResult("ERROR: " + err.Error())
 		}
 		return redactedResult(out)
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "check_approval",
+		Description: "Consulta si el usuario aprobó una acción que requería aprobación humana fuera de banda. " +
+			"Si está aprobada, repetí la llamada original pasando este id como confirm_token.",
+	}, func(ctx context.Context, req *mcp.CallToolRequest, args CheckApprovalArgs) (*mcp.CallToolResult, any, error) {
+		if app.approvals == nil {
+			return textResult("la aprobación fuera de banda no está habilitada en este servidor")
+		}
+		state, request := app.approvals.State(args.Id)
+		switch state {
+		case ApprovalApproved:
+			return textResult(fmt.Sprintf("APROBADA. Repetí la llamada original con confirm_token=%q.", args.Id))
+		case ApprovalDenied:
+			return textResult("RECHAZADA por el usuario. No reintentes esta acción.")
+		case ApprovalExpired:
+			return textResult("EXPIRADA sin respuesta. Si sigue haciendo falta, pedila de nuevo.")
+		case ApprovalPending:
+			return textResult(fmt.Sprintf("PENDIENTE desde %s (expira %s): %s en %s.", request.Created, request.Expires, request.Tool, request.Env))
+		}
+		return textResult("no hay ninguna solicitud con ese id")
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
