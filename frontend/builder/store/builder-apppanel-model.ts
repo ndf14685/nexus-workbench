@@ -8,6 +8,7 @@ import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { atoms, getApi, WOS } from "@/store/global";
 import { base64ToString, stringToBase64 } from "@/util/util";
 import type { WebviewTag } from "electron";
+import { toggleDevToolsSafely } from "@/app/view/webview/webview-devtools";
 import { atom, type Atom, type PrimitiveAtom } from "jotai";
 import type * as MonacoTypes from "monaco-editor";
 import { debounce } from "throttle-debounce";
@@ -317,12 +318,7 @@ export class BuilderAppPanelModel {
     }
 
     openPreviewDevTools() {
-        if (!this.webviewRef.current) return;
-        if (this.webviewRef.current.isDevToolsOpened()) {
-            this.webviewRef.current.closeDevTools();
-        } else {
-            this.webviewRef.current.openDevTools();
-        }
+        toggleDevToolsSafely(this.webviewRef.current);
     }
 
     dispose() {

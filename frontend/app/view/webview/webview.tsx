@@ -22,6 +22,7 @@ import clsx from "clsx";
 import type { WebviewTag } from "electron";
 import { Atom, PrimitiveAtom, atom, useAtomValue, useSetAtom } from "jotai";
 import { Fragment, createRef, memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { closeDevToolsSafely, isDevToolsOpenSafely, toggleDevToolsSafely } from "./webview-devtools";
 import "./webview.scss";
 import type { WebViewEnv } from "./webviewenv";
 
@@ -733,16 +734,8 @@ export class WebViewModel implements ViewModel {
                 submenu: zoomSubMenu,
             },
             {
-                label: this.webviewRef.current?.isDevToolsOpened() ? "Close DevTools" : "Open DevTools",
-                click: () => {
-                    if (this.webviewRef.current) {
-                        if (this.webviewRef.current.isDevToolsOpened()) {
-                            this.webviewRef.current.closeDevTools();
-                        } else {
-                            this.webviewRef.current.openDevTools();
-                        }
-                    }
-                },
+                label: isDevToolsOpenSafely(this.webviewRef.current) ? "Close DevTools" : "Open DevTools",
+                click: () => toggleDevToolsSafely(this.webviewRef.current),
             },
             {
                 type: "separator",
@@ -963,10 +956,7 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
 
     useLayoutEffect(() => {
         return () => {
-            const webview = model.webviewRef.current;
-            if (webview?.isDevToolsOpened()) {
-                webview.closeDevTools();
-            }
+            closeDevToolsSafely(model.webviewRef.current);
         };
     }, []);
 

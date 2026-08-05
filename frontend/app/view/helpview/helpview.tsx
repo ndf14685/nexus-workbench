@@ -4,6 +4,7 @@
 import { globalStore, WOS } from "@/app/store/global";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
+import { isDevToolsOpenSafely, toggleDevToolsSafely } from "@/app/view/webview/webview-devtools";
 import { WebView, WebViewModel } from "@/app/view/webview/webview";
 import { atom } from "jotai";
 
@@ -104,16 +105,8 @@ class HelpViewModel extends WebViewModel {
 
         return [
             {
-                label: this.webviewRef.current?.isDevToolsOpened() ? "Close DevTools" : "Open DevTools",
-                click: async () => {
-                    if (this.webviewRef.current) {
-                        if (this.webviewRef.current.isDevToolsOpened()) {
-                            this.webviewRef.current.closeDevTools();
-                        } else {
-                            this.webviewRef.current.openDevTools();
-                        }
-                    }
-                },
+                label: isDevToolsOpenSafely(this.webviewRef.current) ? "Close DevTools" : "Open DevTools",
+                click: async () => toggleDevToolsSafely(this.webviewRef.current),
             },
             {
                 label: "Set Zoom Factor",
