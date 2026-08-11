@@ -5,6 +5,7 @@ import { BlockNodeModel } from "@/app/block/blocktypes";
 import type { TabModel } from "@/app/store/tab-model";
 import { AiFileDiffViewModel } from "@/app/view/aifilediff/aifilediff";
 import { LauncherViewModel } from "@/app/view/launcher/launcher";
+import { JarvisViewModel } from "@/app/view/jarvis/jarvis";
 import { NexusAuditViewModel } from "@/app/view/nexusaudit/nexusaudit";
 import { PreviewModel } from "@/app/view/preview/preview-model";
 import { ProcessViewerViewModel } from "@/app/view/processviewer/processviewer";
@@ -37,6 +38,7 @@ BlockRegistry.set("aifilediff", AiFileDiffViewModel);
 BlockRegistry.set("waveconfig", WaveConfigViewModel);
 BlockRegistry.set("processviewer", ProcessViewerViewModel);
 BlockRegistry.set("nexusaudit", NexusAuditViewModel); // nexus: auditoría del MCP
+BlockRegistry.set("jarvis", JarvisViewModel); // nexus: panel Mission Supervisor
 
 function makeDefaultViewModel(viewType: string): ViewModel {
     const viewModel: ViewModel = {

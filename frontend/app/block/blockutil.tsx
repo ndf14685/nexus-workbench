@@ -48,6 +48,9 @@ export function blockViewToIcon(view: string): string {
     if (view == "nexusaudit") {
         return "clipboard-list";
     }
+    if (view == "jarvis") {
+        return "robot";
+    }
     return "square";
 }
 
@@ -78,6 +81,9 @@ export function blockViewToName(view: string): string {
     }
     if (view == "nexusaudit") {
         return "Auditoría MCP";
+    }
+    if (view == "jarvis") {
+        return "Jarvis";
     }
     return view;
 }

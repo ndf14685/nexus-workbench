@@ -44,6 +44,9 @@ type Environment struct {
 	Class       string `yaml:"class" json:"class"`
 	Criticality string `yaml:"criticality,omitempty" json:"criticality,omitempty"`
 	Notes       string `yaml:"notes,omitempty" json:"notes,omitempty"`
+	// Workspaces: roots/nombres de repos que pertenecen a este ambiente.
+	// Los consume el Execution Target Resolver de Jarvis (señal de ownership).
+	Workspaces []string `yaml:"workspaces,omitempty" json:"workspaces,omitempty"`
 }
 
 // ConnName mapea el ambiente al nombre de conexión nativo de Wave.

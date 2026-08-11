@@ -1,0 +1,452 @@
+// Copyright 2026, Nexus Workbench
+// SPDX-License-Identifier: Apache-2.0
+
+// jarvis-agent: modo headless del binario MCP que conecta el Workbench al
+// cerebro jarvisd (Jarvis Protocol v1.3). Registra las capabilities
+// terminal.*/env.list y las ejecuta vía wsh sobre la app en ejecución.
+// El Workbench se mantiene "tonto": cero decisiones, solo superficies.
+//
+//	nexus-workbench-mcp jarvis-agent --environments env.yaml \
+//	    [--brain http://127.0.0.1:8770] [--client-id wb-<host>]
+//
+// Token: NEXUS_BRAIN_TOKEN (mismo del cerebro). Reconexión SSE con ?since=;
+// re-registro en cada conexión (registro in-memory del cerebro, spec §3).
+package main
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+)
+
+const jarvisClientType = "workbench"
+
+var jarvisCapabilities = []map[string]any{
+	{"name": "env.list", "description": "catálogo de ambientes del Workbench",
+		"risk_class": "read"},
+	{"name": "terminal.list", "description": "bloques terminal con su metadata",
+		"risk_class": "read"},
+	{"name": "terminal.create", "description": "crear terminal (connection+cwd+meta)",
+		"risk_class": "reversible-write"},
+	{"name": "terminal.input", "description": "inyectar input a una terminal",
+		"risk_class": "reversible-write"},
+	{"name": "terminal.read", "description": "leer cola acotada de scrollback (redactada)",
+		"risk_class": "read"},
+	{"name": "terminal.set_meta", "description": "taggear metadata jarvis:* de un bloque",
+		"risk_class": "reversible-write"},
+	{"name": "terminal.close", "description": "cerrar un bloque terminal",
+		"risk_class": "reversible-write"},
+}
+
+// JarvisAgent es transporte puro: recibe capability.invoke por SSE, ejecuta
+// vía wsh y devuelve el resultado. runWsh es inyectable para tests offline.
+type JarvisAgent struct {
+	brainURL  string
+	token     string
+	clientID  string
+	workspace string
+	catalog   *Catalog
+	runWsh    func(ctx context.Context, conn string, tabId string, args ...string) (string, error)
+	tabId     func() (string, error)
+	httpc     *http.Client
+	since     int64
+}
+
+// --- payloads puros (testeables) ---
+
+func jarvisRegisterPayload(clientID string) []byte {
+	body, _ := json.Marshal(map[string]any{
+		"client_id":    clientID,
+		"client_type":  jarvisClientType,
+		"capabilities": jarvisCapabilities,
+	})
+	return body
+}
+
+func jarvisEnvListResult(catalog *Catalog) map[string]any {
+	envs := make([]map[string]any, 0, len(catalog.Environments))
+	for _, e := range catalog.Environments {
+		envs = append(envs, map[string]any{
+			"id": e.Id, "kind": e.Kind, "host": e.Host, "distro": e.Distro,
+			"class": e.Class, "workspaces": e.Workspaces,
+		})
+	}
+	agents := make([]string, 0, len(catalog.Agents))
+	for _, a := range catalog.Agents {
+		agents = append(agents, a.Id)
+	}
+	return map[string]any{"environments": envs, "agents": agents}
+}
+
+// jarvisBlocksResult adapta la salida de `wsh blocks list --json` al contrato
+// terminal.list del cerebro ({blocks: [{block_id, meta, connection}]}).
+func jarvisBlocksResult(blocksJSON string) (map[string]any, error) {
+	var entries []struct {
+		BlockId string         `json:"blockid"`
+		View    string         `json:"view"`
+		Meta    map[string]any `json:"meta"`
+	}
+	if err := json.Unmarshal([]byte(blocksJSON), &entries); err != nil {
+		return nil, fmt.Errorf("parseando blocks list: %w", err)
+	}
+	blocks := make([]map[string]any, 0, len(entries))
+	for _, e := range entries {
+		if e.View != "" && e.View != "term" {
+			continue
+		}
+		connection, _ := e.Meta["connection"].(string)
+		blocks = append(blocks, map[string]any{
+			"block_id":   "block:" + e.BlockId,
+			"meta":       e.Meta,
+			"connection": connection,
+		})
+	}
+	return map[string]any{"blocks": blocks}, nil
+}
+
+// jarvisCreateArgs arma los argumentos de `wsh createblock` para una terminal
+// con conexión/cwd/meta de misión. El host de ejecución REAL queda en el meta
+// `connection` del bloque: una terminal SSH nunca es ejecución local.
+func jarvisCreateArgs(connection, cwd string, meta map[string]any, title string) []string {
+	args := []string{"createblock", "term", "controller=shell"}
+	if connection != "" {
+		args = append(args, "connection="+connection)
+	}
+	if cwd != "" {
+		args = append(args, "cmd:cwd="+cwd)
+	}
+	if title != "" {
+		args = append(args, "frame:title="+title)
+	}
+	for key, value := range meta {
+		args = append(args, fmt.Sprintf("%s=%v", key, value))
+	}
+	return args
+}
+
+func jarvisParseCreatedBlock(out string) (string, error) {
+	// `wsh createblock` imprime "created block <oid>"
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if rest, ok := strings.CutPrefix(line, "created block "); ok {
+			return "block:" + strings.TrimSpace(rest), nil
+		}
+	}
+	return "", fmt.Errorf("createblock sin block id en la salida: %q", out)
+}
+
+// --- ejecución de capabilities ---
+
+func (ja *JarvisAgent) execute(ctx context.Context, capability string, args map[string]any) (map[string]any, error) {
+	str := func(key string) string {
+		value, _ := args[key].(string)
+		return value
+	}
+	switch capability {
+	case "env.list":
+		return jarvisEnvListResult(ja.catalog), nil
+	case "terminal.list":
+		tabId, err := ja.tabId()
+		if err != nil {
+			return nil, err
+		}
+		out, err := ja.runWsh(ctx, "", tabId, "blocks", "list", "--json")
+		if err != nil {
+			return nil, err
+		}
+		return jarvisBlocksResult(out)
+	case "terminal.create":
+		tabId, err := ja.tabId()
+		if err != nil {
+			return nil, err
+		}
+		meta, _ := args["meta"].(map[string]any)
+		wshArgs := jarvisCreateArgs(str("connection"), str("cwd"), meta, str("title"))
+		out, err := ja.runWsh(ctx, str("connection"), tabId, wshArgs...)
+		if err != nil {
+			return nil, err
+		}
+		blockID, err := jarvisParseCreatedBlock(out)
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"block_id": blockID}, nil
+	case "terminal.input":
+		blockID := str("block_id")
+		if blockID == "" {
+			return nil, fmt.Errorf("block_id requerido")
+		}
+		tabId, err := ja.tabId()
+		if err != nil {
+			return nil, err
+		}
+		data64 := base64.StdEncoding.EncodeToString([]byte(str("data")))
+		if _, err := ja.runWsh(ctx, "", tabId, "input", "-b", blockID,
+			"--data64", data64); err != nil {
+			return nil, err
+		}
+		return map[string]any{"accepted": true}, nil
+	case "terminal.read":
+		blockID := str("block_id")
+		if blockID == "" {
+			return nil, fmt.Errorf("block_id requerido")
+		}
+		tabId, err := ja.tabId()
+		if err != nil {
+			return nil, err
+		}
+		out, err := ja.runWsh(ctx, "", tabId, "readfile", "term", "-b", blockID)
+		if err != nil {
+			return nil, err
+		}
+		tail := 200
+		if n, ok := args["tail_lines"].(float64); ok && n > 0 {
+			tail = int(n)
+		}
+		// stripAnsi + tail acotado + redacción: al cerebro nunca viajan
+		// secretos ni scrollback ilimitado.
+		text := RedactForAgent(tailLines(stripAnsi(out), tail))
+		return map[string]any{"text": text, "shell_state": "",
+			"last_exit_code": nil}, nil
+	case "terminal.set_meta":
+		blockID := str("block_id")
+		meta, _ := args["meta"].(map[string]any)
+		if blockID == "" || len(meta) == 0 {
+			return nil, fmt.Errorf("block_id y meta requeridos")
+		}
+		tabId, err := ja.tabId()
+		if err != nil {
+			return nil, err
+		}
+		setArgs := []string{"setmeta", "-b", blockID}
+		for key, value := range meta {
+			setArgs = append(setArgs, fmt.Sprintf("%s=%v", key, value))
+		}
+		if _, err := ja.runWsh(ctx, "", tabId, setArgs...); err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true}, nil
+	case "terminal.close":
+		blockID := str("block_id")
+		if blockID == "" {
+			return nil, fmt.Errorf("block_id requerido")
+		}
+		tabId, err := ja.tabId()
+		if err != nil {
+			return nil, err
+		}
+		if _, err := ja.runWsh(ctx, "", tabId, "deleteblock", "-b", blockID); err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true}, nil
+	}
+	return nil, fmt.Errorf("capability desconocida: %s", capability)
+}
+
+// --- protocolo (register + SSE + results) ---
+
+func (ja *JarvisAgent) request(method, path string, body []byte) ([]byte, error) {
+	req, err := http.NewRequest(method, ja.brainURL+path, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	if ja.token != "" {
+		req.Header.Set("Authorization", "Bearer "+ja.token)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := ja.httpc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 300 {
+		return data, fmt.Errorf("%s %s -> %d: %s", method, path, resp.StatusCode, data)
+	}
+	return data, nil
+}
+
+func (ja *JarvisAgent) register() error {
+	_, err := ja.request(http.MethodPost, "/clients/register",
+		jarvisRegisterPayload(ja.clientID))
+	return err
+}
+
+// consumeSSE lee frames id/event/data separados por línea en blanco y los
+// entrega al handler. Retorna al cerrarse el stream (el caller reconecta).
+func consumeSSE(r io.Reader, handle func(id int64, event, data string)) error {
+	reader := bufio.NewReader(r)
+	frame := map[string]string{}
+	for {
+		line, err := reader.ReadString('\n')
+		if line != "" {
+			line = strings.TrimRight(line, "\n")
+			if line == "" {
+				if len(frame) > 0 {
+					id, _ := strconv.ParseInt(frame["id"], 10, 64)
+					handle(id, frame["event"], frame["data"])
+					frame = map[string]string{}
+				}
+			} else if key, value, ok := strings.Cut(line, ": "); ok {
+				frame[key] = value
+			}
+		}
+		if err != nil {
+			return err
+		}
+	}
+}
+
+func (ja *JarvisAgent) streamOnce(ctx context.Context) error {
+	url := fmt.Sprintf("%s/events?client=%s&since=%d", ja.brainURL, ja.clientID, ja.since)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	if ja.token != "" {
+		req.Header.Set("Authorization", "Bearer "+ja.token)
+	}
+	resp, err := (&http.Client{Timeout: 0}).Do(req) // stream de larga vida
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return fmt.Errorf("stream %d: %s", resp.StatusCode, body)
+	}
+	return consumeSSE(resp.Body, func(id int64, event, data string) {
+		if id > ja.since {
+			ja.since = id
+		}
+		if event != "capability.invoke" {
+			return
+		}
+		go ja.handleInvoke(ctx, data)
+	})
+}
+
+func (ja *JarvisAgent) handleInvoke(ctx context.Context, data string) {
+	var invoke struct {
+		InvocationId string         `json:"invocation_id"`
+		Capability   string         `json:"capability"`
+		Args         map[string]any `json:"args"`
+	}
+	if err := json.Unmarshal([]byte(data), &invoke); err != nil {
+		log.Printf("capability.invoke inválido: %v", err)
+		return
+	}
+	payload := map[string]any{"invocation_id": invoke.InvocationId}
+	result, err := ja.execute(ctx, invoke.Capability, invoke.Args)
+	if err != nil {
+		payload["ok"] = false
+		payload["error"] = err.Error()
+		log.Printf("capability %s falló: %v", invoke.Capability, err)
+	} else {
+		payload["ok"] = true
+		payload["result"] = result
+	}
+	body, _ := json.Marshal(payload)
+	if _, err := ja.request(http.MethodPost, "/capability/result", body); err != nil {
+		log.Printf("no pude entregar el resultado de %s: %v", invoke.Capability, err)
+	}
+}
+
+func (ja *JarvisAgent) Run(ctx context.Context) {
+	backoff := time.Second
+	for ctx.Err() == nil {
+		if err := ja.register(); err != nil {
+			log.Printf("registro contra el cerebro falló: %v (reintento en %s)", err, backoff)
+		} else {
+			log.Printf("registrado como %s contra %s; escuchando SSE", ja.clientID, ja.brainURL)
+			backoff = time.Second
+			if err := ja.streamOnce(ctx); err != nil && ctx.Err() == nil {
+				log.Printf("stream cerrado: %v; reconecto con since=%d", err, ja.since)
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(backoff):
+		}
+		if backoff < 30*time.Second {
+			backoff *= 2
+		}
+	}
+}
+
+// --- entrypoint del subcomando ---
+
+func runJarvisAgent(argv []string) {
+	flags := flag.NewFlagSet("jarvis-agent", flag.ExitOnError)
+	var dataDir, wshPath, envsPath, brainURL, clientID, workspace string
+	var dev bool
+	flags.StringVar(&dataDir, "data-dir", "", "data dir de la app (default: autodetectar)")
+	flags.StringVar(&wshPath, "wsh", "", "ruta al binario wsh (default: autodetectar)")
+	flags.StringVar(&envsPath, "environments", "", "ruta a environments.yaml")
+	flags.StringVar(&brainURL, "brain", "", "URL del cerebro (default: JARVIS_BRAIN_URL o http://127.0.0.1:8770)")
+	flags.StringVar(&clientID, "client-id", "", "client_id del protocolo (default: wb-<hostname>)")
+	flags.StringVar(&workspace, "workspace", "", "workspace destino (default: primero activo)")
+	flags.BoolVar(&dev, "dev", false, "usar los directorios waveterm-dev")
+	_ = flags.Parse(argv)
+
+	log.SetOutput(os.Stderr)
+	if brainURL == "" {
+		brainURL = os.Getenv("JARVIS_BRAIN_URL")
+	}
+	if brainURL == "" {
+		brainURL = "http://127.0.0.1:8770"
+	}
+	if clientID == "" {
+		host, _ := os.Hostname()
+		if host == "" {
+			host = "desktop"
+		}
+		clientID = "wb-" + host
+	}
+	if envsPath == "" {
+		envsPath = os.Getenv("NEXUS_ENVIRONMENTS_FILE")
+	}
+	catalog := &Catalog{}
+	if envsPath != "" {
+		loaded, err := LoadCatalog(envsPath)
+		if err != nil {
+			log.Fatalf("catálogo: %v", err)
+		}
+		catalog = loaded
+	} else {
+		log.Printf("sin --environments: env.list devolverá catálogo vacío")
+	}
+	resolvedWsh, err := ResolveWshPath(wshPath)
+	if err != nil {
+		log.Fatalf("wsh: %v", err)
+	}
+	wave, err := MakeWaveAccess(ResolveDataDir(dataDir, dev), resolvedWsh)
+	if err != nil {
+		log.Fatalf("no puedo acceder al motor: %v", err)
+	}
+	agent := &JarvisAgent{
+		brainURL:  strings.TrimRight(brainURL, "/"),
+		token:     strings.TrimSpace(os.Getenv("NEXUS_BRAIN_TOKEN")),
+		clientID:  clientID,
+		workspace: workspace,
+		catalog:   catalog,
+		runWsh:    wave.RunWsh,
+		tabId:     func() (string, error) { return wave.ActiveTabId(workspace) },
+		httpc:     &http.Client{Timeout: 15 * time.Second},
+	}
+	agent.Run(context.Background())
+}

@@ -208,6 +208,12 @@ type NotifyArgs struct {
 }
 
 func main() {
+	// Subcomando jarvis-agent: modo headless para el cerebro jarvisd
+	// (Jarvis Protocol v1.3); el default sigue siendo el server MCP stdio.
+	if len(os.Args) > 1 && os.Args[1] == "jarvis-agent" {
+		runJarvisAgent(os.Args[2:])
+		return
+	}
 	var dataDir, wshPath, envsPath, auditPath, workspace, runbooksPath, approvalsDir string
 	var dev bool
 	flag.StringVar(&dataDir, "data-dir", "", "data dir de la app (default: autodetectar)")
