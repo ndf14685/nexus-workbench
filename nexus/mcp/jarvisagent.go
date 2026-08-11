@@ -311,7 +311,13 @@ func consumeSSE(r io.Reader, handle func(id int64, event, data string)) error {
 }
 
 func (ja *JarvisAgent) streamOnce(ctx context.Context) error {
-	url := fmt.Sprintf("%s/events?client=%s&since=%d", ja.brainURL, ja.clientID, ja.since)
+	// Primera conexión: sin ?since= (live-only). Replayear el ring re-ejecutaría
+	// capability.invoke viejos de una vida anterior del agente; el broker
+	// rechaza el resultado tardío pero el efecto lateral ocurriría igual.
+	url := fmt.Sprintf("%s/events?client=%s", ja.brainURL, ja.clientID)
+	if ja.since > 0 {
+		url = fmt.Sprintf("%s&since=%d", url, ja.since)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
