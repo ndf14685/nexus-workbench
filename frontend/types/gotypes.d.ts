@@ -1117,6 +1117,11 @@ declare global {
         "frame:title"?: string;
         "frame:icon"?: string;
         "frame:text"?: string;
+        "frame:note"?: string;
+        "frame:activity"?: string;
+        "frame:activity:updatedat"?: number;
+        "frame:activity:source"?: string;
+        "frame:activity:enabled"?: boolean;
         "cmd:*"?: boolean;
         cmd?: string;
         "cmd:interactive"?: boolean;

@@ -35,6 +35,15 @@ type MetaTSType struct {
 	FrameTitle             string `json:"frame:title,omitempty"`
 	FrameIcon              string `json:"frame:icon,omitempty"`
 	FrameText              string `json:"frame:text,omitempty"`
+	FrameNote              string `json:"frame:note,omitempty"`
+
+	// panel activity summary (short, AI-generated in a future phase). frame:title is the manual custom
+	// title; these describe *what* the user is doing in the panel. source is e.g. "manual" or "ai".
+	// enabled is the per-panel opt-in for smart/AI context capture (default off).
+	FrameActivity          string  `json:"frame:activity,omitempty"`
+	FrameActivityUpdatedAt float64 `json:"frame:activity:updatedat,omitempty"`
+	FrameActivitySource    string  `json:"frame:activity:source,omitempty"`
+	FrameActivityEnabled   *bool   `json:"frame:activity:enabled,omitempty"`
 
 	CmdClear            bool     `json:"cmd:*,omitempty"`
 	Cmd                 string   `json:"cmd,omitempty"`

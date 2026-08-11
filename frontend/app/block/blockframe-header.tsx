@@ -30,6 +30,14 @@ import * as jotai from "jotai";
 import * as React from "react";
 import { BlockEnv } from "./blockenv";
 import { BlockFrameProps } from "./blocktypes";
+import { generatePanelActivitySummary, isActivitySummaryAvailable } from "./panelactivity";
+import {
+    openPanelEditor,
+    PanelIdentityEditor,
+    PanelTitleDisplay,
+    resetPanelTitle,
+    resolvePanelTitle,
+} from "./panelidentity";
 
 function handleHeaderContextMenu(
     e: React.MouseEvent<HTMLDivElement>,
@@ -41,6 +49,8 @@ function handleHeaderContextMenu(
     e.preventDefault();
     e.stopPropagation();
     const magnified = globalStore.get(nodeModel.isMagnified);
+    const blockData = globalStore.get(WOS.getWaveObjectAtom<Block>(WOS.makeORef("block", blockId)));
+    const hasCustomTitle = !util.isBlank(blockData?.meta?.["frame:title"]);
     const menu: ContextMenuItem[] = [
         {
             label: magnified ? "Un-Magnify Block" : "Magnify Block",
@@ -50,12 +60,36 @@ function handleHeaderContextMenu(
         },
         { type: "separator" },
         {
+            label: "Rename Panel",
+            click: () => openPanelEditor(blockId, "title"),
+        },
+        {
+            label: "Edit Note",
+            click: () => openPanelEditor(blockId, "note"),
+        },
+        {
+            label: "Reset Custom Title",
+            enabled: hasCustomTitle,
+            click: () => resetPanelTitle(blockId),
+        },
+    ];
+    // only shown once a provider (OpenClaw / Nexus Provider Fabric / local model) registers a
+    // summarizer — see panelactivity.ts. No dead button in the default build.
+    if (isActivitySummaryAvailable()) {
+        menu.push({
+            label: "Generate Activity Summary",
+            click: () => util.fireAndForget(() => generatePanelActivitySummary(blockId)),
+        });
+    }
+    menu.push(
+        { type: "separator" },
+        {
             label: "Copy BlockId",
             click: () => {
                 navigator.clipboard.writeText(blockId);
             },
-        },
-    ];
+        }
+    );
     const extraItems = viewModel?.getSettingsMenuItems?.();
     if (extraItems && extraItems.length > 0) menu.push({ type: "separator" }, ...extraItems);
     menu.push(
@@ -220,6 +254,9 @@ const BlockFrame_Header = ({
     const metaFrameTitle = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "frame:title"));
     const metaFrameIcon = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "frame:icon"));
     const metaConnection = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "connection"));
+    const metaFrameNote = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "frame:note"));
+    const metaCwd = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "cmd:cwd"));
+    const metaActivity = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "frame:activity"));
     let viewName = util.useAtomValueSafe(viewModel?.viewName) ?? blockViewToName(metaView);
     let viewIconUnion = util.useAtomValueSafe(viewModel?.viewIcon) ?? blockViewToIcon(metaView);
     const preIconButton = util.useAtomValueSafe(viewModel?.preIconButton);
@@ -232,9 +269,23 @@ const BlockFrame_Header = ({
     const manageConnection = util.useAtomValueSafe(viewModel?.manageConnection);
     const iconColor = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(nodeModel.blockId, "icon:color"));
     const dragHandleRef = preview ? null : nodeModel.dragHandleRef;
+    const headerRef = React.useRef<HTMLDivElement>(null);
+    const setHeaderRef = React.useCallback(
+        (node: HTMLDivElement) => {
+            headerRef.current = node;
+            if (dragHandleRef != null) {
+                dragHandleRef.current = node;
+            }
+        },
+        [dragHandleRef]
+    );
     const isTerminalBlock = metaView === "term";
-    viewName = metaFrameTitle ?? viewName;
     viewIconUnion = metaFrameIcon ?? viewIconUnion;
+    const customTitle = metaFrameTitle;
+    const hasCustomTitle = !util.isBlank(customTitle);
+    const autoTitleName = viewName;
+    const resolvedTitle = resolvePanelTitle(customTitle, hideViewName, autoTitleName);
+    const onEditPanel = preview ? undefined : () => openPanelEditor(nodeModel.blockId, "title");
 
     React.useEffect(() => {
         if (magnified && !preview && !prevMagifiedState.current) {
@@ -250,7 +301,7 @@ const BlockFrame_Header = ({
         <div
             className={cn("block-frame-default-header", useTermHeader && "!pl-[2px]")}
             data-role="block-header"
-            ref={dragHandleRef}
+            ref={setHeaderRef}
             onContextMenu={(e) => handleHeaderContextMenu(e, nodeModel.blockId, viewModel, nodeModel, waveEnv)}
         >
             {!useTermHeader && (
@@ -258,9 +309,30 @@ const BlockFrame_Header = ({
                     {preIconButton && <IconButton decl={preIconButton} className="block-frame-preicon-button" />}
                     <div className="block-frame-default-header-iconview">
                         {viewIconElem}
-                        {viewName && !hideViewName && <div className="block-frame-view-type">{viewName}</div>}
+                        <PanelTitleDisplay
+                            text={resolvedTitle}
+                            isCustom={hasCustomTitle}
+                            note={metaFrameNote}
+                            activity={metaActivity}
+                            autoTitle={autoTitleName}
+                            connection={metaConnection}
+                            cwd={metaCwd}
+                            onEdit={onEditPanel}
+                        />
                     </div>
                 </>
+            )}
+            {useTermHeader && (
+                <PanelTitleDisplay
+                    text={resolvedTitle}
+                    isCustom={hasCustomTitle}
+                    note={metaFrameNote}
+                    activity={metaActivity}
+                    autoTitle={autoTitleName}
+                    connection={metaConnection}
+                    cwd={metaCwd}
+                    onEdit={onEditPanel}
+                />
             )}
             {manageConnection && (
                 <ConnectionButton
@@ -287,6 +359,14 @@ const BlockFrame_Header = ({
             )}
             <HeaderTextElems viewModel={viewModel} blockId={nodeModel.blockId} preview={preview} error={error} />
             <HeaderEndIcons viewModel={viewModel} nodeModel={nodeModel} blockId={nodeModel.blockId} />
+            {!preview && (
+                <PanelIdentityEditor
+                    blockId={nodeModel.blockId}
+                    anchorRef={headerRef}
+                    initialTitle={customTitle}
+                    initialNote={metaFrameNote}
+                />
+            )}
         </div>
     );
 };

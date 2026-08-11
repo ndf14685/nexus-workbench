@@ -36,6 +36,11 @@ const (
 	MetaKey_FrameTitle                       = "frame:title"
 	MetaKey_FrameIcon                        = "frame:icon"
 	MetaKey_FrameText                        = "frame:text"
+	MetaKey_FrameNote                        = "frame:note"
+	MetaKey_FrameActivity                    = "frame:activity"
+	MetaKey_FrameActivityUpdatedAt           = "frame:activity:updatedat"
+	MetaKey_FrameActivitySource              = "frame:activity:source"
+	MetaKey_FrameActivityEnabled             = "frame:activity:enabled"
 
 	MetaKey_CmdClear                         = "cmd:*"
 	MetaKey_Cmd                              = "cmd"
