@@ -316,6 +316,9 @@ func main() {
 		if msg := app.gateWithContext("run_command", env, args.Command, args.ConfirmToken, effective); msg != "" {
 			return textResult(msg)
 		}
+		if err := app.wave.EnsureConnection(ctx, env.ConnName(), tabId); err != nil {
+			return textResult("ERROR: conectando " + env.ConnName() + ": " + err.Error())
+		}
 		wshArgs := []string{"run"}
 		if args.Cwd != "" {
 			wshArgs = append(wshArgs, "--cwd", args.Cwd)
@@ -341,6 +344,9 @@ func main() {
 		tabId, err := app.tabId()
 		if err != nil {
 			return textResult("ERROR: " + err.Error())
+		}
+		if err := app.wave.EnsureConnection(ctx, env.ConnName(), tabId); err != nil {
+			return textResult("ERROR: conectando " + env.ConnName() + ": " + err.Error())
 		}
 		wshArgs := []string{"createblock", "term", "controller=shell"}
 		if conn := env.ConnName(); conn != "" {
@@ -368,6 +374,9 @@ func main() {
 		tabId, err := app.tabId()
 		if err != nil {
 			return textResult("ERROR: " + err.Error())
+		}
+		if err := app.wave.EnsureConnection(ctx, env.ConnName(), tabId); err != nil {
+			return textResult("ERROR: conectando " + env.ConnName() + ": " + err.Error())
 		}
 		out, err := app.wave.RunWsh(ctx, env.ConnName(), tabId, "view", args.Path)
 		if err != nil {

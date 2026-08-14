@@ -723,7 +723,9 @@ func createCmdStrAndOpts(blockId string, blockMeta waveobj.MetaMapType, connName
 		return "", nil, fmt.Errorf("missing cmd in block meta")
 	}
 	cmdOpts.Cwd = blockMeta.GetString(waveobj.MetaKey_CmdCwd, "")
-	if cmdOpts.Cwd != "" {
+	// solo local: en un bloque con connection el ~ debe resolverlo el host remoto
+	// (shellexec.BuildRemoteCdCommand), no el home de wavesrv
+	if cmdOpts.Cwd != "" && conncontroller.IsLocalConnName(connName) {
 		cwdPath, err := wavebase.ExpandHomeDir(cmdOpts.Cwd)
 		if err != nil {
 			return "", nil, err

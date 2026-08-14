@@ -88,9 +88,14 @@ func runRun(cmd *cobra.Command, args []string) (rtnErr error) {
 			return fmt.Errorf("getting current directory: %w", err)
 		}
 	}
-	cwd, err := filepath.Abs(cwd)
-	if err != nil {
-		return fmt.Errorf("getting absolute path: %w", err)
+	// un cwd con ~ se deja intacto: lo resuelve el host de la conexión del bloque;
+	// filepath.Abs lo convertiría en <cwd-local>\~\... (basura en cualquier host)
+	if !strings.HasPrefix(cwd, "~") {
+		var err error
+		cwd, err = filepath.Abs(cwd)
+		if err != nil {
+			return fmt.Errorf("getting absolute path: %w", err)
+		}
 	}
 
 	// Get current environment and convert to map

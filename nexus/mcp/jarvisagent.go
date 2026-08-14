@@ -215,6 +215,13 @@ func (ja *JarvisAgent) execute(ctx context.Context, capability string, args map[
 		meta, _ := args["meta"].(map[string]any)
 		ja.auditLog("jarvis:terminal.create", "",
 			fmt.Sprintf("connection=%s cwd=%s", str("connection"), str("cwd")), "allowed")
+		// sin la conexión establecida el bloque queda creado pero su controller
+		// nunca arranca (CheckConnStatus falla en el resync)
+		if conn := str("connection"); conn != "" {
+			if _, err := ja.runWsh(ctx, "", tabId, "conn", "connect", conn); err != nil {
+				return nil, fmt.Errorf("conectando %s: %w", conn, err)
+			}
+		}
 		wshArgs := jarvisCreateArgs(str("connection"), str("cwd"), meta, str("title"))
 		out, err := ja.runWsh(ctx, str("connection"), tabId, wshArgs...)
 		if err != nil {

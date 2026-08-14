@@ -115,6 +115,40 @@ func TestConsumeSSEFrames(t *testing.T) {
 	}
 }
 
+func TestTerminalCreateEnsuresConnectionFirst(t *testing.T) {
+	var calls [][]string
+	agent := &JarvisAgent{
+		catalog: &Catalog{},
+		tabId:   func() (string, error) { return "tab-1", nil },
+		runWsh: func(ctx context.Context, conn, tabId string, args ...string) (string, error) {
+			calls = append(calls, args)
+			if args[0] == "createblock" {
+				return "created block deadbeef", nil
+			}
+			return "", nil
+		},
+	}
+	if _, err := agent.execute(context.Background(), "terminal.create", map[string]any{
+		"connection": "rig3060"}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if len(calls) < 2 || calls[0][0] != "conn" || calls[0][1] != "connect" || calls[0][2] != "rig3060" {
+		t.Fatalf("esperaba conn connect antes de createblock, calls=%v", calls)
+	}
+	if calls[1][0] != "createblock" {
+		t.Fatalf("createblock no fue el segundo call: %v", calls)
+	}
+
+	// sin connection no hay nada que conectar
+	calls = nil
+	if _, err := agent.execute(context.Background(), "terminal.create", map[string]any{}); err != nil {
+		t.Fatalf("create local: %v", err)
+	}
+	if calls[0][0] != "createblock" {
+		t.Fatalf("local no debía llamar conn connect: %v", calls)
+	}
+}
+
 func TestExecuteTerminalFlowWithFakeWsh(t *testing.T) {
 	var calls [][]string
 	agent := &JarvisAgent{

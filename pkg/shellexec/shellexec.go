@@ -26,6 +26,7 @@ import (
 	"github.com/wavetermdev/waveterm/pkg/remote/conncontroller"
 	"github.com/wavetermdev/waveterm/pkg/util/pamparse"
 	"github.com/wavetermdev/waveterm/pkg/util/shellutil"
+	"github.com/wavetermdev/waveterm/pkg/util/utilfn"
 	"github.com/wavetermdev/waveterm/pkg/wavebase"
 	"github.com/wavetermdev/waveterm/pkg/waveobj"
 	"github.com/wavetermdev/waveterm/pkg/wshrpc"
@@ -250,7 +251,15 @@ func StartWslShellProc(ctx context.Context, termSize waveobj.TermSize, cmdStr st
 		cmdCombined = fmt.Sprintf("%s %s", shellPath, strings.Join(shellOpts, " "))
 	} else {
 		// TODO check quoting of cmdStr
-		shellOpts = append(shellOpts, "-c", cmdStr)
+		cdCmd := BuildRemoteCdCommand(cmdOpts.Cwd)
+		if cdCmd != "" && shellType != shellutil.ShellType_pwsh {
+			// con cwd el payload de -c viaja quoteado entero (si no, el shell de
+			// login remoto lo re-parsea y el cd se pierde); sin cwd se conserva el
+			// comportamiento histórico para no alterar bloques existentes
+			shellOpts = append(shellOpts, "-c", utilfn.ShellQuote(cdCmd+" && "+cmdStr, true, -1))
+		} else {
+			shellOpts = append(shellOpts, "-c", cmdStr)
+		}
 		cmdCombined = fmt.Sprintf("%s %s", shellPath, strings.Join(shellOpts, " "))
 	}
 	conn.Infof(ctx, "starting shell, using command: %s\n", cmdCombined)
@@ -289,6 +298,21 @@ func StartWslShellProc(ctx context.Context, termSize waveobj.TermSize, cmdStr st
 	}
 	cmdWrap := MakeCmdWrap(ecmd, cmdPty, true)
 	return &ShellProc{Cmd: cmdWrap, ConnName: conn.GetName(), CloseOnce: &sync.Once{}, DoneCh: make(chan any)}, nil
+}
+
+// el "~" se traduce a $HOME para que lo resuelva el shell remoto; expandirlo
+// local (wavesrv) usaría el home de la máquina equivocada
+func BuildRemoteCdCommand(cwd string) string {
+	if cwd == "" {
+		return ""
+	}
+	if cwd == "~" {
+		return `cd "$HOME"`
+	}
+	if strings.HasPrefix(cwd, "~/") {
+		return `cd "$HOME"/` + utilfn.ShellQuote(cwd[2:], false, -1)
+	}
+	return "cd " + utilfn.ShellQuote(cwd, false, -1)
 }
 
 func StartRemoteShellProcNoWsh(ctx context.Context, termSize waveobj.TermSize, cmdStr string, cmdOpts CommandOptsType, conn *conncontroller.SSHConn) (*ShellProc, error) {
@@ -408,7 +432,15 @@ func StartRemoteShellProc(ctx context.Context, logCtx context.Context, termSize 
 		cmdCombined = fmt.Sprintf("%s %s", shellPath, strings.Join(shellOpts, " "))
 	} else {
 		// TODO check quoting of cmdStr
-		shellOpts = append(shellOpts, "-c", cmdStr)
+		cdCmd := BuildRemoteCdCommand(cmdOpts.Cwd)
+		if cdCmd != "" && shellType != shellutil.ShellType_pwsh {
+			// con cwd el payload de -c viaja quoteado entero (si no, el shell de
+			// login remoto lo re-parsea y el cd se pierde); sin cwd se conserva el
+			// comportamiento histórico para no alterar bloques existentes
+			shellOpts = append(shellOpts, "-c", utilfn.ShellQuote(cdCmd+" && "+cmdStr, true, -1))
+		} else {
+			shellOpts = append(shellOpts, "-c", cmdStr)
+		}
 		cmdCombined = fmt.Sprintf("%s %s", shellPath, strings.Join(shellOpts, " "))
 	}
 	conn.Infof(logCtx, "starting shell, using command: %s\n", cmdCombined)

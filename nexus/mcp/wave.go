@@ -248,6 +248,17 @@ func tailLines(s string, n int) string {
 // RunWsh ejecuta un subcomando wsh autenticado. conn setea el contexto de
 // conexión del JWT (los bloques nuevos heredan esa conexión); tabId es
 // necesario para comandos que crean bloques.
+// las conexiones del catálogo pueden no estar establecidas en la app; sin esto el
+// bloque remoto se crea pero su controller nunca arranca (CheckConnStatus falla y el
+// error solo llega a la consola del frontend)
+func (wa *WaveAccess) EnsureConnection(ctx context.Context, conn string, tabId string) error {
+	if conn == "" {
+		return nil
+	}
+	_, err := wa.RunWsh(ctx, "", tabId, "conn", "connect", conn)
+	return err
+}
+
 func (wa *WaveAccess) RunWsh(ctx context.Context, conn string, tabId string, args ...string) (string, error) {
 	token, err := wa.MintJWT(conn)
 	if err != nil {
