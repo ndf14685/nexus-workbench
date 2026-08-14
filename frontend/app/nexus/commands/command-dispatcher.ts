@@ -27,9 +27,12 @@ export function getCommandContext(): CommandContext {
     }
 }
 
+// no fallback to waveEvent.nativeEvent.target: the terminal path omits target on
+// purpose (xterm's input is a hidden TEXTAREA that shouldIgnoreShortcutTarget would
+// veto); callers that want the veto must pass the target explicitly (app.tsx does)
 export function dispatchWorkbenchCommandShortcut(waveEvent: WaveKeyboardEvent, target?: EventTarget | null): boolean {
     registerWorkbenchCommands();
-    if (shouldIgnoreShortcutTarget(target ?? (waveEvent as any).nativeEvent?.target)) {
+    if (shouldIgnoreShortcutTarget(target)) {
         return false;
     }
     const command = shortcutManager.match(waveEvent, commandRegistry.list(), getCommandContext());

@@ -1,9 +1,16 @@
 // Copyright 2026, Nexus Workbench (fork extension)
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, expect, it } from "vitest";
-import { adaptFromElectronKeyEvent, checkKeyPressed, setKeyUtilPlatform } from "@/util/keyutil";
-import { getRegisteredShortcutKeys } from "./command-dispatcher";
+import { beforeAll, describe, expect, it } from "vitest";
+import { initGlobalAtoms } from "@/app/store/global-atoms";
+import { modalsModel } from "@/app/store/modalmodel";
+import {
+    adaptFromElectronKeyEvent,
+    adaptFromReactOrNativeKeyEvent,
+    checkKeyPressed,
+    setKeyUtilPlatform,
+} from "@/util/keyutil";
+import { dispatchWorkbenchCommandShortcut, getRegisteredShortcutKeys } from "./command-dispatcher";
 
 function electronKeyDown(key: string, mods: { control?: boolean; alt?: boolean; shift?: boolean; meta?: boolean }) {
     return adaptFromElectronKeyEvent({
@@ -18,6 +25,64 @@ function electronKeyDown(key: string, mods: { control?: boolean; alt?: boolean; 
         location: 0,
     });
 }
+
+describe("dispatch from terminal focus", () => {
+    beforeAll(() => {
+        initGlobalAtoms({ tabId: "tab-test", windowId: "win-test" } as GlobalInitOptions);
+    });
+
+    // xterm's real input element is a hidden TEXTAREA; the terminal path calls the
+    // dispatcher without a target on purpose so the shortcut is not vetoed
+    it("dispatches even when the native event comes from xterm's textarea", () => {
+        setKeyUtilPlatform("win32");
+        modalsModel.pushModal("MessageModal", {});
+        try {
+            const fakeXtermTextarea = { tagName: "TEXTAREA", closest: () => null };
+            const nativeEvent = {
+                type: "keydown",
+                key: " ",
+                code: "Space",
+                ctrlKey: true,
+                shiftKey: false,
+                altKey: false,
+                metaKey: false,
+                location: 0,
+                target: fakeXtermTextarea,
+            } as unknown as KeyboardEvent;
+            const waveEvent = adaptFromReactOrNativeKeyEvent(nativeEvent);
+            expect(dispatchWorkbenchCommandShortcut(waveEvent)).toBe(true);
+        } finally {
+            while (modalsModel.hasOpenModals()) {
+                modalsModel.popModal();
+            }
+        }
+    });
+
+    it("still vetoes shortcuts when the caller passes a real input target", () => {
+        setKeyUtilPlatform("win32");
+        modalsModel.pushModal("MessageModal", {});
+        try {
+            const inputTarget = { tagName: "INPUT", closest: () => null } as unknown as EventTarget;
+            const nativeEvent = {
+                type: "keydown",
+                key: " ",
+                code: "Space",
+                ctrlKey: true,
+                shiftKey: false,
+                altKey: false,
+                metaKey: false,
+                location: 0,
+                target: inputTarget,
+            } as unknown as KeyboardEvent;
+            const waveEvent = adaptFromReactOrNativeKeyEvent(nativeEvent);
+            expect(dispatchWorkbenchCommandShortcut(waveEvent, inputTarget)).toBe(false);
+        } finally {
+            while (modalsModel.hasOpenModals()) {
+                modalsModel.popModal();
+            }
+        }
+    });
+});
 
 describe("global webview key registration", () => {
     it("does not steal the parts of a chord from the embedded page", () => {
