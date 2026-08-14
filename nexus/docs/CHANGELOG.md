@@ -3,6 +3,33 @@
 Cambios propios del fork; lo heredado de Wave Terminal se documenta en los
 releases de upstream.
 
+## v0.16.0-beta.2 — 2026-08-14 · "Los cinco bugs del E2E"
+
+### Arreglado
+- **Contexto del overlay ya no viene vacío** (bug 2): la captura llamaba
+  `GetFocusedBlockDataCommand` sin route y caía en el wshserver Go, que no
+  lo implementa; ahora rutea al handler del tab (`tab:<tabId>`).
+- **Ctrl+Space abre el overlay también con foco en una terminal** (bug 1):
+  el dispatcher de atajos resucitaba el `nativeEvent.target` (el TEXTAREA
+  oculto de xterm) que el camino de la terminal omitía a propósito, y el
+  veto de inputs se comía el atajo. El veto ahora es solo para targets
+  explícitos.
+- **Las notificaciones nativas de misión llegan** (bug 5): `NotifyCommand`
+  iba sin route al wshserver Go (que no implementa `notify`); ahora viaja
+  con `route: electron`, igual que `wsh notify`.
+- **Un intent que queda "Pensando…" ya no se pierde** (bug 3): jarvisd
+  entrega la respuesta async al inbox del cliente `workbench` y nadie la
+  leía. El overlay ahora la espera vía `/inbox` y la muestra en la
+  conversación — o la entrega como notificación nativa si ya se cerró.
+- **`run_command` remoto con cwd funciona de punta a punta** (bug 6):
+  `wsh run` mangleaba `~/...` con `filepath.Abs` local; el blockcontroller
+  expandía `~` con el home de wavesrv aun con connection remota; y los
+  shells remotos/WSL ignoraban `cmdOpts.Cwd` por completo (el comando corría
+  siempre en el home). Además el MCP y el jarvis-agent ahora aseguran la
+  conexión (`wsh conn connect`) antes de crear bloques remotos: sin eso el
+  controller nunca arrancaba y el error solo se veía en la consola del
+  frontend.
+
 ## v0.16.0-beta.1 — 2026-08-14 · "Restore de parking"
 
 ### Arreglado
