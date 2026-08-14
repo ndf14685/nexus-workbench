@@ -16,6 +16,7 @@ import { Tab } from "./tab";
 import "./tabbar.scss";
 import { TabBarEnv } from "./tabbarenv";
 import { NexusEnvIndicator } from "@/app/nexus/envindicator";
+import { JarvisIndicator } from "@/app/nexus/jarvis/jarvis-indicator";
 import { UpdateStatusBanner } from "./updatebanner";
 import { WorkspaceSwitcher } from "./workspaceswitcher";
 
@@ -667,6 +668,7 @@ const TabBar = memo(({ workspace, noTabs }: TabBarProps) => {
             </button>
             <div className="flex-1" />
             <div ref={rightContainerRef} className="flex flex-row gap-1 items-end">
+                <JarvisIndicator />
                 <NexusEnvIndicator />
                 <UpdateStatusBanner />
                 <div

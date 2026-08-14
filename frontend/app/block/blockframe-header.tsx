@@ -10,6 +10,7 @@ import {
 } from "@/app/block/blockutil";
 import { ConnectionButton } from "@/app/block/connectionbutton";
 import { DurableSessionFlyover } from "@/app/block/durable-session-flyover";
+import { JarvisBlockBadge } from "@/app/nexus/jarvis/jarvis-block-badge";
 import { getBlockBadgeAtom } from "@/app/store/badge";
 import {
     createBlockSplitHorizontally,
@@ -113,10 +114,14 @@ const HeaderTextElems = React.memo(({ viewModel, blockId, preview, error }: Head
     const waveEnv = useWaveEnv<BlockEnv>();
     const frameTextAtom = waveEnv.getBlockMetaKeyAtom(blockId, "frame:text");
     const frameText = jotai.useAtomValue(frameTextAtom);
+    const jarvisMission = jotai.useAtomValue(waveEnv.getBlockMetaKeyAtom(blockId, "jarvis:mission" as any));
     let headerTextUnion = util.useAtomValueSafe(viewModel?.viewText);
     headerTextUnion = frameText ?? headerTextUnion;
 
     const headerTextElems: React.ReactElement[] = [];
+    if (typeof jarvisMission === "string" && jarvisMission) {
+        headerTextElems.push(<JarvisBlockBadge key="jarvis-badge" missionId={jarvisMission} />);
+    }
     if (typeof headerTextUnion === "string") {
         if (!util.isBlank(headerTextUnion)) {
             headerTextElems.push(
