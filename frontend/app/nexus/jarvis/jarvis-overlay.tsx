@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { getBrainConfig, saveBrainConfig } from "./brain-config";
 import { postIntent } from "./brain-client";
 import { captureFocusedContext, describeContext, type JarvisContextModule } from "./context";
+import { listParked, matchParkIntent, parkBlock, restorePark, closeParked, type ParkedEntry } from "./parking";
 import { jarvisLog } from "./telemetry";
 
 interface Turn {
@@ -60,8 +61,11 @@ export function JarvisOverlay() {
     const [busy, setBusy] = useState(false);
     const [context, setContext] = useState<JarvisContextModule>({ kind: "empty" });
     const [configured, setConfigured] = useState<boolean>(null);
+    const [parked, setParked] = useState<ParkedEntry[]>([]);
     const inputRef = useRef<HTMLInputElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
+
+    const refreshParked = () => void listParked().then(setParked).catch(() => setParked([]));
 
     useEffect(() => {
         jarvisLog("jarvis.invoke", { source: "overlay" });
@@ -70,6 +74,7 @@ export function JarvisOverlay() {
             setContext(ctx);
             jarvisLog("jarvis.context.capture", { kind: ctx.kind });
         });
+        refreshParked();
     }, []);
 
     useEffect(() => {
@@ -84,6 +89,23 @@ export function JarvisOverlay() {
         setInput("");
         setTurns((prev) => [...prev, { who: "user", text }]);
         setBusy(true);
+        if (matchParkIntent(text) && context.kind != "empty") {
+            try {
+                await parkBlock(context.blockid, text);
+                refreshParked();
+                setTurns((prev) => [
+                    ...prev,
+                    { who: "jarvis", text: `Guardado «${describeContext(context)}». Lo recuperás desde acá cuando quieras.` },
+                ]);
+                setContext({ kind: "empty" });
+            } catch (e) {
+                setTurns((prev) => [...prev, { who: "jarvis", text: `No pude guardarlo: ${e?.message ?? e}` }]);
+            } finally {
+                setBusy(false);
+                inputRef.current?.focus();
+            }
+            return;
+        }
         try {
             const contexts = context.kind == "empty" ? [] : [context];
             const resp = await postIntent(text, contexts);
@@ -121,6 +143,38 @@ export function JarvisOverlay() {
                             </div>
                         ))}
                         {busy && <div className="text-sm text-muted">Jarvis está pensando…</div>}
+                    </div>
+                )}
+                {parked.length > 0 && (
+                    <div className="px-4 py-2 border-t border-border">
+                        <div className="text-xs text-muted mb-1">Guardado para después</div>
+                        <div className="flex flex-col gap-1 max-h-[140px] overflow-auto">
+                            {parked.map((entry) => (
+                                <div key={entry.blockid} className="flex items-center gap-2 text-sm">
+                                    <span className="text-secondary truncate flex-1" title={entry.note ?? entry.title}>
+                                        {entry.title}
+                                    </span>
+                                    <button
+                                        className="text-xs text-primary bg-accent/80 hover:bg-accent transition-colors rounded px-2 py-0.5 cursor-pointer"
+                                        onClick={() =>
+                                            void restorePark(entry.blockid).then(() => {
+                                                refreshParked();
+                                                modalsModel.popModal();
+                                            })
+                                        }
+                                    >
+                                        Retomar
+                                    </button>
+                                    <button
+                                        className="text-xs text-muted hover:text-primary transition-colors cursor-pointer"
+                                        onClick={() => void closeParked(entry.blockid).then(refreshParked)}
+                                        title="Cerrar definitivamente"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 )}
                 <input

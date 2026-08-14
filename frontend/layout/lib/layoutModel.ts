@@ -1311,6 +1311,24 @@ export class LayoutModel {
         await this.onNodeDelete?.(nodeToDelete.data);
     }
 
+    // nexus: saca el nodo del árbol SIN borrar el bloque (parking, ADR-0005).
+    // El caller debe sacar el block de tab.blockids inmediatamente después
+    // (ParkBlockCommand) o el próximo cleanuporphaned lo borra.
+    removeNodeKeepBlock(nodeId: string): boolean {
+        const node = findNode(this.treeState.rootNode, nodeId);
+        if (!node) {
+            return false;
+        }
+        if (nodeId === this.magnifiedNodeId) {
+            this.magnifyNodeToggle(nodeId);
+        }
+        this.treeReducer({
+            type: LayoutTreeActionType.DeleteNode,
+            nodeId: nodeId,
+        } as LayoutTreeDeleteNodeAction);
+        return true;
+    }
+
     /**
      * Shorthand function for closing the focused node in a layout.
      */

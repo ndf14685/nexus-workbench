@@ -11,6 +11,8 @@ import {
 import { ConnectionButton } from "@/app/block/connectionbutton";
 import { DurableSessionFlyover } from "@/app/block/durable-session-flyover";
 import { JarvisBlockBadge } from "@/app/nexus/jarvis/jarvis-block-badge";
+import { parkBlock } from "@/app/nexus/jarvis/parking";
+import { modalsModel } from "@/app/store/modalmodel";
 import { getBlockBadgeAtom } from "@/app/store/badge";
 import {
     createBlockSplitHorizontally,
@@ -93,6 +95,20 @@ function handleHeaderContextMenu(
     );
     const extraItems = viewModel?.getSettingsMenuItems?.();
     if (extraItems && extraItems.length > 0) menu.push({ type: "separator" }, ...extraItems);
+    menu.push(
+        { type: "separator" },
+        {
+            label: "Jarvis: delegar este módulo…",
+            click: () => {
+                nodeModel.focusNode();
+                modalsModel.pushModal("JarvisOverlay", {});
+            },
+        },
+        {
+            label: "Jarvis: guardar para después",
+            click: () => util.fireAndForget(() => parkBlock(blockId)),
+        }
+    );
     menu.push(
         { type: "separator" },
         {
