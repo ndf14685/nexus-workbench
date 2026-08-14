@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { scrubSecrets } from "@/app/block/panelactivity-util";
-import { getSettingsKeyAtom, globalStore } from "@/app/store/global";
+import { atoms, getSettingsKeyAtom, globalStore } from "@/app/store/global";
 import { RpcApi } from "@/app/store/wshclientapi";
-import { makeFeBlockRouteId } from "@/app/store/wshrouter";
+import { makeFeBlockRouteId, makeTabRouteId } from "@/app/store/wshrouter";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { inferRepo } from "./repo-infer";
 
@@ -103,7 +103,10 @@ function captureWebContext(fbd: FocusedBlockData): JarvisContextModule {
 export async function captureFocusedContext(): Promise<JarvisContextModule> {
     let fbd: FocusedBlockData;
     try {
-        fbd = await RpcApi.GetFocusedBlockDataCommand(TabRpcClient, { timeout: 3000 });
+        // getfocusedblockdata solo lo implementa el TabRpcClient (tabrpcclient.ts); sin route
+        // el call cae en el wshserver Go, que no lo conoce, y el contexto queda vacío.
+        const tabRoute = makeTabRouteId(globalStore.get(atoms.staticTabId));
+        fbd = await RpcApi.GetFocusedBlockDataCommand(TabRpcClient, { route: tabRoute, timeout: 3000 });
     } catch {
         return { kind: "empty" };
     }

@@ -1,22 +1,27 @@
 // Copyright 2026, Nexus Workbench (fork extension)
 // SPDX-License-Identifier: Apache-2.0
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { initGlobalAtoms } from "@/app/store/global-atoms";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { captureFocusedContext, describeContext } from "./context";
 
-function mockRpc(handlers: Record<string, (data: any) => any>) {
+function mockRpc(handlers: Record<string, (data: any, opts?: RpcOpts) => any>) {
     RpcApi.setMockRpcClient({
-        mockWshRpcCall: async (_client, command, data) => {
+        mockWshRpcCall: async (_client, command, data, opts) => {
             const handler = handlers[command];
             if (!handler) {
                 throw new Error(`sin mock para ${command}`);
             }
-            return handler(data);
+            return handler(data, opts);
         },
         mockWshRpcStream: null,
     });
 }
+
+beforeAll(() => {
+    initGlobalAtoms({ tabId: "tab-test", windowId: "win-test" } as GlobalInitOptions);
+});
 
 afterEach(() => {
     RpcApi.setMockRpcClient(null);
@@ -70,6 +75,18 @@ describe("captureFocusedContext", () => {
         });
         const ctx = await captureFocusedContext();
         expect(ctx).toEqual({ kind: "web", blockid: "b-2", url: "https://chatgpt.com/c/abc", title: "Charla", domain: "chatgpt.com" });
+    });
+
+    it("routes the focused-block query to the tab handler", async () => {
+        let seenRoute: string;
+        mockRpc({
+            getfocusedblockdata: (_data, opts) => {
+                seenRoute = opts?.route;
+                return { blockid: "b-2", viewtype: "web", blockmeta: { url: "https://x.dev/p" } };
+            },
+        });
+        await captureFocusedContext();
+        expect(seenRoute).toBe("tab:tab-test");
     });
 
     it("returns empty for unsupported views and rpc failures", async () => {
