@@ -6,11 +6,13 @@ package wshserver
 import (
 	"context"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/wavetermdev/waveterm/pkg/waveobj"
 	"github.com/wavetermdev/waveterm/pkg/wcore"
+	"github.com/wavetermdev/waveterm/pkg/wps"
 	"github.com/wavetermdev/waveterm/pkg/wshrpc"
 	"github.com/wavetermdev/waveterm/pkg/wstore"
 )
@@ -121,5 +123,63 @@ func TestParkAndUnparkBlock(t *testing.T) {
 	}
 	if restoredTab != otherTabId {
 		t.Fatalf("expected fallback tab %q, got %q", otherTabId, restoredTab)
+	}
+}
+
+type captureWpsClient struct {
+	lock   sync.Mutex
+	events []wps.WaveEvent
+}
+
+func (c *captureWpsClient) SendEvent(routeId string, event wps.WaveEvent) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.events = append(c.events, event)
+}
+
+func (c *captureWpsClient) snapshot() []wps.WaveEvent {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	return slices.Clone(c.events)
+}
+
+// El frontend solo monta el bloque restaurado si le llega el waveobj:update del
+// LayoutState con la acción insert pendiente; encolarla en la DB no alcanza.
+func TestUnparkBroadcastsLayoutStateUpdate(t *testing.T) {
+	setupTestWStore(t)
+	ctx, cancelFn := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelFn()
+	server := &WshServer{}
+	tabId, blockId := setupParkedWorkspace(t, ctx, server)
+
+	capture := &captureWpsClient{}
+	prevClient := wps.Broker.GetClient()
+	wps.Broker.SetClient(capture)
+	defer wps.Broker.SetClient(prevClient)
+	const testRoute = "test-unpark-layout"
+	wps.Broker.Subscribe(testRoute, wps.SubscriptionRequest{Event: wps.Event_WaveObjUpdate, AllScopes: true})
+	defer wps.Broker.UnsubscribeAll(testRoute)
+
+	if err := server.ParkBlockCommand(ctx, wshrpc.CommandParkBlockData{BlockId: blockId}); err != nil {
+		t.Fatalf("ParkBlockCommand: %v", err)
+	}
+	if _, err := server.UnparkBlockCommand(ctx, wshrpc.CommandUnparkBlockData{BlockId: blockId}); err != nil {
+		t.Fatalf("UnparkBlockCommand: %v", err)
+	}
+
+	tab, _ := wstore.DBGet[*waveobj.Tab](ctx, tabId)
+	layoutScope := waveobj.MakeORef(waveobj.OType_LayoutState, tab.LayoutState).String()
+	blockScope := waveobj.MakeORef(waveobj.OType_Block, blockId).String()
+	tabScope := waveobj.MakeORef(waveobj.OType_Tab, tabId).String()
+	seen := map[string]bool{}
+	for _, event := range capture.snapshot() {
+		for _, scope := range event.Scopes {
+			seen[scope] = true
+		}
+	}
+	for _, scope := range []string{layoutScope, blockScope, tabScope} {
+		if !seen[scope] {
+			t.Fatalf("expected waveobj:update broadcast for %q after unpark, got scopes %v", scope, seen)
+		}
 	}
 }

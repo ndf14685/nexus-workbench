@@ -3,6 +3,17 @@
 Cambios propios del fork; lo heredado de Wave Terminal se documenta en los
 releases de upstream.
 
+## v0.16.0-beta.1 — 2026-08-14 · "Restore de parking"
+
+### Arreglado
+- **Retomar desde el Parking Lot ahora monta el bloque de verdad.** El
+  restore devolvía el bloque a `tab.blockids` y limpiaba `nexus:parked`,
+  pero el `waveobj:update` del LayoutState (con el insert pendiente) nunca
+  se emitía: el bloque quedaba invisible y huérfano, expuesto al GC.
+  `UnparkBlockCommand` ahora difunde los updates acumulados del contexto
+  (block + tab + layoutstate), igual que la creación de bloques.
+  (Detectado en los E2E reales de §28.)
+
 ## v0.16.0-beta.0 — 2026-08-14 · "Jarvis UX: delegación cognitiva"
 
 La evolución integral de ADR-0005: delegar responsabilidad a Jarvis en

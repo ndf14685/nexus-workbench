@@ -204,12 +204,16 @@ func (ws *WshServer) ParkBlockCommand(ctx context.Context, data wshrpc.CommandPa
 }
 
 func (ws *WshServer) UnparkBlockCommand(ctx context.Context, data wshrpc.CommandUnparkBlockData) (string, error) {
+	// via ContextWithUpdates para que el waveobj:update del LayoutState (con el
+	// insert pendiente) llegue al frontend; sin eso el bloque vuelve a
+	// tab.blockids pero nunca se monta en el layout
+	ctx = waveobj.ContextWithUpdates(ctx)
 	tabId, err := wcore.UnparkBlock(ctx, data.BlockId, data.TabId)
 	if err != nil {
 		return "", err
 	}
-	wcore.SendWaveObjUpdate(waveobj.MakeORef(waveobj.OType_Block, data.BlockId))
-	wcore.SendWaveObjUpdate(waveobj.MakeORef(waveobj.OType_Tab, tabId))
+	updates := waveobj.ContextGetUpdatesRtn(ctx)
+	wps.Broker.SendUpdateEvents(updates)
 	return tabId, nil
 }
 
