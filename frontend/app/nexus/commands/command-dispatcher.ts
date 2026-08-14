@@ -44,6 +44,18 @@ export function dispatchWorkbenchCommandShortcut(waveEvent: WaveKeyboardEvent, t
     return true;
 }
 
+// keyutil.parseKeyDescription infers Shift from an upper-case letter, so the final
+// key must go out lower-case ("Ctrl:Alt:j") or main would require Shift and never
+// reinject the shortcut from an embedded webview
+function toWaveKeyDescriptor(shortcut: string): string {
+    const parts = shortcut.split("+");
+    const key = parts[parts.length - 1];
+    if (key.length == 1) {
+        parts[parts.length - 1] = key == " " ? "Space" : key.toLowerCase();
+    }
+    return parts.join(":");
+}
+
 export function getRegisteredShortcutKeys(): string[] {
     registerWorkbenchCommands();
     // chords are left out on purpose: registering their parts would swallow a bare Ctrl+K or Ctrl+S
@@ -52,5 +64,5 @@ export function getRegisteredShortcutKeys(): string[] {
         .list()
         .map((cmd) => shortcutManager.getShortcut(cmd))
         .filter((shortcut) => shortcut && !/\s/.test(shortcut))
-        .map((shortcut) => shortcut.replace(/\+/g, ":"));
+        .map(toWaveKeyDescriptor);
 }
