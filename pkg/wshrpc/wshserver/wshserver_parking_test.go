@@ -84,12 +84,17 @@ func TestParkAndUnparkBlock(t *testing.T) {
 		t.Fatalf("nexus:parked meta must be cleared on restore")
 	}
 	layout, _ := wstore.DBGet[*waveobj.LayoutState](ctx, tab.LayoutState)
-	if layout == nil || layout.PendingBackendActions == nil || len(*layout.PendingBackendActions) == 0 {
-		t.Fatalf("expected a pending insert layout action after unpark")
+	if layout == nil || layout.PendingBackendActions == nil {
+		t.Fatalf("expected pending layout actions after unpark")
 	}
-	action := (*layout.PendingBackendActions)[0]
-	if action.ActionType != wcore.LayoutActionDataType_Insert || action.BlockId != blockId {
-		t.Fatalf("unexpected layout action %+v", action)
+	foundInsert := false
+	for _, action := range *layout.PendingBackendActions {
+		if action.ActionType == wcore.LayoutActionDataType_Insert && action.BlockId == blockId {
+			foundInsert = true
+		}
+	}
+	if !foundInsert {
+		t.Fatalf("expected a pending insert action for %q, got %+v", blockId, *layout.PendingBackendActions)
 	}
 
 	parked, _ = server.ListParkedBlocksCommand(ctx)
