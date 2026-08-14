@@ -5,6 +5,9 @@ package wshserver
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,17 +18,41 @@ import (
 	"github.com/wavetermdev/waveterm/pkg/wstore"
 )
 
+// setupTestWStore inicializa el wstore UNA sola vez por proceso: wavebase
+// cachea los env vars en la primera llamada, así que re-inicializar desde
+// otro test del mismo package apuntaría a un TempDir ya limpiado.
+var testWStoreOnce sync.Once
+var testWStoreErr error
+
 func setupTestWStore(t *testing.T) {
-	t.Setenv(wavebase.WaveDataHomeEnvVar, t.TempDir())
-	t.Setenv(wavebase.WaveConfigHomeEnvVar, t.TempDir())
-	if err := wavebase.CacheAndRemoveEnvVars(); err != nil {
-		t.Fatalf("caching env vars: %v", err)
-	}
-	if err := wavebase.EnsureWaveDBDir(); err != nil {
-		t.Fatalf("ensuring db dir: %v", err)
-	}
-	if err := wstore.InitWStore(); err != nil {
-		t.Fatalf("initializing wstore: %v", err)
+	testWStoreOnce.Do(func() {
+		dataDir, err := os.MkdirTemp("", "wstore-test-data")
+		if err != nil {
+			testWStoreErr = err
+			return
+		}
+		configDir, err := os.MkdirTemp("", "wstore-test-config")
+		if err != nil {
+			testWStoreErr = err
+			return
+		}
+		os.Setenv(wavebase.WaveDataHomeEnvVar, dataDir)
+		os.Setenv(wavebase.WaveConfigHomeEnvVar, configDir)
+		if err := wavebase.CacheAndRemoveEnvVars(); err != nil {
+			testWStoreErr = fmt.Errorf("caching env vars: %w", err)
+			return
+		}
+		if err := wavebase.EnsureWaveDBDir(); err != nil {
+			testWStoreErr = fmt.Errorf("ensuring db dir: %w", err)
+			return
+		}
+		if err := wstore.InitWStore(); err != nil {
+			testWStoreErr = fmt.Errorf("initializing wstore: %w", err)
+			return
+		}
+	})
+	if testWStoreErr != nil {
+		t.Fatalf("setupTestWStore: %v", testWStoreErr)
 	}
 }
 

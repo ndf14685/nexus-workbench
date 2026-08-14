@@ -101,30 +101,23 @@ func TestParkAndUnparkBlock(t *testing.T) {
 	if len(parked) != 0 {
 		t.Fatalf("expected empty parking lot after restore, got %v", parked)
 	}
-}
 
-func TestUnparkFallsBackToPreferredTabWhenOriginalGone(t *testing.T) {
-	setupTestWStore(t)
-	ctx, cancelFn := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelFn()
-	server := &WshServer{}
-	_, blockId := setupParkedWorkspace(t, ctx, server)
-	otherTabId, otherBlockId := setupParkedWorkspace(t, ctx, server)
-	_ = otherBlockId
-
+	// fallback: si la tab original murió, el restore va a la tab preferida.
+	// (mismo proceso a propósito: setupTestWStore no es re-entrante — el
+	// cache de wavebase apunta al primer TempDir)
+	otherTabId, _ := setupParkedWorkspace(t, ctx, server)
 	if err := server.ParkBlockCommand(ctx, wshrpc.CommandParkBlockData{BlockId: blockId}); err != nil {
-		t.Fatalf("ParkBlockCommand: %v", err)
+		t.Fatalf("re-ParkBlockCommand: %v", err)
 	}
-	block, _ := wstore.DBGet[*waveobj.Block](ctx, blockId)
+	block, _ = wstore.DBGet[*waveobj.Block](ctx, blockId)
 	block.Meta[wcore.MetaKey_NexusParkedFrom] = "tab-que-no-existe"
 	if err := wstore.DBUpdate(ctx, block); err != nil {
 		t.Fatalf("DBUpdate: %v", err)
 	}
-
-	restoredTab, err := server.UnparkBlockCommand(ctx, wshrpc.CommandUnparkBlockData{
+	restoredTab, err = server.UnparkBlockCommand(ctx, wshrpc.CommandUnparkBlockData{
 		BlockId: blockId, TabId: otherTabId})
 	if err != nil {
-		t.Fatalf("UnparkBlockCommand: %v", err)
+		t.Fatalf("UnparkBlockCommand fallback: %v", err)
 	}
 	if restoredTab != otherTabId {
 		t.Fatalf("expected fallback tab %q, got %q", otherTabId, restoredTab)
