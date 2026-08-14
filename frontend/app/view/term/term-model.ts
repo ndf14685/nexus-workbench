@@ -3,6 +3,7 @@
 
 import { WaveAIModel } from "@/app/aipanel/waveai-model";
 import { BlockNodeModel } from "@/app/block/blocktypes";
+import { dispatchWorkbenchCommandShortcut } from "@/app/nexus/commands/command-dispatcher";
 import { appHandleKeyDown } from "@/app/store/keymodel";
 import { modalsModel } from "@/app/store/modalmodel";
 import type { TabModel } from "@/app/store/tab-model";
@@ -770,7 +771,8 @@ export class TermViewModel implements ViewModel {
             fireAndForget(() => this.forceRestartController());
             return false;
         }
-        const appHandled = appHandleKeyDown(waveEvent);
+        // sin target: el input real de xterm es un TEXTAREA y shouldIgnoreShortcutTarget lo vetaría
+        const appHandled = dispatchWorkbenchCommandShortcut(waveEvent) || appHandleKeyDown(waveEvent);
         if (appHandled) {
             event.preventDefault();
             event.stopPropagation();

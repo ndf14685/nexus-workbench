@@ -50,4 +50,13 @@ describe("ShortcutManager", () => {
         expect(shouldIgnoreShortcutTarget(input)).toBe(true);
         expect(shouldIgnoreShortcutTarget(text)).toBe(true);
     });
+    it("notifies change listeners when the config mutates", () => {
+        const mgr = new ShortcutManager(memoryStorage());
+        let fired = 0;
+        mgr.onChange(() => fired++);
+        mgr.setShortcut("a", "Ctrl+Alt+Q");
+        mgr.resetShortcut("a");
+        mgr.importConfig({ a: "Ctrl+Alt+Q" });
+        expect(fired).toBe(3);
+    });
 });

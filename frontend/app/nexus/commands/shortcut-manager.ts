@@ -60,6 +60,7 @@ export class ShortcutManager {
     private config: ShortcutConfig = {};
     private chordPrefix: string | null = null;
     private chordTimer: ReturnType<typeof setTimeout> | null = null;
+    private changeListeners: Array<() => void> = [];
 
     constructor(private storage: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null = typeof localStorage === "undefined" ? null : localStorage) {
         this.load();
@@ -77,6 +78,13 @@ export class ShortcutManager {
 
     save() {
         this.storage?.setItem(StorageKey, JSON.stringify(this.config, null, 2));
+        for (const listener of this.changeListeners) {
+            listener();
+        }
+    }
+
+    onChange(listener: () => void) {
+        this.changeListeners.push(listener);
     }
 
     exportConfig(): ShortcutConfig {

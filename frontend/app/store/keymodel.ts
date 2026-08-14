@@ -3,6 +3,7 @@
 
 import { WaveAIModel } from "@/app/aipanel/waveai-model";
 import { dispatchWorkbenchCommandShortcut, getRegisteredShortcutKeys } from "@/app/nexus/commands/command-dispatcher";
+import { shortcutManager } from "@/app/nexus/commands/shortcut-manager";
 import { FocusManager } from "@/app/store/focusManager";
 import {
     atoms,
@@ -504,6 +505,13 @@ function countTermBlocks(): number {
     return count;
 }
 
+function syncGlobalWebviewKeys() {
+    const allKeys = Array.from(new Set([...globalKeyMap.keys(), ...getRegisteredShortcutKeys()]));
+    // special case keys, handled by web view
+    allKeys.push("Cmd:l", "Cmd:r", "Cmd:ArrowRight", "Cmd:ArrowLeft", "Cmd:o");
+    getApi().registerGlobalWebviewKeys(allKeys);
+}
+
 function registerGlobalKeys() {
     globalKeyMap.set("Cmd:]", () => {
         switchTab(1);
@@ -749,10 +757,8 @@ function registerGlobalKeys() {
         WorkspaceLayoutModel.getInstance().setAIPanelVisible(!currentVisible);
         return true;
     });
-    const allKeys = Array.from(new Set([...globalKeyMap.keys(), ...getRegisteredShortcutKeys()]));
-    // special case keys, handled by web view
-    allKeys.push("Cmd:l", "Cmd:r", "Cmd:ArrowRight", "Cmd:ArrowLeft", "Cmd:o");
-    getApi().registerGlobalWebviewKeys(allKeys);
+    syncGlobalWebviewKeys();
+    shortcutManager.onChange(syncGlobalWebviewKeys);
 
     const splitBlockKeys = new Map<string, KeyHandler>();
     splitBlockKeys.set("ArrowUp", () => {
