@@ -80,6 +80,7 @@ export class WebViewModel implements ViewModel {
     domReady: PrimitiveAtom<boolean>;
     hideNav: Atom<boolean>;
     searchAtoms?: SearchAtoms;
+    lastWrittenTitle: string = null;
     typeaheadOpen: PrimitiveAtom<boolean>;
     partitionOverride: PrimitiveAtom<string> | null;
     userAgentType: Atom<string>;
@@ -398,6 +399,21 @@ export class WebViewModel implements ViewModel {
         if (this.searchAtoms) {
             globalStore.set(this.searchAtoms.isOpen, false);
         }
+    }
+
+    // nexus: título persistido para captura de contexto (JarvisContext); no pisa
+    // frame:title, que es identidad manual del usuario (PANEL_IDENTITY.md)
+    handleTitleUpdated(title: string) {
+        if (!title || title == this.lastWrittenTitle) {
+            return;
+        }
+        this.lastWrittenTitle = title;
+        fireAndForget(() =>
+            this.env.rpc.SetMetaCommand(TabRpcClient, {
+                oref: makeORef("block", this.blockId),
+                meta: { "nexus:web:title": title },
+            })
+        );
     }
 
     ensureUrlScheme(url: string, searchTemplate: string) {
@@ -1085,6 +1101,8 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
         webview.addEventListener("media-started-playing", handleMediaPlaying);
         webview.addEventListener("media-paused", handleMediaPaused);
         webview.addEventListener("found-in-page", onFoundInPage);
+        const titleListener = (e: any) => model.handleTitleUpdated(e?.title ?? "");
+        webview.addEventListener("page-title-updated", titleListener);
 
         // Clean up event listeners on component unmount
         return () => {
@@ -1101,6 +1119,7 @@ const WebView = memo(({ model, onFailLoad, blockRef, initialSrc }: WebViewProps)
             webview.removeEventListener("media-started-playing", handleMediaPlaying);
             webview.removeEventListener("media-paused", handleMediaPaused);
             webview.removeEventListener("found-in-page", onFoundInPage);
+            webview.removeEventListener("page-title-updated", titleListener);
         };
     }, []);
 

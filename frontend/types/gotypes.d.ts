@@ -1122,6 +1122,7 @@ declare global {
         "frame:activity:updatedat"?: number;
         "frame:activity:source"?: string;
         "frame:activity:enabled"?: boolean;
+        "nexus:web:title"?: string;
         "cmd:*"?: boolean;
         cmd?: string;
         "cmd:interactive"?: boolean;
@@ -1247,6 +1248,7 @@ declare global {
         kind?: string;
         conn?: string;
         color?: string;
+        workspaces?: string[];
     };
 
     // waveobj.ORef
@@ -1509,6 +1511,7 @@ declare global {
         "tsunami:sdkversion"?: string;
         "tsunami:gopath"?: string;
         "nexus:environments"?: NexusEnvType[];
+        "nexus:brainurl"?: string;
     };
 
     // waveobj.StickerClickOptsType

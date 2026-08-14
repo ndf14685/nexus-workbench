@@ -290,6 +290,7 @@ settings["nexus:environments"] = catalog.environments.map((env) => {
     if (env.class) entry.class = env.class;
     if (env.kind) entry.kind = env.kind;
     if (env.color) entry.color = env.color;
+    if (Array.isArray(env.workspaces) && env.workspaces.length > 0) entry.workspaces = env.workspaces;
     return entry;
 });
 

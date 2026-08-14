@@ -42,6 +42,8 @@ const (
 	MetaKey_FrameActivitySource              = "frame:activity:source"
 	MetaKey_FrameActivityEnabled             = "frame:activity:enabled"
 
+	MetaKey_NexusWebTitle                    = "nexus:web:title"
+
 	MetaKey_CmdClear                         = "cmd:*"
 	MetaKey_Cmd                              = "cmd"
 	MetaKey_CmdInteractive                   = "cmd:interactive"

@@ -133,5 +133,6 @@ const (
 	ConfigKey_TsunamiGoPath                  = "tsunami:gopath"
 
 	ConfigKey_NexusEnvironments              = "nexus:environments"
+	ConfigKey_NexusBrainUrl                  = "nexus:brainurl"
 )
 

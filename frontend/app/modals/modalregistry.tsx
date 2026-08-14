@@ -3,6 +3,7 @@
 
 import { MessageModal } from "@/app/modals/messagemodal";
 import { CommandPaletteModal } from "@/app/nexus/commands/command-palette"; // nexus:
+import { JarvisOverlay } from "@/app/nexus/jarvis/jarvis-overlay"; // nexus:
 import { NewInstallOnboardingModal } from "@/app/onboarding/onboarding";
 import { UpgradeOnboardingModal } from "@/app/onboarding/onboarding-upgrade";
 import { UpgradeOnboardingPatch } from "@/app/onboarding/onboarding-upgrade-patch";
@@ -23,6 +24,7 @@ const modalRegistry: { [key: string]: React.ComponentType<any> } = {
     [DeleteFileModal.displayName || "DeleteFileModal"]: DeleteFileModal,
     [SetSecretDialog.displayName || "SetSecretDialog"]: SetSecretDialog,
     [CommandPaletteModal.displayName || "CommandPaletteModal"]: CommandPaletteModal, // nexus:
+    [JarvisOverlay.displayName || "JarvisOverlay"]: JarvisOverlay, // nexus:
 };
 
 export const getModalComponent = (key: string): React.ComponentType<any> | undefined => {

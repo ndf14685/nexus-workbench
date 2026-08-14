@@ -125,6 +125,7 @@ export function registerWorkbenchCommands() {
     registered = true;
 
     const commands: CommandDefinition[] = [
+        { id: "jarvis.open", title: "Invocar a Jarvis", description: "Delegar el contexto actual a Jarvis en lenguaje natural", category: "General", defaultShortcut: "Ctrl+Space", contexts: ["global"], editable: true, handler: () => { if (modalsModel.isModalOpen("JarvisOverlay")) { modalsModel.popModal(); } else { modalsModel.pushModal("JarvisOverlay", {}); } return true; } },
         { id: "workspace.openCommandPalette", title: "Abrir paleta de comandos", description: "Buscar y ejecutar comandos del Workbench", category: "General", defaultShortcut: "Ctrl+Shift+P", contexts: ["global"], editable: true, handler: () => modalsModel.pushModal("CommandPaletteModal") },
         { id: "workspace.openSettings", title: "Abrir configuración", description: "Abrir la configuración del Workbench", category: "General", defaultShortcut: "Ctrl+,", contexts: ["global"], editable: true, handler: () => openConfig() },
         { id: "workspace.openKeyboardShortcuts", title: "Abrir atajos de teclado", description: "Editar combinaciones de comandos", category: "General", defaultShortcut: "Ctrl+K Ctrl+S", contexts: ["global"], editable: true, handler: () => openConfig("nexus-shortcuts") },

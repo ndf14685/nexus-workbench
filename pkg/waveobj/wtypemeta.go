@@ -45,6 +45,10 @@ type MetaTSType struct {
 	FrameActivitySource    string  `json:"frame:activity:source,omitempty"`
 	FrameActivityEnabled   *bool   `json:"frame:activity:enabled,omitempty"`
 
+	// nexus: page title reported by the embedded page (page-title-updated),
+	// persisted for context capture; frame:title stays user-owned identity
+	NexusWebTitle string `json:"nexus:web:title,omitempty"`
+
 	CmdClear            bool     `json:"cmd:*,omitempty"`
 	Cmd                 string   `json:"cmd,omitempty"`
 	CmdInteractive      bool     `json:"cmd:interactive,omitempty"`
