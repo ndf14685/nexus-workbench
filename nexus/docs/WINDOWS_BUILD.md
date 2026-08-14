@@ -6,21 +6,23 @@
   actual: `build:server:windows` está gateado a `platforms: [windows]` y
   `wavesrv` requiere cgo (sqlite). Verificado en `Taskfile.yml`.
 - Vías soportadas: **CI en GitHub** (recomendada) o **build local en Windows**.
-- La firma de código requiere secretos DigiCert de Command Line Inc que no
-  tenemos: los instaladores salen **sin firma** (SmartScreen va a advertir;
-  "More info" → "Run anyway", una sola vez por instalador).
+- Firma: **cert autofirmado propio** ("Nestor Fleitas", generado con
+  `nexus/scripts/new-signing-cert.ps1`, ver `SIGNING.md`). CI firma con los
+  secrets `WIN_CSC_LINK`/`WIN_CSC_KEY_PASSWORD` + variable
+  `NEXUS_PUBLISHER_NAME`; sin esos secrets el build sale sin firmar y
+  `verifyUpdateCodeSignature` queda apagado.
 
 ## Vía 1 — CI (recomendada)
 
 Workflow: `.github/workflows/nexus-windows-package.yml`.
 
-1. Push del repo a GitHub (rama o tag `nexus-vX.Y.Z`).
-2. GitHub → Actions → **Nexus Windows Package** → *Run workflow* (o el push
-   del tag lo dispara solo).
-3. Al terminar (~15-25 min), bajar el artifact `nexus-workbench-windows`:
-   contiene `NexusWorkbench-win-x64-<version>.exe` (NSIS), `.msi` y `.zip`.
-4. Ese artefacto es el canal **candidate**; probarlo y recién entonces
-   considerarlo **stable** (taggear el commit).
+1. Push del tag `vX.Y.Z[-beta.N]` a GitHub (o Actions → *Run workflow*).
+2. Al terminar (~15-25 min): artifact `nexus-workbench-windows` con
+   `NexusWorkbench-win32-x64-<version>.exe` (NSIS), `.msi`, `.zip`,
+   `beta.yml`/`latest.yml`, SBOM y `SHA256SUMS.txt`.
+3. Tags `-beta.N` publican la **prerelease automáticamente** (canal beta del
+   updater); tags estables quedan en **draft** hasta publicarlos a mano
+   (ver `UPSTREAM_SYNC.md` § Canales).
 
 ## Vía 2 — Build local en Windows
 

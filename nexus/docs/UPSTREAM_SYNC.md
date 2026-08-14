@@ -65,16 +65,22 @@ lo que da la compuerta manual:
 | Canal | Qué es | Cómo se produce |
 |---|---|---|
 | dev | `task dev` local | siempre disponible |
-| candidate | draft release con instalador + `latest.yml` | push de tag `vX.Y.Z` → `nexus-windows-package.yml` |
-| stable | la draft release **publicada a mano** | recién ahí "Check for Updates" la ofrece a la app instalada |
+| beta | prerelease **publicada automáticamente** con instalador + `beta.yml`/`latest.yml` | push de tag `vX.Y.Z-beta.N` → `nexus-windows-package.yml` (`prerelease: true`) |
+| candidate | draft release (solo tags estables) | push de tag `vX.Y.Z` sin `-beta.` → el workflow la deja en draft |
+| stable | la draft **publicada a mano** | recién ahí el canal `latest` la ofrece; el canal `beta` ve ambas |
 
-Flujo de release propio:
+La app empaquetada con canal `beta` (el default actual, `channel: beta` en
+`electron-builder.config.cjs`) detecta las betas apenas el tag termina de
+buildear — sin paso manual. `autoupdate:enabled` sigue en `false` (D-005):
+el chequeo es manual vía "Check for Updates" salvo que se habilite.
+
+Flujo de release beta:
 
 ```bash
-task version -- patch        # bumpea package.json (p.ej. 0.14.6)
-git commit -am "release: v0.14.6" && git push
-git tag v0.14.6 && git push origin v0.14.6   # CI: build + draft release
-# probar el instalador del draft → GitHub → Releases → publicar = stable
+task version -- none true    # 0.15.0-beta.20 → 0.15.0-beta.21 (o `minor true`)
+git commit -am "release: v0.15.0-beta.21" && git push
+git tag v0.15.0-beta.21 && git push origin v0.15.0-beta.21
+# CI (windows-latest): build + firma + prerelease publicada con beta.yml
 ```
 
 Novedades de Wave siempre entran por `upstream-sync/<tag>` → filtro/merge →

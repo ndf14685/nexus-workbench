@@ -83,3 +83,31 @@ destino; default: primer workspace activo), `--audit <ruta>`.
 - `create_workspace`/`restore_workspace` del contrato Bridge: backlog.
 - La clave JWT da control total local: proteger el acceso a la cuenta de
   usuario del SO es la frontera de seguridad real (igual que con la app misma).
+
+
+## jarvis-agent (subcomando headless)
+
+El mismo binario corre como agente del Mission Supervisor:
+
+```
+nexus-workbench-mcp.exe jarvis-agent --brain http://<cerebro>:8770 --wsh <wsh.exe> --environments <environments.json|yaml>
+```
+
+- Se registra como cliente `workbench` (`wb-<hostname>`) vía
+  `POST /clients/register` y ejecuta por SSE las capabilities
+  `env.list` / `terminal.list|create|input|read|set_meta|close` usando `wsh`
+  con JWT minteado de `waveterm.db` (igual que el server MCP).
+- **Gobernanza (ADR-0004 §2)**: `terminal.input` con patrón destructivo sobre
+  un ambiente `class=prod` se deniega en el Workbench (el cerebro además tiene
+  su InstructionGuard); toda capability de escritura queda en
+  `nexus-mcp-audit.jsonl` con decisión (`allowed` /
+  `allowed_destructive_nonprod` / `denied_destructive_prod`).
+- Reconexión SSE con backoff 1s-30s y re-registro; la primera conexión va
+  live-only (sin `?since=`) para no re-ejecutar invokes de una vida anterior.
+- En Windows corre como Scheduled Task `JarvisAgent` (logon + restart on
+  failure); token por env `NEXUS_BRAIN_TOKEN`.
+
+Tools MCP agregadas después de la tabla original: `check_approval`,
+`list_runbooks`, `run_runbook`, `list_agents`, `launch_agent`, `notify_user`,
+`get_status`.
+

@@ -110,6 +110,7 @@ jobs:
                       make/*.msi
                       make/*.zip
                       make/*.yml
+                      make/*.blockmap
                       make/nexus-workbench-mcp.exe
                       make/nexus-workbench-sbom.spdx.json
                       make/SHA256SUMS.txt
@@ -127,6 +128,7 @@ jobs:
                       make/*.msi
                       make/*.zip
                       make/*.yml
+                      make/*.blockmap
                       make/nexus-workbench-mcp.exe
                       make/nexus-workbench-sbom.spdx.json
                       make/SHA256SUMS.txt

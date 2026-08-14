@@ -7,6 +7,8 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -173,3 +175,58 @@ func TestExecuteTerminalFlowWithFakeWsh(t *testing.T) {
 		t.Fatal("capability desconocida debe fallar")
 	}
 }
+
+
+func TestTerminalInputDestructiveGate(t *testing.T) {
+	catalog := &Catalog{Environments: []Environment{
+		{Id: "prod-env", Kind: "ssh", Host: "prodhost", Class: "prod"},
+		{Id: "lab-env", Kind: "ssh", Host: "labhost", Class: "lab"},
+	}}
+	auditPath := filepath.Join(t.TempDir(), "audit.jsonl")
+	connection := "prodhost"
+	inputs := 0
+	agent := &JarvisAgent{
+		catalog: catalog,
+		audit:   MakeAuditor(auditPath),
+		tabId:   func() (string, error) { return "tab-1", nil },
+		runWsh: func(ctx context.Context, conn, tabId string, args ...string) (string, error) {
+			switch args[0] {
+			case "blocks":
+				return `[{"blockid":"deadbeef","view":"term","meta":{"connection":"` + connection + `"}}]`, nil
+			case "input":
+				inputs++
+			}
+			return "", nil
+		},
+	}
+	ctx := context.Background()
+
+	// destructivo sobre prod: se corta antes de llegar a la terminal y queda auditado
+	_, err := agent.execute(ctx, "terminal.input", map[string]any{
+		"block_id": "block:deadbeef", "data": "rm -rf /var/data\n"})
+	if err == nil || inputs != 0 {
+		t.Fatalf("input destructivo a prod tiene que bloquearse (err=%v inputs=%d)", err, inputs)
+	}
+	raw, _ := os.ReadFile(auditPath)
+	if !strings.Contains(string(raw), "denied_destructive_prod") {
+		t.Fatalf("falta la denegación en el audit: %s", raw)
+	}
+
+	// mismo comando sobre lab: pasa (el gate duro del cerebro ya corrió antes)
+	connection = "labhost"
+	if _, err := agent.execute(ctx, "terminal.input", map[string]any{
+		"block_id": "block:deadbeef", "data": "rm -rf /tmp/x\n"}); err != nil || inputs != 1 {
+		t.Fatalf("destructivo a lab debía pasar (err=%v inputs=%d)", err, inputs)
+	}
+
+	// input normal: pasa y queda auditado como allowed
+	if _, err := agent.execute(ctx, "terminal.input", map[string]any{
+		"block_id": "block:deadbeef", "data": "echo hola\n"}); err != nil || inputs != 2 {
+		t.Fatalf("input normal debía pasar (err=%v inputs=%d)", err, inputs)
+	}
+	raw, _ = os.ReadFile(auditPath)
+	if !strings.Contains(string(raw), "allowed_destructive_nonprod") || !strings.Contains(string(raw), `"allowed"`) {
+		t.Fatalf("audit incompleto: %s", raw)
+	}
+}
+

@@ -25,6 +25,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -57,10 +58,50 @@ type JarvisAgent struct {
 	clientID  string
 	workspace string
 	catalog   *Catalog
+	audit     *Auditor
 	runWsh    func(ctx context.Context, conn string, tabId string, args ...string) (string, error)
 	tabId     func() (string, error)
 	httpc     *http.Client
 	since     int64
+}
+
+func (ja *JarvisAgent) auditLog(tool, env, detail, decision string) {
+	if ja.audit != nil {
+		ja.audit.Log(tool, env, detail, decision)
+	}
+}
+
+// classForBlock resuelve la clase (lab|personal|work|prod) del ambiente de la
+// conexión del bloque contra el catálogo; "" si no se puede determinar.
+func (ja *JarvisAgent) classForBlock(ctx context.Context, blockID string) string {
+	tabId, err := ja.tabId()
+	if err != nil {
+		return ""
+	}
+	out, err := ja.runWsh(ctx, "", tabId, "blocks", "list", "--json")
+	if err != nil {
+		return ""
+	}
+	var entries []struct {
+		BlockId string         `json:"blockid"`
+		Meta    map[string]any `json:"meta"`
+	}
+	if json.Unmarshal([]byte(out), &entries) != nil {
+		return ""
+	}
+	want := strings.TrimPrefix(blockID, "block:")
+	for _, entry := range entries {
+		if entry.BlockId != want {
+			continue
+		}
+		connection, _ := entry.Meta["connection"].(string)
+		for i := range ja.catalog.Environments {
+			if ja.catalog.Environments[i].ConnName() == connection {
+				return ja.catalog.Environments[i].Class
+			}
+		}
+	}
+	return ""
 }
 
 // --- payloads puros (testeables) ---
@@ -172,6 +213,8 @@ func (ja *JarvisAgent) execute(ctx context.Context, capability string, args map[
 			return nil, err
 		}
 		meta, _ := args["meta"].(map[string]any)
+		ja.auditLog("jarvis:terminal.create", "",
+			fmt.Sprintf("connection=%s cwd=%s", str("connection"), str("cwd")), "allowed")
 		wshArgs := jarvisCreateArgs(str("connection"), str("cwd"), meta, str("title"))
 		out, err := ja.runWsh(ctx, str("connection"), tabId, wshArgs...)
 		if err != nil {
@@ -187,11 +230,26 @@ func (ja *JarvisAgent) execute(ctx context.Context, capability string, args map[
 		if blockID == "" {
 			return nil, fmt.Errorf("block_id requerido")
 		}
+		// ADR-0004 §2: este camino de escritura también pasa por policy. El
+		// InstructionGuard del cerebro es la primera línea; acá el Workbench
+		// corta en seco lo destructivo sobre ambientes prod y audita todo.
+		data := str("data")
+		if IsDestructive(data) {
+			class := ja.classForBlock(ctx, blockID)
+			if class == "prod" {
+				ja.auditLog("jarvis:terminal.input", class, data, "denied_destructive_prod")
+				return nil, fmt.Errorf("input destructivo bloqueado en ambiente prod " +
+					"(gobernanza ADR-0004): requiere aprobación humana")
+			}
+			ja.auditLog("jarvis:terminal.input", class, data, "allowed_destructive_nonprod")
+		} else {
+			ja.auditLog("jarvis:terminal.input", "", "block="+blockID, "allowed")
+		}
 		tabId, err := ja.tabId()
 		if err != nil {
 			return nil, err
 		}
-		data64 := base64.StdEncoding.EncodeToString([]byte(str("data")))
+		data64 := base64.StdEncoding.EncodeToString([]byte(data))
 		if _, err := ja.runWsh(ctx, "", tabId, "input", "-b", blockID,
 			"--data64", data64); err != nil {
 			return nil, err
@@ -229,6 +287,7 @@ func (ja *JarvisAgent) execute(ctx context.Context, capability string, args map[
 		if err != nil {
 			return nil, err
 		}
+		ja.auditLog("jarvis:terminal.set_meta", "", "block="+blockID, "allowed")
 		setArgs := []string{"setmeta", "-b", blockID}
 		for key, value := range meta {
 			setArgs = append(setArgs, fmt.Sprintf("%s=%v", key, value))
@@ -246,6 +305,7 @@ func (ja *JarvisAgent) execute(ctx context.Context, capability string, args map[
 		if err != nil {
 			return nil, err
 		}
+		ja.auditLog("jarvis:terminal.close", "", "block="+blockID, "allowed")
 		if _, err := ja.runWsh(ctx, "", tabId, "deleteblock", "-b", blockID); err != nil {
 			return nil, err
 		}
@@ -450,6 +510,7 @@ func runJarvisAgent(argv []string) {
 		clientID:  clientID,
 		workspace: workspace,
 		catalog:   catalog,
+		audit:     MakeAuditor(filepath.Join(ResolveDataDir(dataDir, dev), "nexus-mcp-audit.jsonl")),
 		runWsh:    wave.RunWsh,
 		tabId:     func() (string, error) { return wave.ActiveTabId(workspace) },
 		httpc:     &http.Client{Timeout: 15 * time.Second},

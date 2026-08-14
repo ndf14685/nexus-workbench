@@ -147,7 +147,7 @@ jarvisd: `Mission.name: str` (nuevo), intents de misión en
   misión con contexto capturado → completion sin conocer IDs; delegación
   sin terminal; park → reinicio → restore.
 
-## Deuda explícita conocida al diseñar
+## Deuda explícita conocida (estado al cierre de la implementación)
 
 - Entrada por voz: fuera de alcance de esta release (la arquitectura del
   overlay deja el hook: el input es un componente aislado).
@@ -155,3 +155,13 @@ jarvisd: `Mission.name: str` (nuevo), intents de misión en
   (shell integration no lo reporta hoy); se omite antes que inventarlo.
 - Multi-select visual de módulos: v1 = módulo enfocado + selección desde
   el Parking/status; la API ya es `contexts: []`.
+- HEADLESS automático: un worker corre perfectamente con su terminal
+  parkeada (controller Go + filestore no dependen del renderer) y "Ver
+  trabajo"/Retomar la materializa, pero el brain todavía no marca
+  `nexus:headless` en el create para auto-parkearla — hoy el parking del
+  worker es manual.
+- Los intents de misión entran solo por `POST /intent` (overlay); el camino
+  TCP del HUD/voz (`BrainBackedTransport`) no los rutea todavía.
+- Cierre automático de módulos al completar misión (§17): solo notificación
+  + badge; no se cierran módulos automáticamente (comportamiento
+  conservador a propósito).
