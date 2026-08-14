@@ -8,6 +8,7 @@ import { getBrainConfig, saveBrainConfig } from "./brain-config";
 import { postIntent } from "./brain-client";
 import { captureFocusedContext, describeContext, type JarvisContextModule } from "./context";
 import { listParked, matchParkIntent, parkBlock, restorePark, closeParked, type ParkedEntry } from "./parking";
+import { JarvisStatusModel } from "./status-model";
 import { jarvisLog } from "./telemetry";
 
 interface Turn {
@@ -64,6 +65,7 @@ export function JarvisOverlay() {
     const [parked, setParked] = useState<ParkedEntry[]>([]);
     const inputRef = useRef<HTMLInputElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const mountedRef = useRef(true);
 
     const refreshParked = () => void listParked().then(setParked).catch(() => setParked([]));
 
@@ -75,7 +77,26 @@ export function JarvisOverlay() {
             jarvisLog("jarvis.context.capture", { kind: ctx.kind });
         });
         refreshParked();
+        return () => {
+            mountedRef.current = false;
+        };
     }, []);
+
+    // la respuesta de un intent llm_pending llega DESPUÉS por el inbox del cliente;
+    // se muestra acá si el overlay sigue abierto, o como notificación nativa si no
+    const watchAsyncAnswer = async (sinceTs: number) => {
+        const model = JarvisStatusModel.getInstance();
+        // 5s de margen: el timestamp del inbox lo pone el reloj de jarvisd, no este
+        const answer = await model.waitForInboxAnswer(sinceTs - 5);
+        if (answer == null) {
+            return;
+        }
+        if (mountedRef.current) {
+            setTurns((prev) => [...prev, { who: "jarvis", text: answer }]);
+        } else {
+            model.notifyAnswer(answer);
+        }
+    };
 
     useEffect(() => {
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -108,12 +129,16 @@ export function JarvisOverlay() {
         }
         try {
             const contexts = context.kind == "empty" ? [] : [context];
+            const sentAt = Date.now() / 1000;
             const resp = await postIntent(text, contexts);
             jarvisLog("jarvis.intent.resolve", { handled: resp.handled, needsConfirmation: resp.needs_confirmation });
             const reply = resp.handled
                 ? resp.response || "Hecho."
                 : "Todavía no sé resolver eso. Probá reformularlo, o usá la CLI jarvis para casos avanzados.";
             setTurns((prev) => [...prev, { who: "jarvis", text: reply }]);
+            if (resp.metadata?.["llm_pending"] === true) {
+                void watchAsyncAnswer(sentAt);
+            }
         } catch (e) {
             setTurns((prev) => [...prev, { who: "jarvis", text: `No pude hablar con el cerebro: ${e?.message ?? e}` }]);
         } finally {

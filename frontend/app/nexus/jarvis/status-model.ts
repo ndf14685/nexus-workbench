@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getBrainConfig } from "./brain-config";
-import { fetchMissions } from "./brain-client";
+import { fetchInbox, fetchMissions, type InboxMessage } from "./brain-client";
 import { jarvisLog } from "./telemetry";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
@@ -85,6 +85,16 @@ export function computeTransitions(
     return out;
 }
 
+// puro: la respuesta async más nueva que llegó después de sinceTs (o null)
+export function pickInboxAnswer(messages: InboxMessage[], sinceTs: number): string {
+    const fresh = messages.filter((m) => m.timestamp > sinceTs && m.text.trim() != "");
+    if (fresh.length == 0) {
+        return null;
+    }
+    fresh.sort((a, b) => a.timestamp - b.timestamp);
+    return fresh[fresh.length - 1].text;
+}
+
 export function summarizeCounts(missions: MissionSnapshot[]): { working: number; attention: number } {
     return {
         working: missions.filter((m) => WorkingStatuses.includes(m.status)).length,
@@ -163,15 +173,57 @@ export class JarvisStatusModel {
                 : "jarvis.user_attention.required",
             { missionId: notification.missionId, status: notification.status }
         );
-        void RpcApi.NotifyCommand(TabRpcClient, {
-            title: notification.title,
-            body: notification.body.slice(0, 300),
-            silent: false,
-        }).catch(() => {});
+        // la notificación nativa la muestra electron (mismo route que usa wsh notify);
+        // sin route el call cae en el wshserver Go, que no implementa notify
+        void RpcApi.NotifyCommand(
+            TabRpcClient,
+            {
+                title: notification.title,
+                body: notification.body.slice(0, 300),
+                silent: false,
+            },
+            { route: "electron" }
+        ).catch(() => {});
     }
 
     missionForBlock(blockId: string, missions: MissionSnapshot[]): MissionSnapshot {
         const needle = `block:${blockId}`;
         return missions.find((m) => (m.workers ?? []).some((w) => w.block_id == needle || w.block_id == blockId));
+    }
+
+    // un intent que quedó "Pensando…" (llm_pending) resuelve después por el inbox
+    // del cliente workbench; jarvisd no vuelve a llamar — hay que ir a buscarla
+    async waitForInboxAnswer(
+        sinceTs: number,
+        fetcher: () => Promise<InboxMessage[]> = fetchInbox,
+        delayMs = 3000,
+        maxTries = 60
+    ): Promise<string> {
+        for (let attempt = 0; attempt < maxTries; attempt++) {
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+            let messages: InboxMessage[];
+            try {
+                messages = await fetcher();
+            } catch {
+                continue;
+            }
+            const answer = pickInboxAnswer(messages, sinceTs);
+            if (answer != null) {
+                return answer;
+            }
+        }
+        return null;
+    }
+
+    notifyAnswer(text: string) {
+        void RpcApi.NotifyCommand(
+            TabRpcClient,
+            {
+                title: "Jarvis respondió",
+                body: text.slice(0, 300),
+                silent: false,
+            },
+            { route: "electron" }
+        ).catch(() => {});
     }
 }

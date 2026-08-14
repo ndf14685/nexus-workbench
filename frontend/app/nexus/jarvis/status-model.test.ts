@@ -1,8 +1,16 @@
 // Copyright 2026, Nexus Workbench (fork extension)
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, expect, it } from "vitest";
-import { computeTransitions, missionLabel, summarizeCounts, type MissionSnapshot } from "./status-model";
+import { afterEach, describe, expect, it } from "vitest";
+import { RpcApi } from "@/app/store/wshclientapi";
+import {
+    computeTransitions,
+    JarvisStatusModel,
+    missionLabel,
+    pickInboxAnswer,
+    summarizeCounts,
+    type MissionSnapshot,
+} from "./status-model";
 
 function snap(id: string, status: string, extra: Partial<MissionSnapshot> = {}): MissionSnapshot {
     return { mission_id: id, name: `m ${id}`, status, ...extra };
@@ -60,6 +68,80 @@ describe("computeTransitions (§8: solo atención, jamás pasos)", () => {
     it("does not re-notify an unchanged terminal state", () => {
         const prev = new Map([["1", "completed"]]);
         expect(computeTransitions(prev, [snap("1", "completed")])).toEqual([]);
+    });
+});
+
+describe("notify", () => {
+    afterEach(() => {
+        RpcApi.setMockRpcClient(null);
+        JarvisStatusModel.resetInstance();
+    });
+
+    // las notificaciones nativas las muestra electron; sin route el call cae en el
+    // wshserver Go, que no implementa notify, y se pierde en silencio
+    it("routes the native notification to electron", () => {
+        let seenRoute: string;
+        RpcApi.setMockRpcClient({
+            mockWshRpcCall: async (_client, command, _data, opts) => {
+                if (command == "notify") {
+                    seenRoute = opts?.route;
+                }
+                return null;
+            },
+            mockWshRpcStream: null,
+        });
+        JarvisStatusModel.getInstance().notify({ missionId: "m-1", title: "✓ listo", body: "ok", status: "completed" });
+        expect(seenRoute).toBe("electron");
+    });
+});
+
+describe("pickInboxAnswer", () => {
+    it("returns the newest answer that arrived after sinceTs", () => {
+        const messages = [
+            { timestamp: 100, text: "vieja" },
+            { timestamp: 210, text: "intermedia" },
+            { timestamp: 220, text: "la última" },
+        ];
+        expect(pickInboxAnswer(messages, 200)).toBe("la última");
+        expect(pickInboxAnswer(messages, 300)).toBeNull();
+        expect(pickInboxAnswer([], 0)).toBeNull();
+        expect(pickInboxAnswer([{ timestamp: 500, text: "   " }], 400)).toBeNull();
+    });
+});
+
+describe("waitForInboxAnswer", () => {
+    afterEach(() => {
+        JarvisStatusModel.resetInstance();
+    });
+
+    it("polls until an answer newer than sinceTs shows up", async () => {
+        let polls = 0;
+        const fetcher = async () => {
+            polls++;
+            if (polls < 3) {
+                return [{ timestamp: 50, text: "respuesta vieja" }];
+            }
+            return [
+                { timestamp: 50, text: "respuesta vieja" },
+                { timestamp: 150, text: "acá está" },
+            ];
+        };
+        const model = JarvisStatusModel.getInstance();
+        const answer = await model.waitForInboxAnswer(100, fetcher, 1, 10);
+        expect(answer).toBe("acá está");
+        expect(polls).toBe(3);
+    });
+
+    it("gives up after maxTries and survives fetch errors", async () => {
+        let polls = 0;
+        const fetcher = async () => {
+            polls++;
+            throw new Error("cerebro caído");
+        };
+        const model = JarvisStatusModel.getInstance();
+        const answer = await model.waitForInboxAnswer(100, fetcher, 1, 4);
+        expect(answer).toBeNull();
+        expect(polls).toBe(4);
     });
 });
 
