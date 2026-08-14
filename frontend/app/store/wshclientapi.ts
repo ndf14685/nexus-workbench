@@ -618,6 +618,12 @@ export class RpcApiType {
         return client.wshRpcCall("listalleditableapps", null, opts);
     }
 
+    // command "listparkedblocks" [call]
+    ListParkedBlocksCommand(client: WshClient, opts?: RpcOpts): Promise<ParkedBlockInfo[]> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "listparkedblocks", null, opts);
+        return client.wshRpcCall("listparkedblocks", null, opts);
+    }
+
     // command "macosversion" [call]
     MacOSVersionCommand(client: WshClient, opts?: RpcOpts): Promise<string> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "macosversion", null, opts);
@@ -652,6 +658,12 @@ export class RpcApiType {
     NotifySystemResumeCommand(client: WshClient, opts?: RpcOpts): Promise<void> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "notifysystemresume", null, opts);
         return client.wshRpcCall("notifysystemresume", null, opts);
+    }
+
+    // command "parkblock" [call]
+    ParkBlockCommand(client: WshClient, data: CommandParkBlockData, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "parkblock", data, opts);
+        return client.wshRpcCall("parkblock", data, opts);
     }
 
     // command "path" [call]
@@ -940,6 +952,12 @@ export class RpcApiType {
     TestMultiArgCommand(client: WshClient, arg1: string, arg2: number, arg3: boolean, opts?: RpcOpts): Promise<string> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "testmultiarg", { args: [arg1, arg2, arg3] }, opts);
         return client.wshRpcCall("testmultiarg", { args: [arg1, arg2, arg3] }, opts);
+    }
+
+    // command "unparkblock" [call]
+    UnparkBlockCommand(client: WshClient, data: CommandUnparkBlockData, opts?: RpcOpts): Promise<string> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "unparkblock", data, opts);
+        return client.wshRpcCall("unparkblock", data, opts);
     }
 
     // command "updatetabname" [call]

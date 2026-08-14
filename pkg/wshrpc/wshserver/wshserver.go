@@ -190,6 +190,41 @@ func (ws *WshServer) GetRTInfoCommand(ctx context.Context, data wshrpc.CommandGe
 	return wstore.GetRTInfo(data.ORef), nil
 }
 
+func (ws *WshServer) ParkBlockCommand(ctx context.Context, data wshrpc.CommandParkBlockData) error {
+	tabId, _ := wstore.DBFindTabForBlockId(ctx, data.BlockId)
+	err := wcore.ParkBlock(ctx, data.BlockId, data.Note)
+	if err != nil {
+		return err
+	}
+	wcore.SendWaveObjUpdate(waveobj.MakeORef(waveobj.OType_Block, data.BlockId))
+	if tabId != "" {
+		wcore.SendWaveObjUpdate(waveobj.MakeORef(waveobj.OType_Tab, tabId))
+	}
+	return nil
+}
+
+func (ws *WshServer) UnparkBlockCommand(ctx context.Context, data wshrpc.CommandUnparkBlockData) (string, error) {
+	tabId, err := wcore.UnparkBlock(ctx, data.BlockId, data.TabId)
+	if err != nil {
+		return "", err
+	}
+	wcore.SendWaveObjUpdate(waveobj.MakeORef(waveobj.OType_Block, data.BlockId))
+	wcore.SendWaveObjUpdate(waveobj.MakeORef(waveobj.OType_Tab, tabId))
+	return tabId, nil
+}
+
+func (ws *WshServer) ListParkedBlocksCommand(ctx context.Context) ([]wshrpc.ParkedBlockInfo, error) {
+	blocks, err := wcore.ListParkedBlocks(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rtn := make([]wshrpc.ParkedBlockInfo, 0, len(blocks))
+	for _, block := range blocks {
+		rtn = append(rtn, wshrpc.ParkedBlockInfo{BlockId: block.OID, Meta: block.Meta})
+	}
+	return rtn, nil
+}
+
 func (ws *WshServer) SetRTInfoCommand(ctx context.Context, data wshrpc.CommandSetRTInfoData) error {
 	if data.Delete {
 		wstore.DeleteRTInfo(data.ORef)

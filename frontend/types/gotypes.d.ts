@@ -505,6 +505,12 @@ declare global {
         message: string;
     };
 
+    // wshrpc.CommandParkBlockData
+    type CommandParkBlockData = {
+        blockid: string;
+        note?: string;
+    };
+
     // wshrpc.CommandPublishAppData
     type CommandPublishAppData = {
         appid: string;
@@ -703,6 +709,12 @@ declare global {
         linestart: number;
         lines: string[];
         lastupdated: number;
+    };
+
+    // wshrpc.CommandUnparkBlockData
+    type CommandUnparkBlockData = {
+        blockid: string;
+        tabid?: string;
     };
 
     // wshrpc.CommandVarData
@@ -1275,6 +1287,12 @@ declare global {
         "waveai:chatid"?: string;
         "waveai:mode"?: string;
         "waveai:maxoutputtokens"?: number;
+    };
+
+    // wshrpc.ParkedBlockInfo
+    type ParkedBlockInfo = {
+        blockid: string;
+        meta: MetaType;
     };
 
     // wshrpc.PathCommandData

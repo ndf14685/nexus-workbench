@@ -173,6 +173,11 @@ type WshRpcInterface interface {
 	GetRTInfoCommand(ctx context.Context, data CommandGetRTInfoData) (*waveobj.ObjRTInfo, error)
 	SetRTInfoCommand(ctx context.Context, data CommandSetRTInfoData) error
 
+	// nexus: parking de bloques (Jarvis UX, ADR-0005)
+	ParkBlockCommand(ctx context.Context, data CommandParkBlockData) error
+	UnparkBlockCommand(ctx context.Context, data CommandUnparkBlockData) (string, error)
+	ListParkedBlocksCommand(ctx context.Context) ([]ParkedBlockInfo, error)
+
 	// terminal
 	TermGetScrollbackLinesCommand(ctx context.Context, data CommandTermGetScrollbackLinesData) (*CommandTermGetScrollbackLinesRtnData, error)
 
@@ -664,6 +669,21 @@ type CommandSetRTInfoData struct {
 	ORef   waveobj.ORef   `json:"oref"`
 	Data   map[string]any `json:"data" tstype:"ObjRTInfo"`
 	Delete bool           `json:"delete,omitempty"`
+}
+
+type CommandParkBlockData struct {
+	BlockId string `json:"blockid"`
+	Note    string `json:"note,omitempty"`
+}
+
+type CommandUnparkBlockData struct {
+	BlockId string `json:"blockid"`
+	TabId   string `json:"tabid,omitempty"`
+}
+
+type ParkedBlockInfo struct {
+	BlockId string              `json:"blockid"`
+	Meta    waveobj.MetaMapType `json:"meta"`
 }
 
 type CommandTermGetScrollbackLinesData struct {

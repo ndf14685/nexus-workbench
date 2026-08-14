@@ -616,6 +616,12 @@ func ListAllEditableAppsCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]wshr
 	return resp, err
 }
 
+// command "listparkedblocks", wshserver.ListParkedBlocksCommand
+func ListParkedBlocksCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) ([]wshrpc.ParkedBlockInfo, error) {
+	resp, err := sendRpcRequestCallHelper[[]wshrpc.ParkedBlockInfo](w, "listparkedblocks", nil, opts)
+	return resp, err
+}
+
 // command "macosversion", wshserver.MacOSVersionCommand
 func MacOSVersionCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) (string, error) {
 	resp, err := sendRpcRequestCallHelper[string](w, "macosversion", nil, opts)
@@ -649,6 +655,12 @@ func NotifyCommand(w *wshutil.WshRpc, data wshrpc.WaveNotificationOptions, opts 
 // command "notifysystemresume", wshserver.NotifySystemResumeCommand
 func NotifySystemResumeCommand(w *wshutil.WshRpc, opts *wshrpc.RpcOpts) error {
 	_, err := sendRpcRequestCallHelper[any](w, "notifysystemresume", nil, opts)
+	return err
+}
+
+// command "parkblock", wshserver.ParkBlockCommand
+func ParkBlockCommand(w *wshutil.WshRpc, data wshrpc.CommandParkBlockData, opts *wshrpc.RpcOpts) error {
+	_, err := sendRpcRequestCallHelper[any](w, "parkblock", data, opts)
 	return err
 }
 
@@ -933,6 +945,12 @@ func TestCommand(w *wshutil.WshRpc, data string, opts *wshrpc.RpcOpts) error {
 // command "testmultiarg", wshserver.TestMultiArgCommand
 func TestMultiArgCommand(w *wshutil.WshRpc, arg1 string, arg2 int, arg3 bool, opts *wshrpc.RpcOpts) (string, error) {
 	resp, err := sendRpcRequestCallHelper[string](w, "testmultiarg", wshrpc.MultiArg{Args: []any{arg1, arg2, arg3}}, opts)
+	return resp, err
+}
+
+// command "unparkblock", wshserver.UnparkBlockCommand
+func UnparkBlockCommand(w *wshutil.WshRpc, data wshrpc.CommandUnparkBlockData, opts *wshrpc.RpcOpts) (string, error) {
+	resp, err := sendRpcRequestCallHelper[string](w, "unparkblock", data, opts)
 	return resp, err
 }
 
