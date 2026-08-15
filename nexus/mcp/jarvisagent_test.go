@@ -211,6 +211,81 @@ func TestExecuteTerminalFlowWithFakeWsh(t *testing.T) {
 }
 
 
+func TestTerminalCreateOwnershipAndDurable(t *testing.T) {
+	var createArgs []string
+	agent := &JarvisAgent{
+		catalog: &Catalog{},
+		tabId:   func() (string, error) { return "tab-1", nil },
+		runWsh: func(ctx context.Context, conn, tabId string, args ...string) (string, error) {
+			if args[0] == "createblock" {
+				createArgs = args
+				return "created block deadbeef", nil
+			}
+			return "", nil
+		},
+	}
+	ctx := context.Background()
+
+	if _, err := agent.execute(ctx, "terminal.create", map[string]any{
+		"connection": "rig3060"}); err != nil {
+		t.Fatalf("create remoto: %v", err)
+	}
+	joined := strings.Join(createArgs, " ")
+	if !strings.Contains(joined, "nexus:owner=mission") {
+		t.Fatalf("create remoto sin ownership: %q", joined)
+	}
+	if !strings.Contains(joined, "term:durable=true") {
+		t.Fatalf("create remoto sin durabilidad: %q", joined)
+	}
+
+	if _, err := agent.execute(ctx, "terminal.create", map[string]any{}); err != nil {
+		t.Fatalf("create local: %v", err)
+	}
+	joined = strings.Join(createArgs, " ")
+	if !strings.Contains(joined, "nexus:owner=mission") {
+		t.Fatalf("create local sin ownership: %q", joined)
+	}
+	if strings.Contains(joined, "term:durable") {
+		t.Fatalf("create local no debe ser durable: %q", joined)
+	}
+}
+
+func TestTerminalSetMetaAdoptTransfersOwnership(t *testing.T) {
+	var setArgs []string
+	agent := &JarvisAgent{
+		catalog: &Catalog{},
+		tabId:   func() (string, error) { return "tab-1", nil },
+		runWsh: func(ctx context.Context, conn, tabId string, args ...string) (string, error) {
+			if args[0] == "setmeta" {
+				setArgs = args
+			}
+			return "", nil
+		},
+	}
+	ctx := context.Background()
+
+	if _, err := agent.execute(ctx, "terminal.set_meta", map[string]any{
+		"block_id": "block:deadbeef",
+		"meta":     map[string]any{"jarvis:mission": "m-1"}}); err != nil {
+		t.Fatalf("set_meta ADOPT: %v", err)
+	}
+	joined := strings.Join(setArgs, " ")
+	if !strings.Contains(joined, "jarvis:mission=m-1") ||
+		!strings.Contains(joined, "nexus:owner=mission") {
+		t.Fatalf("ADOPT no transfirió ownership: %q", joined)
+	}
+
+	if _, err := agent.execute(ctx, "terminal.set_meta", map[string]any{
+		"block_id": "block:deadbeef",
+		"meta":     map[string]any{"jarvis:note": "x"}}); err != nil {
+		t.Fatalf("set_meta simple: %v", err)
+	}
+	joined = strings.Join(setArgs, " ")
+	if strings.Contains(joined, "nexus:owner") {
+		t.Fatalf("set_meta sin jarvis:mission no debe tocar ownership: %q", joined)
+	}
+}
+
 func TestTerminalInputDestructiveGate(t *testing.T) {
 	catalog := &Catalog{Environments: []Environment{
 		{Id: "prod-env", Kind: "ssh", Host: "prodhost", Class: "prod"},

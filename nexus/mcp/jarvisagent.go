@@ -170,6 +170,14 @@ func jarvisCreateArgs(connection, cwd string, meta map[string]any, title string)
 	if title != "" {
 		args = append(args, "frame:title="+title)
 	}
+	// ADR-0006 §4/§5: toda sesión de misión lleva ownership; las remotas además
+	// corren bajo jobmanager durable y sobreviven restarts del runtime.
+	if _, ok := meta["nexus:owner"]; !ok {
+		args = append(args, "nexus:owner=mission")
+	}
+	if _, ok := meta["term:durable"]; !ok && connection != "" {
+		args = append(args, "term:durable=true")
+	}
 	for key, value := range meta {
 		args = append(args, fmt.Sprintf("%s=%v", key, value))
 	}
@@ -298,6 +306,12 @@ func (ja *JarvisAgent) execute(ctx context.Context, capability string, args map[
 		setArgs := []string{"setmeta", "-b", blockID}
 		for key, value := range meta {
 			setArgs = append(setArgs, fmt.Sprintf("%s=%v", key, value))
+		}
+		// camino ADOPT (ADR-0006 §4): taggear jarvis:mission transfiere ownership
+		if _, adopt := meta["jarvis:mission"]; adopt {
+			if _, ok := meta["nexus:owner"]; !ok {
+				setArgs = append(setArgs, "nexus:owner=mission")
+			}
 		}
 		if _, err := ja.runWsh(ctx, "", tabId, setArgs...); err != nil {
 			return nil, err
