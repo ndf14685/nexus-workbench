@@ -330,17 +330,31 @@ func SendInput(blockId string, inputUnion *BlockInputUnion) error {
 	return controller.SendInput(inputUnion)
 }
 
-// only call this on shutdown
-func StopAllBlockControllersForShutdown() {
+// only call this on shutdown; blocks until every controller stopped or the
+// timeout expired, so doShutdown drains for real instead of exiting mid-kill
+func StopAllBlockControllersForShutdown(timeout time.Duration) {
 	controllers := getAllControllers()
+	var wg sync.WaitGroup
 	for blockId, controller := range controllers {
 		status := controller.GetRuntimeStatus()
 		if status != nil && status.ShellProcStatus == Status_Running {
+			wg.Add(1)
 			go func(id string, c Controller) {
+				defer wg.Done()
 				c.Stop(true, Status_Done, false)
 				wstore.DeleteRTInfo(waveobj.MakeORef(waveobj.OType_Block, id))
 			}(blockId, controller)
 		}
+	}
+	doneCh := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(doneCh)
+	}()
+	select {
+	case <-doneCh:
+	case <-time.After(timeout):
+		log.Printf("StopAllBlockControllersForShutdown timed out after %v\n", timeout)
 	}
 }
 
