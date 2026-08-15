@@ -72,22 +72,24 @@ func (ja *JarvisAgent) auditLog(tool, env, detail, decision string) {
 }
 
 // classForBlock resuelve la clase (lab|personal|work|prod) del ambiente de la
-// conexión del bloque contra el catálogo; "" si no se puede determinar.
-func (ja *JarvisAgent) classForBlock(ctx context.Context, blockID string) string {
+// conexión del bloque contra el catálogo; "" sin error cuando el bloque no
+// matchea ningún ambiente conocido. Error solo cuando la clasificación misma
+// falla (wsh/runtime caído): el caller destructivo debe tratarlo fail-closed.
+func (ja *JarvisAgent) classForBlock(ctx context.Context, blockID string) (string, error) {
 	tabId, err := ja.tabId()
 	if err != nil {
-		return ""
+		return "", err
 	}
 	out, err := ja.runWsh(ctx, "", tabId, "blocks", "list", "--json")
 	if err != nil {
-		return ""
+		return "", err
 	}
 	var entries []struct {
 		BlockId string         `json:"blockid"`
 		Meta    map[string]any `json:"meta"`
 	}
-	if json.Unmarshal([]byte(out), &entries) != nil {
-		return ""
+	if err := json.Unmarshal([]byte(out), &entries); err != nil {
+		return "", err
 	}
 	want := strings.TrimPrefix(blockID, "block:")
 	for _, entry := range entries {
@@ -97,11 +99,11 @@ func (ja *JarvisAgent) classForBlock(ctx context.Context, blockID string) string
 		connection, _ := entry.Meta["connection"].(string)
 		for i := range ja.catalog.Environments {
 			if ja.catalog.Environments[i].ConnName() == connection {
-				return ja.catalog.Environments[i].Class
+				return ja.catalog.Environments[i].Class, nil
 			}
 		}
 	}
-	return ""
+	return "", nil
 }
 
 // --- payloads puros (testeables) ---
@@ -250,7 +252,12 @@ func (ja *JarvisAgent) execute(ctx context.Context, capability string, args map[
 		// corta en seco lo destructivo sobre ambientes prod y audita todo.
 		data := str("data")
 		if IsDestructive(data) {
-			class := ja.classForBlock(ctx, blockID)
+			class, err := ja.classForBlock(ctx, blockID)
+			if err != nil {
+				ja.auditLog("jarvis:terminal.input", "", data, "denied_destructive_unknown_env")
+				return nil, fmt.Errorf("input destructivo bloqueado: no se pudo clasificar "+
+					"el ambiente (fail-closed, gobernanza ADR-0004): %w", err)
+			}
 			if class == "prod" {
 				ja.auditLog("jarvis:terminal.input", class, data, "denied_destructive_prod")
 				return nil, fmt.Errorf("input destructivo bloqueado en ambiente prod " +

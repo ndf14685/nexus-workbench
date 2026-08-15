@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -339,3 +340,38 @@ func TestTerminalInputDestructiveGate(t *testing.T) {
 	}
 }
 
+
+func TestTerminalInputFailClosedWhenUnclassifiable(t *testing.T) {
+	auditPath := filepath.Join(t.TempDir(), "audit.jsonl")
+	inputs := 0
+	agent := &JarvisAgent{
+		catalog: &Catalog{},
+		audit:   MakeAuditor(auditPath),
+		tabId:   func() (string, error) { return "tab-1", nil },
+		runWsh: func(ctx context.Context, conn, tabId string, args ...string) (string, error) {
+			switch args[0] {
+			case "blocks":
+				return "", fmt.Errorf("runtime caído")
+			case "input":
+				inputs++
+			}
+			return "", nil
+		},
+	}
+	ctx := context.Background()
+
+	_, err := agent.execute(ctx, "terminal.input", map[string]any{
+		"block_id": "block:deadbeef", "data": "rm -rf /tmp/x\n"})
+	if err == nil || inputs != 0 {
+		t.Fatalf("destructivo sin clasificación debe denegarse (err=%v inputs=%d)", err, inputs)
+	}
+	raw, _ := os.ReadFile(auditPath)
+	if !strings.Contains(string(raw), "denied_destructive_unknown_env") {
+		t.Fatalf("falta la denegación fail-closed en el audit: %s", raw)
+	}
+
+	if _, err := agent.execute(ctx, "terminal.input", map[string]any{
+		"block_id": "block:deadbeef", "data": "echo hola\n"}); err != nil || inputs != 1 {
+		t.Fatalf("input normal debía pasar aunque no se pueda clasificar (err=%v inputs=%d)", err, inputs)
+	}
+}
