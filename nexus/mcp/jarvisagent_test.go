@@ -150,6 +150,28 @@ func TestTerminalCreateEnsuresConnectionFirst(t *testing.T) {
 	}
 }
 
+func TestTerminalCreateToleratesAlreadyConnected(t *testing.T) {
+	var calls [][]string
+	agent := &JarvisAgent{
+		catalog: &Catalog{},
+		tabId:   func() (string, error) { return "tab-1", nil },
+		runWsh: func(ctx context.Context, conn, tabId string, args ...string) (string, error) {
+			calls = append(calls, args)
+			if args[0] == "conn" {
+				return "", fmt.Errorf(`wsh conn connect rig3060: exit status 1 — Error: connecting connection: cannot connect to "rig3060" when status is "connected"`)
+			}
+			return "created block deadbeef", nil
+		},
+	}
+	if _, err := agent.execute(context.Background(), "terminal.create", map[string]any{
+		"connection": "rig3060"}); err != nil {
+		t.Fatalf("create con conexión ya establecida: %v", err)
+	}
+	if len(calls) != 2 || calls[1][0] != "createblock" {
+		t.Fatalf("createblock debía ejecutarse igual: %v", calls)
+	}
+}
+
 func TestExecuteTerminalFlowWithFakeWsh(t *testing.T) {
 	var calls [][]string
 	agent := &JarvisAgent{

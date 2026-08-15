@@ -233,7 +233,7 @@ func (ja *JarvisAgent) execute(ctx context.Context, capability string, args map[
 		// sin la conexión establecida el bloque queda creado pero su controller
 		// nunca arranca (CheckConnStatus falla en el resync)
 		if conn := str("connection"); conn != "" {
-			if _, err := ja.runWsh(ctx, "", tabId, "conn", "connect", conn); err != nil {
+			if _, err := ja.runWsh(ctx, "", tabId, "conn", "connect", conn); ignoreAlreadyConnected(err) != nil {
 				return nil, fmt.Errorf("conectando %s: %w", conn, err)
 			}
 		}

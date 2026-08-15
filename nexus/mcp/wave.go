@@ -256,6 +256,19 @@ func (wa *WaveAccess) EnsureConnection(ctx context.Context, conn string, tabId s
 		return nil
 	}
 	_, err := wa.RunWsh(ctx, "", tabId, "conn", "connect", conn)
+	return ignoreAlreadyConnected(err)
+}
+
+// Connect del conncontroller rechaza el pedido solo cuando el estado ya es
+// "connected" o "connecting"; para "asegurar la conexión" ambos son éxito.
+func ignoreAlreadyConnected(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	if strings.Contains(msg, `when status is "connected"`) || strings.Contains(msg, `when status is "connecting"`) {
+		return nil
+	}
 	return err
 }
 
