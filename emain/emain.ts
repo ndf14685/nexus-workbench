@@ -41,7 +41,7 @@ import {
     unamePlatform,
 } from "./emain-platform";
 import { ensureHotSpareTab, setMaxTabCacheSize } from "./emain-tabview";
-import { ensureRuntime, isRuntimeAttached } from "./emain-runtime";
+import { ensureRuntime, isRuntimeAttached, startRuntimeWatchdog } from "./emain-runtime";
 import { ensureRuntimeTask } from "./emain-runtimetask";
 import { getIsWaveSrvDead, getWaveSrvProc, getWaveSrvReady } from "./emain-wavesrv";
 import {
@@ -462,6 +462,22 @@ async function appMain() {
     makeDockTaskbar();
     if (isRuntimeAttached() && !isDev) {
         ensureRuntimeTask();
+    }
+    if (isRuntimeAttached()) {
+        startRuntimeWatchdog(
+            (status) => {
+                console.log("runtime status:", status);
+            },
+            async (endpointsChanged: boolean) => {
+                if (!endpointsChanged) {
+                    return;
+                }
+                configureAuthKeyRequestInjection(electron.session.defaultSession);
+                shutdownWshrpc();
+                initElectronWshrpc(ElectronWshClient, { authKey: getAuthKey() }, handleWSEvent);
+                await relaunchBrowserWindows();
+            }
+        );
     }
     await configureAutoUpdater();
     setGlobalIsStarting(false);

@@ -5,10 +5,13 @@
 // --detached) outlives this process; we rendezvous through runtime.json and
 // runtime.authkey in the data dir instead of spawning wavesrv as a child.
 
+import { RpcApi } from "@/app/store/wshclientapi";
+import * as electron from "electron";
 import * as child_process from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { WebServerEndpointVarName, WSServerEndpointVarName } from "../frontend/util/endpoints";
+import { ElectronWshClient } from "./emain-wsh";
 import { initAuthKey } from "./authkey";
 import {
     getElectronAppResourcesPath,
@@ -257,4 +260,151 @@ async function startLegacyChild(handleWSEvent: (evtMsg: WSEventType) => void) {
 export async function reattachRuntime(): Promise<boolean> {
     const rtn = await tryAttach();
     return rtn != null && rtn !== "mismatch";
+}
+
+let watchdogTimer: NodeJS.Timeout = null;
+let watchdogBusy = false;
+let runtimeDown = false;
+
+export function stopRuntimeWatchdog() {
+    if (watchdogTimer != null) {
+        clearInterval(watchdogTimer);
+        watchdogTimer = null;
+    }
+}
+
+export async function countActiveMissionBlocks(): Promise<number> {
+    try {
+        const blocks = await RpcApi.BlocksListCommand(ElectronWshClient, {});
+        return blocks?.filter((b) => b.meta?.["nexus:owner"] == "mission").length ?? 0;
+    } catch (e) {
+        console.log("error counting mission blocks", e);
+        return 0;
+    }
+}
+
+export async function shutdownRuntime(reason: string): Promise<boolean> {
+    stopRuntimeWatchdog();
+    try {
+        await RpcApi.ShutdownRuntimeCommand(ElectronWshClient, { reason });
+    } catch (e) {
+        console.log("error requesting runtime shutdown", e);
+    }
+    const deadline = Date.now() + 10000;
+    while (Date.now() < deadline) {
+        const state = readRuntimeState();
+        if (state == null || !isPidAlive(state.pid)) {
+            return true;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    console.log("runtime did not exit within 10s of shutdown request");
+    return false;
+}
+
+// NSIS cannot replace a locked wavesrv.exe, so the runtime must stop before
+// quitAndInstall; with missions active the user decides (defer keeps them alive)
+export async function prepareRuntimeForUpdate(): Promise<boolean> {
+    const missionCount = await countActiveMissionBlocks();
+    if (missionCount > 0) {
+        const { response } = await electron.dialog.showMessageBox(null, {
+            type: "warning",
+            buttons: ["Diferir actualización", "Actualizar igual"],
+            defaultId: 0,
+            cancelId: 0,
+            title: "Nexus Workbench",
+            message: `Hay ${missionCount} sesión(es) de misión de Jarvis activas.`,
+            detail: "Actualizar ahora detiene el runtime y esas sesiones. Diferir instala la actualización más tarde, cuando no haya misiones trabajando.",
+        });
+        if (response === 0) {
+            return false;
+        }
+    }
+    return await shutdownRuntime("update");
+}
+
+export async function shutdownRuntimeInteractive() {
+    if (!isRuntimeAttached()) {
+        electron.dialog.showMessageBoxSync(null, {
+            type: "info",
+            buttons: ["OK"],
+            title: "Nexus Workbench",
+            message: "El runtime corre en modo hijo (legacy): se detiene al cerrar la app.",
+        });
+        return;
+    }
+    const missionCount = await countActiveMissionBlocks();
+    const detail =
+        missionCount > 0
+            ? `Hay ${missionCount} sesión(es) de misión de Jarvis activas que se detendrán.`
+            : "Todas las sesiones de terminal se detendrán.";
+    const { response } = await electron.dialog.showMessageBox(null, {
+        type: "warning",
+        buttons: ["Cancelar", "Detener runtime"],
+        defaultId: 0,
+        cancelId: 0,
+        title: "Nexus Workbench",
+        message: "¿Detener el Nexus Runtime por completo?",
+        detail,
+    });
+    if (response !== 1) {
+        return;
+    }
+    await shutdownRuntime("menu shutdown");
+    electron.app.quit();
+}
+
+export function isRuntimeDown(): boolean {
+    return runtimeDown;
+}
+
+// the runtime can restart under the scheduled task at any time, changing its
+// ephemeral ports; this watchdog notices, reattaches, and lets emain rewire
+// clients/windows when the endpoints changed
+export function startRuntimeWatchdog(
+    onStatusChange: (status: "reconnecting" | "connected") => void,
+    onReattached: (endpointsChanged: boolean) => Promise<void>
+) {
+    if (!isRuntimeAttached() || watchdogTimer != null) {
+        return;
+    }
+    watchdogTimer = setInterval(async () => {
+        if (watchdogBusy || !isRuntimeAttached()) {
+            return;
+        }
+        watchdogBusy = true;
+        try {
+            const state = attachedState;
+            const authKey = readRuntimeAuthKey();
+            const healthy =
+                state != null && authKey != null && isPidAlive(state.pid)
+                    ? (await probeRuntime(state, authKey)) != null
+                    : false;
+            if (healthy) {
+                if (runtimeDown) {
+                    runtimeDown = false;
+                    onStatusChange("connected");
+                }
+                return;
+            }
+            if (!runtimeDown) {
+                runtimeDown = true;
+                console.log("runtime connection lost, attempting reattach");
+                onStatusChange("reconnecting");
+            }
+            const prevWeb = state?.web;
+            const ok = await reattachRuntime();
+            if (ok) {
+                runtimeDown = false;
+                const endpointsChanged = attachedState.web !== prevWeb;
+                console.log(`runtime reattached (endpointsChanged: ${endpointsChanged})`);
+                onStatusChange("connected");
+                await onReattached(endpointsChanged);
+            }
+        } catch (e) {
+            console.log("runtime watchdog error", e);
+        } finally {
+            watchdogBusy = false;
+        }
+    }, 5000);
 }

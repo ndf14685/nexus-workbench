@@ -108,11 +108,16 @@ func (ja *JarvisAgent) classForBlock(ctx context.Context, blockID string) (strin
 
 // --- payloads puros (testeables) ---
 
+// protocolo jarvisd v1.4: register con version negociable (ADR-0006 §7)
+const jarvisProtocolVersion = "1.4"
+
 func jarvisRegisterPayload(clientID string) []byte {
 	body, _ := json.Marshal(map[string]any{
-		"client_id":    clientID,
-		"client_type":  jarvisClientType,
-		"capabilities": jarvisCapabilities,
+		"client_id":        clientID,
+		"client_type":      jarvisClientType,
+		"capabilities":     jarvisCapabilities,
+		"protocol_version": jarvisProtocolVersion,
+		"agent_version":    ServerVersion,
 	})
 	return body
 }

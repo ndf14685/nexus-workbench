@@ -10,6 +10,7 @@ import { RpcApi } from "../frontend/app/store/wshclientapi";
 import { isDev } from "../frontend/util/isdev";
 import { fireAndForget } from "../frontend/util/util";
 import { setUserConfirmedQuit } from "./emain-activity";
+import { isRuntimeAttached, prepareRuntimeForUpdate } from "./emain-runtime";
 import { delay } from "./emain-util";
 import { focusedWaveWindow, getAllWaveWindows } from "./emain-window";
 import { ElectronWshClient } from "./emain-wsh";
@@ -205,12 +206,20 @@ export class Updater {
      * Restarts the app and installs an update if it is available.
      */
     async installUpdate() {
-        if (this.status == "ready") {
-            this.status = "installing";
-            await delay(1000);
-            setUserConfirmedQuit(true);
-            autoUpdater.quitAndInstall();
+        if (this.status != "ready") {
+            return;
         }
+        if (isRuntimeAttached()) {
+            const proceed = await prepareRuntimeForUpdate();
+            if (!proceed) {
+                console.log("runtime update deferred/failed, not installing now");
+                return;
+            }
+        }
+        this.status = "installing";
+        await delay(1000);
+        setUserConfirmedQuit(true);
+        autoUpdater.quitAndInstall();
     }
 }
 

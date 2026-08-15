@@ -8,6 +8,7 @@ import { fireAndForget } from "../frontend/util/util";
 import { focusedBuilderWindow, getBuilderWindowById } from "./emain-builder";
 import { openBuilderWindow } from "./emain-ipc";
 import { isDev, unamePlatform } from "./emain-platform";
+import { shutdownRuntimeInteractive } from "./emain-runtime";
 import { clearTabCache } from "./emain-tabview";
 import { decreaseZoomLevel, increaseZoomLevel, resetZoomLevel } from "./emain-util";
 import {
@@ -183,6 +184,13 @@ function makeAppMenuItems(webContents: electron.WebContents): Electron.MenuItemC
             label: "Check for Updates",
             click: () => {
                 fireAndForget(() => updater?.checkForUpdates(true));
+            },
+        },
+        { type: "separator" },
+        {
+            label: "Shutdown Nexus Runtime…",
+            click: () => {
+                fireAndForget(shutdownRuntimeInteractive);
             },
         },
         { type: "separator" },
