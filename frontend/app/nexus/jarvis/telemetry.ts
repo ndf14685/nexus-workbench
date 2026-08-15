@@ -10,6 +10,7 @@ export type JarvisTelemetryEvent =
     | "jarvis.mission.adopt"
     | "jarvis.mission.complete"
     | "jarvis.user_attention.required"
+    | "jarvis.away_digest"
     | "jarvis.park"
     | "jarvis.restore";
 

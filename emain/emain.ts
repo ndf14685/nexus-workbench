@@ -270,6 +270,17 @@ let runtimeCloseNoticeShown = false;
 
 async function showRuntimeCloseNoticeAndQuit() {
     runtimeCloseNoticeShown = true;
+    // persistir ANTES del diálogo y con timeout: tras cerrarse la última
+    // ventana este RPC puede no resolver nunca y dejaba el quit colgado
+    // (Electron vivo sin ventanas, flag sin escribir)
+    try {
+        await Promise.race([
+            RpcApi.SetConfigCommand(ElectronWshClient, { "nexus:runtime:closenotice": true }),
+            sleep(2000),
+        ]);
+    } catch (e) {
+        console.log("error persisting close notice flag", e);
+    }
     electron.dialog.showMessageBoxSync(null, {
         type: "info",
         buttons: ["Entendido"],
@@ -278,11 +289,7 @@ async function showRuntimeCloseNoticeAndQuit() {
         defaultId: 0,
         cancelId: 0,
     });
-    try {
-        await RpcApi.SetConfigCommand(ElectronWshClient, { "nexus:runtime:closenotice": true });
-    } catch (e) {
-        console.log("error persisting close notice flag", e);
-    }
+    console.log("runtime close notice acknowledged, quitting");
     electronApp.quit();
 }
 
