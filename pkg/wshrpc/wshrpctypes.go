@@ -178,6 +178,9 @@ type WshRpcInterface interface {
 	UnparkBlockCommand(ctx context.Context, data CommandUnparkBlockData) (string, error)
 	ListParkedBlocksCommand(ctx context.Context) ([]ParkedBlockInfo, error)
 
+	// nexus: detached runtime (ADR-0006)
+	ShutdownRuntimeCommand(ctx context.Context, data CommandShutdownRuntimeData) error
+
 	// terminal
 	TermGetScrollbackLinesCommand(ctx context.Context, data CommandTermGetScrollbackLinesData) (*CommandTermGetScrollbackLinesRtnData, error)
 
@@ -684,6 +687,10 @@ type CommandUnparkBlockData struct {
 type ParkedBlockInfo struct {
 	BlockId string              `json:"blockid"`
 	Meta    waveobj.MetaMapType `json:"meta"`
+}
+
+type CommandShutdownRuntimeData struct {
+	Reason string `json:"reason,omitempty"`
 }
 
 type CommandTermGetScrollbackLinesData struct {

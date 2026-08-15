@@ -606,6 +606,7 @@ func main() {
 		log.Printf("error fixing up wave zsh history: %v\n", err)
 	}
 	createMainWshClient()
+	wshserver.RuntimeShutdownFn = doShutdown
 	sigutil.InstallShutdownSignalHandlers(doShutdown)
 	sigutil.InstallSIGUSR1Handler()
 	wconfig.MigratePresetsBackgrounds()

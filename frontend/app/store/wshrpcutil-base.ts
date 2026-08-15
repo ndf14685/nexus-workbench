@@ -111,9 +111,17 @@ if (globalThis.window != null) {
     globalThis["consumeGenerator"] = consumeGenerator;
 }
 
-function initElectronWshrpc(electronClient: WshClient, eoOpts: ElectronOverrideOpts) {
+function initElectronWshrpc(
+    electronClient: WshClient,
+    eoOpts: ElectronOverrideOpts,
+    wsEventHandler?: (event: WSEventType) => void
+) {
     setDefaultRouter(new WshRouter(new UpstreamWshRpcProxy()));
     const handleFn = (event: WSEventType) => {
+        if (event.eventtype != null && event.eventtype != "rpc") {
+            wsEventHandler?.(event);
+            return;
+        }
         DefaultRouter.recvRpcMessage(event.data);
     };
     initGlobalWS(getWSServerEndpoint(), "electron", handleFn, eoOpts);

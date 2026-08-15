@@ -46,13 +46,37 @@ func UnregisterWSChannel(connId string) {
 	delete(wsMap, connId)
 }
 
+const ElectronRouteId = "electron"
+
+func SendEventToRoute(routeId string, event WSEventType) bool {
+	globalLock.Lock()
+	defer globalLock.Unlock()
+	sent := false
+	for _, wdata := range wsMap {
+		if wdata.RouteId != routeId {
+			continue
+		}
+		select {
+		case wdata.WindowWSCh <- event:
+			sent = true
+		default:
+		}
+	}
+	return sent
+}
+
 func SendEventToElectron(event WSEventType) {
+	// with a detached runtime Electron is not the parent process, so stderr
+	// never reaches it; the websocket route is primary and stderr the fallback
+	// for the legacy child mode
+	log.Printf("sending event to electron: %q\n", event.EventType)
+	if SendEventToRoute(ElectronRouteId, event) {
+		return
+	}
 	barr, err := json.Marshal(event)
 	if err != nil {
 		log.Printf("cannot marshal electron message: %v\n", err)
 		return
 	}
-	// send to electron
-	log.Printf("sending event to electron: %q\n", event.EventType)
 	fmt.Fprintf(os.Stderr, "\nWAVESRV-EVENT:%s\n", string(barr))
 }

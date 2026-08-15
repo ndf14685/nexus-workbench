@@ -654,6 +654,11 @@ declare global {
         delete?: boolean;
     };
 
+    // wshrpc.CommandShutdownRuntimeData
+    type CommandShutdownRuntimeData = {
+        reason?: string;
+    };
+
     // wshrpc.CommandStartBuilderData
     type CommandStartBuilderData = {
         builderid: string;

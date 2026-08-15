@@ -385,6 +385,32 @@ type ClientActiveState struct {
 	Open   bool `json:"open"`
 }
 
+type RuntimeHealthData struct {
+	Ok       bool   `json:"ok"`
+	Version  string `json:"version"`
+	Protocol int    `json:"protocol"`
+	Pid      int    `json:"pid"`
+	Detached bool   `json:"detached"`
+}
+
+func handleRuntimeHealth(w http.ResponseWriter, r *http.Request) {
+	health := RuntimeHealthData{
+		Ok:       true,
+		Version:  wavebase.WaveVersion,
+		Protocol: wavebase.RuntimeProtocolVersion,
+		Pid:      os.Getpid(),
+		Detached: wavebase.RuntimeDetached,
+	}
+	barr, err := json.Marshal(health)
+	if err != nil {
+		WriteJsonError(w, err)
+		return
+	}
+	w.Header().Set(ContentTypeHeaderKey, ContentTypeJson)
+	w.WriteHeader(http.StatusOK)
+	w.Write(barr)
+}
+
 func WebFnWrap(opts WebFnOpts, fn WebFnType) WebFnType {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
@@ -462,6 +488,7 @@ func RunWebServer(listener net.Listener) {
 	waveRouter := mux.NewRouter()
 	waveRouter.HandleFunc("/wave/file", WebFnWrap(WebFnOpts{AllowCaching: false}, handleWaveFile))
 	waveRouter.HandleFunc("/wave/service", WebFnWrap(WebFnOpts{JsonErrors: true}, handleService))
+	waveRouter.HandleFunc("/wave/runtime-health", WebFnWrap(WebFnOpts{JsonErrors: true}, handleRuntimeHealth))
 	waveRouter.HandleFunc("/wave/aichat", WebFnWrap(WebFnOpts{JsonErrors: true, AllowCaching: false}, aiusechat.WaveAIGetChatHandler))
 
 	vdomRouter := mux.NewRouter()

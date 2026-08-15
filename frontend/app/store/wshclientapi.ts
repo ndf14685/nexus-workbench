@@ -894,6 +894,12 @@ export class RpcApiType {
         return client.wshRpcCall("setvar", data, opts);
     }
 
+    // command "shutdownruntime" [call]
+    ShutdownRuntimeCommand(client: WshClient, data: CommandShutdownRuntimeData, opts?: RpcOpts): Promise<void> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "shutdownruntime", data, opts);
+        return client.wshRpcCall("shutdownruntime", data, opts);
+    }
+
     // command "startbuilder" [call]
     StartBuilderCommand(client: WshClient, data: CommandStartBuilderData, opts?: RpcOpts): Promise<void> {
         if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "startbuilder", data, opts);

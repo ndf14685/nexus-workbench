@@ -217,6 +217,29 @@ func (ws *WshServer) UnparkBlockCommand(ctx context.Context, data wshrpc.Command
 	return tabId, nil
 }
 
+// set by main-server.go; nil means shutdown-by-rpc is unavailable
+var RuntimeShutdownFn func(reason string)
+
+func (ws *WshServer) ShutdownRuntimeCommand(ctx context.Context, data wshrpc.CommandShutdownRuntimeData) error {
+	if RuntimeShutdownFn == nil {
+		return fmt.Errorf("runtime shutdown not available")
+	}
+	reason := data.Reason
+	if reason == "" {
+		reason = "shutdown requested via rpc"
+	}
+	log.Printf("runtime shutdown requested: %s\n", reason)
+	// delay so the rpc response reaches the caller before the process exits
+	go func() {
+		defer func() {
+			panichandler.PanicHandler("ShutdownRuntimeCommand", recover())
+		}()
+		time.Sleep(250 * time.Millisecond)
+		RuntimeShutdownFn(reason)
+	}()
+	return nil
+}
+
 func (ws *WshServer) ListParkedBlocksCommand(ctx context.Context) ([]wshrpc.ParkedBlockInfo, error) {
 	blocks, err := wcore.ListParkedBlocks(ctx)
 	if err != nil {

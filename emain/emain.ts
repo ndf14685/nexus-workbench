@@ -408,7 +408,7 @@ async function appMain() {
     await sleep(10); // wait a bit for wavesrv to be ready
     try {
         initElectronWshClient();
-        initElectronWshrpc(ElectronWshClient, { authKey: AuthKey });
+        initElectronWshrpc(ElectronWshClient, { authKey: AuthKey }, handleWSEvent);
         initMenuEventSubscriptions();
     } catch (e) {
         console.log("error initializing wshrpc", e);
