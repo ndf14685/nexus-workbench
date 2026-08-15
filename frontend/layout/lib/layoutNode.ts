@@ -122,6 +122,25 @@ export function findNode(node: LayoutNode, id: string): LayoutNode | undefined {
 }
 
 /**
+ * Finds the leaf node containing the given blockId, searching the tree state directly.
+ * Unlike LayoutModel.getNodeByBlockId, this does not depend on the rendered leafs atom,
+ * so it works before the layout container has mounted.
+ * @param node The node to search in.
+ * @param blockId The blockId to search for.
+ * @returns The node containing the blockId, or undefined if not found.
+ */
+export function findNodeByBlockId(node: LayoutNode, blockId: string): LayoutNode | undefined {
+    if (!node) return;
+    if (node.data?.blockId === blockId) return node;
+    if (!node.children) return;
+    for (const child of node.children) {
+        const result = findNodeByBlockId(child, blockId);
+        if (result) return result;
+    }
+    return;
+}
+
+/**
  * Finds the node whose children contains the node with the given id.
  * @param node The node to start the search from.
  * @param id The id to search for.

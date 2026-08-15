@@ -11,16 +11,18 @@ import { splitAtom } from "jotai/utils";
 import { createRef, CSSProperties } from "react";
 import { debounce } from "throttle-debounce";
 import { getLayoutStateAtomFromTab } from "./layoutAtom";
-import { balanceNode, findNode, newLayoutNode, walkNodes } from "./layoutNode";
+import { balanceNode, findNode, findNodeByBlockId, newLayoutNode, walkNodes } from "./layoutNode";
 import {
     clearTree,
     computeMoveNode,
     deleteNode,
+    deleteNodeByBlockId,
     focusNode,
     insertNode,
     insertNodeAtIndex,
     magnifyNodeToggle,
     moveNode,
+    pruneMissingBlockNodes,
     replaceNode,
     resizeNode,
     splitHorizontal,
@@ -430,6 +432,14 @@ export class LayoutModel {
                 }
             }
         }
+
+        // dirección inversa: nodos del layout cuyo bloque ya no existe en el tab
+        // (deletes de backend descartados por versiones viejas dejaban estas
+        // franjas fantasma que rompen la distribución de las ventanas)
+        const removed = pruneMissingBlockNodes(this.treeState, new Set(tab.blockids ?? []));
+        if (removed.length > 0) {
+            console.log("Pruned ghost layout nodes for missing blocks:", removed);
+        }
     }
 
     private async handleBackendAction(action: LayoutActionData) {
@@ -454,12 +464,19 @@ export class LayoutModel {
                 const leaf = this?.getNodeByBlockId(action.blockid);
                 if (leaf) {
                     await this.closeNode(leaf.id);
-                } else {
-                    console.error(
-                        "Cannot apply eventbus layout action DeleteNode, could not find leaf node with blockId",
-                        action.blockid
-                    );
+                    break;
                 }
+                // el atom de leafs está vacío hasta que monta el contenedor (p.ej.
+                // acciones encoladas con la UI cerrada, procesadas al arrancar);
+                // resolver contra el árbol para no descartar el delete y dejar un
+                // nodo fantasma persistido
+                if (deleteNodeByBlockId(this.treeState, action.blockid)) {
+                    break;
+                }
+                console.error(
+                    "Cannot apply eventbus layout action DeleteNode, could not find leaf node with blockId",
+                    action.blockid
+                );
                 break;
             }
             case LayoutTreeActionType.InsertNodeAtIndex: {
@@ -489,7 +506,9 @@ export class LayoutModel {
                 break;
             }
             case LayoutTreeActionType.ReplaceNode: {
-                const targetNode = this?.getNodeByBlockId(action.targetblockid);
+                const targetNode =
+                    this?.getNodeByBlockId(action.targetblockid) ??
+                    findNodeByBlockId(this.treeState.rootNode, action.targetblockid);
                 if (!targetNode) {
                     console.error(
                         "Cannot apply eventbus layout action ReplaceNode, could not find target node with blockId",
@@ -508,7 +527,9 @@ export class LayoutModel {
                 break;
             }
             case LayoutTreeActionType.SplitHorizontal: {
-                const targetNode = this?.getNodeByBlockId(action.targetblockid);
+                const targetNode =
+                    this?.getNodeByBlockId(action.targetblockid) ??
+                    findNodeByBlockId(this.treeState.rootNode, action.targetblockid);
                 if (!targetNode) {
                     console.error(
                         "Cannot apply eventbus layout action SplitHorizontal, could not find target node with blockId",
@@ -536,7 +557,9 @@ export class LayoutModel {
                 break;
             }
             case LayoutTreeActionType.SplitVertical: {
-                const targetNode = this?.getNodeByBlockId(action.targetblockid);
+                const targetNode =
+                    this?.getNodeByBlockId(action.targetblockid) ??
+                    findNodeByBlockId(this.treeState.rootNode, action.targetblockid);
                 if (!targetNode) {
                     console.error(
                         "Cannot apply eventbus layout action SplitVertical, could not find target node with blockId",

@@ -5,11 +5,14 @@ import { lazy } from "@/util/util";
 import {
     addChildAt,
     addIntermediateNode,
+    balanceNode,
     findInsertLocationFromIndexArr,
     findNextInsertLocation,
     findNode,
+    findNodeByBlockId,
     findParent,
     removeChild,
+    walkNodes,
 } from "./layoutNode";
 import {
     DefaultNodeSize,
@@ -374,6 +377,58 @@ export function deleteNode(layoutState: LayoutTreeState, action: LayoutTreeDelet
             console.error("unable to delete node, not found in tree");
         }
     }
+}
+
+// deleteNode deja padres vacíos/de un solo hijo; los colapsa acá porque el
+// balanceo normal vive en updateTree, que no corre si el contenedor no montó
+function normalizeAfterDelete(layoutState: LayoutTreeState) {
+    if (!layoutState.rootNode) return;
+    if (layoutState.rootNode.children?.length === 0) {
+        clearTree(layoutState);
+        return;
+    }
+    layoutState.rootNode = balanceNode(layoutState.rootNode);
+}
+
+/**
+ * Deletes the leaf node containing the given blockId, resolving it from the tree state
+ * directly so it works even when the layout container has not mounted yet.
+ * @param layoutState The state of the tree.
+ * @param blockId The blockId whose node should be removed.
+ * @returns True if a node was found and removed.
+ */
+export function deleteNodeByBlockId(layoutState: LayoutTreeState, blockId: string): boolean {
+    const node = findNodeByBlockId(layoutState.rootNode, blockId);
+    if (!node) {
+        return false;
+    }
+    if (layoutState.magnifiedNodeId === node.id) {
+        layoutState.magnifiedNodeId = undefined;
+    }
+    deleteNode(layoutState, { type: LayoutTreeActionType.DeleteNode, nodeId: node.id });
+    normalizeAfterDelete(layoutState);
+    return true;
+}
+
+/**
+ * Removes every leaf node whose blockId is not in the given set of valid blockIds.
+ * Heals layouts left with ghost nodes when backend delete actions were dropped.
+ * @param layoutState The state of the tree.
+ * @param validBlockIds The set of blockIds that are allowed to remain in the tree.
+ * @returns The blockIds whose nodes were removed.
+ */
+export function pruneMissingBlockNodes(layoutState: LayoutTreeState, validBlockIds: Set<string>): string[] {
+    const staleBlockIds: string[] = [];
+    walkNodes(layoutState.rootNode, (node) => {
+        const blockId = node.data?.blockId;
+        if (blockId && !validBlockIds.has(blockId)) {
+            staleBlockIds.push(blockId);
+        }
+    });
+    for (const blockId of staleBlockIds) {
+        deleteNodeByBlockId(layoutState, blockId);
+    }
+    return staleBlockIds;
 }
 
 export function resizeNode(layoutState: LayoutTreeState, action: LayoutTreeResizeNodeAction) {
