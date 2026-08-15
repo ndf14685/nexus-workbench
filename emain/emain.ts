@@ -9,7 +9,7 @@ import { sprintf } from "sprintf-js";
 import * as services from "../frontend/app/store/services";
 import { initElectronWshrpc, shutdownWshrpc } from "../frontend/app/store/wshrpcutil-base";
 import { fireAndForget, sleep } from "../frontend/util/util";
-import { AuthKey, configureAuthKeyRequestInjection } from "./authkey";
+import { configureAuthKeyRequestInjection, getAuthKey } from "./authkey";
 import {
     getActivityState,
     getAndClearTermCommandsDurable,
@@ -41,7 +41,9 @@ import {
     unamePlatform,
 } from "./emain-platform";
 import { ensureHotSpareTab, setMaxTabCacheSize } from "./emain-tabview";
-import { getIsWaveSrvDead, getWaveSrvProc, getWaveSrvReady, runWaveSrv } from "./emain-wavesrv";
+import { ensureRuntime, isRuntimeAttached } from "./emain-runtime";
+import { ensureRuntimeTask } from "./emain-runtimetask";
+import { getIsWaveSrvDead, getWaveSrvProc, getWaveSrvReady } from "./emain-wavesrv";
 import {
     createBrowserWindow,
     createNewWaveWindow,
@@ -264,9 +266,40 @@ electronApp.on("window-all-closed", () => {
         electronApp.quit();
     }
 });
+let runtimeCloseNoticeShown = false;
+
+async function showRuntimeCloseNoticeAndQuit() {
+    runtimeCloseNoticeShown = true;
+    electron.dialog.showMessageBoxSync(null, {
+        type: "info",
+        buttons: ["Entendido"],
+        title: "Nexus Workbench",
+        message: "Jarvis y las tareas delegadas seguirán trabajando en segundo plano.",
+        defaultId: 0,
+        cancelId: 0,
+    });
+    try {
+        await RpcApi.SetConfigCommand(ElectronWshClient, { "nexus:runtime:closenotice": true });
+    } catch (e) {
+        console.log("error persisting close notice flag", e);
+    }
+    electronApp.quit();
+}
+
 electronApp.on("before-quit", (e) => {
     const allWindows = getAllWaveWindows();
     const allBuilders = getAllBuilderWindows();
+    if (isRuntimeAttached()) {
+        if (!runtimeCloseNoticeShown) {
+            e.preventDefault();
+            fireAndForget(showRuntimeCloseNoticeAndQuit);
+            return;
+        }
+        setGlobalIsQuitting(true);
+        updater?.stop();
+        shutdownWshrpc();
+        return;
+    }
     if (
         confirmQuit &&
         !getForceQuit() &&
@@ -392,7 +425,8 @@ async function appMain() {
         fireAndForget(createNewWaveWindow);
     });
     try {
-        await runWaveSrv(handleWSEvent);
+        const runtimeMode = await ensureRuntime(handleWSEvent);
+        console.log("runtime mode:", runtimeMode);
     } catch (e) {
         console.log(e.toString());
     }
@@ -408,7 +442,7 @@ async function appMain() {
     await sleep(10); // wait a bit for wavesrv to be ready
     try {
         initElectronWshClient();
-        initElectronWshrpc(ElectronWshClient, { authKey: AuthKey }, handleWSEvent);
+        initElectronWshrpc(ElectronWshClient, { authKey: getAuthKey() }, handleWSEvent);
         initMenuEventSubscriptions();
     } catch (e) {
         console.log("error initializing wshrpc", e);
@@ -418,6 +452,7 @@ async function appMain() {
     if (fullConfig?.settings?.["app:confirmquit"] != null) {
         confirmQuit = fullConfig.settings["app:confirmquit"];
     }
+    runtimeCloseNoticeShown = fullConfig?.settings?.["nexus:runtime:closenotice"] === true;
     ensureHotSpareTab(fullConfig);
     await relaunchBrowserWindows();
     setTimeout(runActiveTimer, 5000); // start active timer, wait 5s just to be safe
@@ -425,6 +460,9 @@ async function appMain() {
 
     makeAndSetAppMenu();
     makeDockTaskbar();
+    if (isRuntimeAttached() && !isDev) {
+        ensureRuntimeTask();
+    }
     await configureAutoUpdater();
     setGlobalIsStarting(false);
     if (fullConfig?.settings?.["window:maxtabcachesize"] != null) {

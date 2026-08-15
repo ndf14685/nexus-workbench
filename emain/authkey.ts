@@ -6,10 +6,24 @@ import { getWebServerEndpoint, getWSServerEndpoint } from "../frontend/util/endp
 
 const AuthKeyHeader = "X-AuthKey";
 export const WaveAuthKeyEnv = "WAVETERM_AUTH_KEY";
-export const AuthKey = crypto.randomUUID();
+
+// in attached mode the key comes from runtime.authkey (persistent, owned by
+// the runtime); in legacy child mode it is random per launch as before
+let authKey: string = null;
+
+export function initAuthKey(key: string) {
+    authKey = key;
+}
+
+export function getAuthKey(): string {
+    if (authKey == null) {
+        throw new Error("authkey not initialized");
+    }
+    return authKey;
+}
 
 ipcMain.on("get-auth-key", (event) => {
-    event.returnValue = AuthKey;
+    event.returnValue = getAuthKey();
 });
 
 export function configureAuthKeyRequestInjection(session: Electron.Session) {
@@ -17,7 +31,7 @@ export function configureAuthKeyRequestInjection(session: Electron.Session) {
         urls: [`${getWebServerEndpoint()}/*`, `${getWSServerEndpoint()}/*`],
     };
     session.webRequest.onBeforeSendHeaders(filter, (details, callback) => {
-        details.requestHeaders[AuthKeyHeader] = AuthKey;
+        details.requestHeaders[AuthKeyHeader] = getAuthKey();
         callback({ requestHeaders: details.requestHeaders });
     });
 }

@@ -183,8 +183,9 @@ type SettingsType struct {
 	TsunamiSdkVersion     string `json:"tsunami:sdkversion,omitempty"`
 	TsunamiGoPath         string `json:"tsunami:gopath,omitempty"`
 
-	NexusEnvironments []NexusEnvType `json:"nexus:environments,omitempty"`
-	NexusBrainUrl     string         `json:"nexus:brainurl,omitempty"`
+	NexusEnvironments       []NexusEnvType `json:"nexus:environments,omitempty"`
+	NexusBrainUrl           string         `json:"nexus:brainurl,omitempty"`
+	NexusRuntimeCloseNotice bool           `json:"nexus:runtime:closenotice,omitempty"`
 }
 
 // NexusEnvType is a Nexus Workbench extension: one entry of the environment

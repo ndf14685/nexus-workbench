@@ -386,20 +386,22 @@ type ClientActiveState struct {
 }
 
 type RuntimeHealthData struct {
-	Ok       bool   `json:"ok"`
-	Version  string `json:"version"`
-	Protocol int    `json:"protocol"`
-	Pid      int    `json:"pid"`
-	Detached bool   `json:"detached"`
+	Ok        bool   `json:"ok"`
+	Version   string `json:"version"`
+	BuildTime string `json:"buildtime"`
+	Protocol  int    `json:"protocol"`
+	Pid       int    `json:"pid"`
+	Detached  bool   `json:"detached"`
 }
 
 func handleRuntimeHealth(w http.ResponseWriter, r *http.Request) {
 	health := RuntimeHealthData{
-		Ok:       true,
-		Version:  wavebase.WaveVersion,
-		Protocol: wavebase.RuntimeProtocolVersion,
-		Pid:      os.Getpid(),
-		Detached: wavebase.RuntimeDetached,
+		Ok:        true,
+		Version:   wavebase.WaveVersion,
+		BuildTime: wavebase.BuildTime,
+		Protocol:  wavebase.RuntimeProtocolVersion,
+		Pid:       os.Getpid(),
+		Detached:  wavebase.RuntimeDetached,
 	}
 	barr, err := json.Marshal(health)
 	if err != nil {

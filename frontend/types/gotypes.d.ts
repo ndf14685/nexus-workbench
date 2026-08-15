@@ -1535,6 +1535,7 @@ declare global {
         "tsunami:gopath"?: string;
         "nexus:environments"?: NexusEnvType[];
         "nexus:brainurl"?: string;
+        "nexus:runtime:closenotice"?: boolean;
     };
 
     // waveobj.StickerClickOptsType

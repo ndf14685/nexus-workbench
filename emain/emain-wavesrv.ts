@@ -5,7 +5,7 @@ import * as electron from "electron";
 import * as child_process from "node:child_process";
 import * as readline from "readline";
 import { WebServerEndpointVarName, WSServerEndpointVarName } from "../frontend/util/endpoints";
-import { AuthKey, WaveAuthKeyEnv } from "./authkey";
+import { getAuthKey, WaveAuthKeyEnv } from "./authkey";
 import { setForceQuit, setUserConfirmedQuit } from "./emain-activity";
 import {
     getElectronAppResourcesPath,
@@ -35,6 +35,11 @@ export function getWaveVersion(): { version: string; buildTime: number } {
     return { version: WaveVersion, buildTime: WaveBuildTime };
 }
 
+export function setWaveVersion(version: string, buildTime: number) {
+    WaveVersion = version;
+    WaveBuildTime = buildTime;
+}
+
 let waveSrvReadyResolve = (value: boolean) => {};
 const waveSrvReady: Promise<boolean> = new Promise((resolve, _) => {
     waveSrvReadyResolve = resolve;
@@ -42,6 +47,10 @@ const waveSrvReady: Promise<boolean> = new Promise((resolve, _) => {
 
 export function getWaveSrvReady(): Promise<boolean> {
     return waveSrvReady;
+}
+
+export function resolveWaveSrvReady() {
+    waveSrvReadyResolve(true);
 }
 
 export function getWaveSrvProc(): child_process.ChildProcessWithoutNullStreams | null {
@@ -67,7 +76,7 @@ export function runWaveSrv(handleWSEvent: (evtMsg: WSEventType) => void): Promis
     envCopy[WaveAppPathVarName] = getElectronAppUnpackedBasePath();
     envCopy[WaveAppResourcesPathVarName] = getElectronAppResourcesPath();
     envCopy[WaveAppElectronExecPath] = getElectronExecPath();
-    envCopy[WaveAuthKeyEnv] = AuthKey;
+    envCopy[WaveAuthKeyEnv] = getAuthKey();
     envCopy[WaveDataHomeVarName] = getWaveDataDir();
     envCopy[WaveConfigHomeVarName] = getWaveConfigDir();
     const waveSrvCmd = getWaveSrvPath();
