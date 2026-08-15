@@ -3,6 +3,45 @@
 Cambios propios del fork; lo heredado de Wave Terminal se documenta en los
 releases de upstream.
 
+## v0.17.0-beta.0 — 2026-08-15 · "Detached Runtime" (ADR-0006)
+
+### Cambiado
+- **La UI ya no es dueña de la ejecución.** `wavesrv --detached` corre como
+  servicio persistente supervisado por la Scheduled Task `NexusRuntime`
+  (logon + restart on failure). Electron ahora ATTACHEA a un runtime
+  pre-existente (rendezvous `runtime.json` + `runtime.authkey` en el data
+  dir) en vez de spawnearlo como hijo; el dead-man switch de stdin queda
+  solo para el modo hijo legacy (dev/fallback). Cerrar o matar
+  `NexusWorkbench.exe` no detiene terminales, workers ni misiones.
+- **Workers remotos de Jarvis son jobs durables** (`term:durable=true` en
+  el `terminal.create` del jarvis-agent): corren bajo `wsh jobmanager`
+  (PPID 1) en el host remoto y sobreviven cierre de UI, restart del
+  runtime y cortes de red.
+- **Semántica de cierre explícita**: X cierra solo la UI (aviso informativo
+  una sola vez, `nexus:runtime:closenotice`); "Shutdown Nexus Runtime…"
+  en el menú hace drain informado; `wsh runtime status|stop` por CLI; el
+  updater detiene el runtime antes de `quitAndInstall` y ofrece diferir si
+  hay misiones activas.
+- **Ownership de sesión** (`nexus:owner: ui|mission|user`): el spawn de
+  workers lo setea y el ADOPT lo transfiere.
+- Eventos backend→Electron (`electron:*`) viajan por websocket a la ruta
+  `electron`; stderr queda como fallback del modo hijo.
+
+### Agregado
+- `GET /wave/runtime-health`, `ShutdownRuntimeCommand`, `wsh runtime`,
+  `wsh block park|unpark`; watchdog de re-attach en Electron (runtime
+  reiniciado → endpoints nuevos → rewire + relaunch de ventanas).
+- Workers **headless** de nacimiento: `headless: true` en el spec del
+  worker → bloque parkeado al crearse; "Ver trabajo" lo materializa.
+- Digest "mientras no estabas" al reabrir (un solo toast agregado).
+- jarvis-agent: deny destructivo fail-closed cuando el entorno no se puede
+  clasificar; register con `protocol_version` 1.4 y `agent_version`.
+- jarvisd (repo aparte): status `spawning` cierra el race spawn→blocked;
+  liveness del canal por `last_seen` (45 s) con recovery ante timeouts;
+  atención asíncrona por inbox dirigido; `/health` con resumen de misiones
+  y estado del canal.
+- `doShutdown` drena los blockcontrollers de verdad (espera con timeout).
+
 ## v0.16.0-beta.2 — 2026-08-14 · "Los cinco bugs del E2E"
 
 ### Arreglado

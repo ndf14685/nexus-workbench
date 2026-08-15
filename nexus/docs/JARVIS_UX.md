@@ -155,13 +155,49 @@ jarvisd: `Mission.name: str` (nuevo), intents de misión en
   (shell integration no lo reporta hoy); se omite antes que inventarlo.
 - Multi-select visual de módulos: v1 = módulo enfocado + selección desde
   el Parking/status; la API ya es `contexts: []`.
-- HEADLESS automático: un worker corre perfectamente con su terminal
-  parkeada (controller Go + filestore no dependen del renderer) y "Ver
-  trabajo"/Retomar la materializa, pero el brain todavía no marca
-  `nexus:headless` en el create para auto-parkearla — hoy el parking del
-  worker es manual.
+- ~~HEADLESS automático~~ CERRADA en Detached Runtime (ADR-0006): el spec
+  de worker acepta `headless: true`, jarvisd lo propaga en `terminal.create`
+  y el jarvis-agent parkea el bloque al nacer (`wsh block park`). "Ver
+  trabajo"/Retomar lo materializa.
 - Los intents de misión entran solo por `POST /intent` (overlay); el camino
   TCP del HUD/voz (`BrainBackedTransport`) no los rutea todavía.
 - Cierre automático de módulos al completar misión (§17): solo notificación
   + badge; no se cierran módulos automáticamente (comportamiento
   conservador a propósito).
+
+## Detached Runtime (v0.17, ADR-0006)
+
+La UI dejó de ser dueña de la ejecución. Resumen operativo:
+
+- `wavesrv --detached` corre supervisado por la Scheduled Task
+  **NexusRuntime** (logon + restart on failure), instalada
+  idempotentemente por la app al arrancar. Rendezvous por
+  `<dataDir>/runtime.json` + `runtime.authkey` (0600).
+- Cerrar o matar `NexusWorkbench.exe` NO detiene el runtime, las
+  terminales, los workers ni las misiones. Primera vez muestra un aviso
+  informativo (config `nexus:runtime:closenotice`).
+- Ownership de sesión: meta `nexus:owner` (`ui|mission|user`). El
+  jarvis-agent lo setea en `terminal.create` y el ADOPT lo transfiere en
+  `terminal.set_meta`.
+- Workers remotos de Jarvis son **jobs durables** (`term:durable=true` →
+  `wsh jobmanager` con PPID 1 en el host remoto): sobreviven al cierre de
+  la UI, a un restart del runtime y a cortes de red (`ReconnectJob`).
+- Workers/terminales **locales** sobreviven al cierre de la UI pero NO a
+  un restart del runtime (fail-safe: recovery de jarvisd → `needs_input`).
+  Extender jobmanager a local+Windows queda como deuda.
+- Semántica de cierre (§19 del spec): X = solo UI; "Shutdown Nexus
+  Runtime…" (menú) = drain informado + stop total; `wsh runtime
+  status|stop` por CLI; el updater detiene el runtime antes de instalar
+  (o difiere si hay misiones activas).
+- Al reabrir: attach + digest "mientras no estabas" (un solo toast) +
+  badges de atención. El watchdog re-attachea solo si el runtime se
+  reinicia (puertos efímeros nuevos → relaunch de ventanas).
+- jarvisd: liveness del canal por `last_seen` (45s), race spawn→blocked
+  cerrado con el status `spawning`, atención asíncrona por inbox dirigido,
+  `/health` con resumen de misiones, protocolo v1.4 con
+  `protocol_version`/`agent_version` en el register.
+- Deuda nueva explícita: notificación nativa con la app cerrada (el inbox
+  la retiene hasta reabrir; falta un puente toast desde el servicio),
+  banner dedicado de "runtime reconectando" en el renderer (hoy: UX de WS
+  desconectado existente + relaunch automático), y hardening del minteo
+  de JWT del MCP (lee la clave de `waveterm.db`; mover a DPAPI/keyring).
