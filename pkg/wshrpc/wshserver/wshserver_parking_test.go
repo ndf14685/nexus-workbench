@@ -70,6 +70,21 @@ func TestParkAndUnparkBlock(t *testing.T) {
 		t.Fatalf("ListParkedBlocksCommand = %v, %v", parked, err)
 	}
 
+	// sin la acción de layout pendiente, un park via wsh (sin frontend que
+	// remueva el nodo) deja el bloque parkeado renderizado tras recargar
+	layoutAfterPark, _ := wstore.DBGet[*waveobj.LayoutState](ctx, tab.LayoutState)
+	foundRemove := false
+	if layoutAfterPark != nil && layoutAfterPark.PendingBackendActions != nil {
+		for _, action := range *layoutAfterPark.PendingBackendActions {
+			if action.ActionType == wcore.LayoutActionDataType_Remove && action.BlockId == blockId {
+				foundRemove = true
+			}
+		}
+	}
+	if !foundRemove {
+		t.Fatalf("expected a pending remove action for %q after park", blockId)
+	}
+
 	restoredTab, err := server.UnparkBlockCommand(ctx, wshrpc.CommandUnparkBlockData{BlockId: blockId})
 	if err != nil {
 		t.Fatalf("UnparkBlockCommand: %v", err)

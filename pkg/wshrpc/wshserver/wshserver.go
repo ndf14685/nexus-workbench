@@ -191,15 +191,27 @@ func (ws *WshServer) GetRTInfoCommand(ctx context.Context, data wshrpc.CommandGe
 }
 
 func (ws *WshServer) ParkBlockCommand(ctx context.Context, data wshrpc.CommandParkBlockData) error {
+	ctx = waveobj.ContextWithUpdates(ctx)
 	tabId, _ := wstore.DBFindTabForBlockId(ctx, data.BlockId)
 	err := wcore.ParkBlock(ctx, data.BlockId, data.Note)
 	if err != nil {
 		return err
 	}
+	// el frontend remueve el nodo de layout solo cuando el park sale del menú
+	// contextual; via wsh (agente/headless, UI cerrada) el nodo quedaba en el
+	// LayoutState y el bloque parkeado se seguía renderizando tras recargar
+	if tabId != "" {
+		wcore.QueueLayoutActionForTab(ctx, tabId, waveobj.LayoutActionData{
+			ActionType: wcore.LayoutActionDataType_Remove,
+			BlockId:    data.BlockId,
+		})
+	}
 	wcore.SendWaveObjUpdate(waveobj.MakeORef(waveobj.OType_Block, data.BlockId))
 	if tabId != "" {
 		wcore.SendWaveObjUpdate(waveobj.MakeORef(waveobj.OType_Tab, tabId))
 	}
+	updates := waveobj.ContextGetUpdatesRtn(ctx)
+	wps.Broker.SendUpdateEvents(updates)
 	return nil
 }
 
