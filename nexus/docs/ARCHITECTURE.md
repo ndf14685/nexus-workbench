@@ -23,14 +23,35 @@
 └────────────────────────────────────────────────────────────┘
 ```
 
+## Detached Runtime (v0.17, ADR-0006)
+
+Desde v0.17 el ciclo de vida de la UI y el de ejecución están desacoplados:
+
+```
+Scheduled Task NexusRuntime (logon + restart on failure)
+  └─ wavesrv --detached          ← dueño de PTYs/SSH/misiones; NO hijo de Electron
+       ├─ runtime.json           ← rendezvous: pid/puertos/version/protocolo
+       ├─ runtime.authkey        ← secreto persistente (0600)
+       └─ jobs durables remotos  ← wsh jobmanager (PPID 1) via term:durable
+
+NexusWorkbench.exe (descartable)
+  └─ attach: lee runtime.json → probe /wave/runtime-health → cliente WS
+     (watchdog: si el runtime se reinicia, re-attachea y relanza ventanas)
+```
+
+Cerrar/matar la app no toca la ejecución. El modo hijo legacy (spawn +
+dead-man switch de stdin) queda para dev y como fallback.
+
 ## El motor (WaveTerm) — arquitectura real encontrada
 
-- **Proceso Electron** (`emain/`): `emain.ts` (`appMain`) lanza `wavesrv`
-  (`emain-wavesrv.ts`), crea ventanas (`emain-window.ts`,
+- **Proceso Electron** (`emain/`): `emain.ts` (`appMain`) attachea al
+  runtime o lanza `wavesrv` legacy (`emain-runtime.ts`,
+  `emain-wavesrv.ts`), crea ventanas (`emain-window.ts`,
   `WaveBrowserWindow`), resuelve dirs de config/data (`emain-platform.ts`).
 - **Backend Go `wavesrv`** (`cmd/server/main-server.go`): servidor web +
-  websocket en `127.0.0.1` (puertos efímeros anunciados por stderr con el
-  handshake `WAVESRV-ESTART`), y domain socket `wave.sock`.
+  websocket en `127.0.0.1` (puertos efímeros anunciados por
+  `runtime.json` en modo detached y por stderr con el handshake
+  `WAVESRV-ESTART` en modo hijo), y domain socket `wave.sock`.
 - **RPC `wshrpc`** (`pkg/wshrpc/wshrpctypes.go` → `wshserver.go`): interfaz
   única `WshRpcInterface`; codegen con `task generate` produce el cliente TS
   (`frontend/app/store/wshclientapi.ts`) y Go (`pkg/wshrpc/wshclient/`).
