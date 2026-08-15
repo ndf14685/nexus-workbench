@@ -102,6 +102,48 @@ export function summarizeCounts(missions: MissionSnapshot[]): { working: number;
     };
 }
 
+export interface AwayDigest {
+    working: number;
+    completed: MissionSnapshot[];
+    attention: MissionSnapshot[];
+}
+
+// puro: qué pasó desde la última vez que el usuario tuvo el Workbench abierto.
+// lastSeenTs en ms; updated_at de jarvisd viene en segundos epoch.
+export function computeAwayDigest(missions: MissionSnapshot[], lastSeenTs: number): AwayDigest {
+    if (lastSeenTs <= 0) {
+        return null;
+    }
+    const updatedSince = (m: MissionSnapshot) => (m.updated_at ?? 0) * 1000 > lastSeenTs;
+    const completed = missions.filter((m) => m.status == "completed" && updatedSince(m));
+    const attention = missions.filter((m) => AttentionStatuses.includes(m.status));
+    const working = summarizeCounts(missions).working;
+    if (completed.length == 0 && attention.length == 0 && working == 0) {
+        return null;
+    }
+    return { working, completed, attention };
+}
+
+export function formatAwayDigest(digest: AwayDigest): string {
+    const parts: string[] = [];
+    if (digest.working > 0) {
+        parts.push(`${digest.working} trabajando`);
+    }
+    if (digest.completed.length > 0) {
+        parts.push(
+            digest.completed.length == 1
+                ? `1 terminó mientras no estabas (${missionLabel(digest.completed[0])})`
+                : `${digest.completed.length} terminaron mientras no estabas`
+        );
+    }
+    if (digest.attention.length > 0) {
+        parts.push(
+            digest.attention.length == 1 ? "1 necesita atención" : `${digest.attention.length} necesitan atención`
+        );
+    }
+    return parts.join(" · ");
+}
+
 export class JarvisStatusModel {
     private static instance: JarvisStatusModel = null;
 
@@ -112,6 +154,7 @@ export class JarvisStatusModel {
 
     lastStatuses: Map<string, string> = new Map();
     timer: ReturnType<typeof setInterval> = null;
+    awayDigestPending = true;
 
     private constructor() {
         this.workingCountAtom = jotai.atom((get) => summarizeCounts(get(this.missionsAtom)).working);
@@ -159,11 +202,49 @@ export class JarvisStatusModel {
         }
         globalStore.set(this.availableAtom, true);
         globalStore.set(this.missionsAtom, missions);
+        this.maybeShowAwayDigest(missions);
         const notifications = computeTransitions(this.lastStatuses, missions);
         this.lastStatuses = new Map(missions.map((m) => [m.mission_id, m.status]));
         for (const notification of notifications) {
             this.notify(notification);
         }
+        try {
+            localStorage.setItem("jarvis:lastseen", String(Date.now()));
+        } catch {
+            // storage puede no estar (tests/node)
+        }
+    }
+
+    // un solo toast agregado al reconectar (§21): nada de spam por misión
+    maybeShowAwayDigest(missions: MissionSnapshot[]) {
+        if (!this.awayDigestPending) {
+            return;
+        }
+        this.awayDigestPending = false;
+        let lastSeenTs = 0;
+        try {
+            lastSeenTs = parseInt(localStorage.getItem("jarvis:lastseen")) || 0;
+        } catch {
+            return;
+        }
+        const digest = computeAwayDigest(missions, lastSeenTs);
+        if (digest == null || (digest.completed.length == 0 && digest.attention.length == 0)) {
+            return;
+        }
+        jarvisLog("jarvis.away_digest", {
+            working: digest.working,
+            completed: digest.completed.length,
+            attention: digest.attention.length,
+        });
+        void RpcApi.NotifyCommand(
+            TabRpcClient,
+            {
+                title: "Jarvis",
+                body: formatAwayDigest(digest).slice(0, 300),
+                silent: false,
+            },
+            { route: "electron" }
+        ).catch(() => {});
     }
 
     notify(notification: MissionNotification) {

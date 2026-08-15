@@ -4,7 +4,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { RpcApi } from "@/app/store/wshclientapi";
 import {
+    computeAwayDigest,
     computeTransitions,
+    formatAwayDigest,
     JarvisStatusModel,
     missionLabel,
     pickInboxAnswer,
@@ -150,5 +152,49 @@ describe("missionLabel", () => {
         expect(missionLabel(snap("1", "running"))).toBe("m 1");
         expect(missionLabel({ mission_id: "m-x", status: "running", objective: "arreglar CV" })).toBe("arreglar CV");
         expect(missionLabel({ mission_id: "m-x", status: "running" })).toBe("m-x");
+    });
+});
+
+describe("computeAwayDigest / formatAwayDigest (§21: resumen al reconectar)", () => {
+    const nowMs = 1_800_000_000_000;
+    const secsAgo = (s: number) => (nowMs - s * 1000) / 1000;
+
+    it("returns null without a previous lastseen (first run ever)", () => {
+        expect(computeAwayDigest([snap("1", "completed", { updated_at: secsAgo(10) })], 0)).toBeNull();
+    });
+
+    it("returns null when nothing happened and nothing is active", () => {
+        const missions = [snap("1", "completed", { updated_at: secsAgo(9999) }), snap("2", "stopped")];
+        expect(computeAwayDigest(missions, nowMs - 3600 * 1000)).toBeNull();
+    });
+
+    it("collects completions since lastseen, current attention and working count", () => {
+        const lastSeen = nowMs - 3600 * 1000;
+        const missions = [
+            snap("1", "completed", { updated_at: secsAgo(60) }),
+            snap("2", "completed", { updated_at: secsAgo(7200) }),
+            snap("3", "needs_input"),
+            snap("4", "running"),
+        ];
+        const digest = computeAwayDigest(missions, lastSeen);
+        expect(digest.working).toBe(1);
+        expect(digest.completed.map((m) => m.mission_id)).toEqual(["1"]);
+        expect(digest.attention.map((m) => m.mission_id)).toEqual(["3"]);
+    });
+
+    it("formats the digest like the spec example", () => {
+        const digest = computeAwayDigest(
+            [
+                snap("1", "completed", { updated_at: secsAgo(60), name: "deploy staging" }),
+                snap("3", "needs_input"),
+                snap("4", "running"),
+                snap("5", "running"),
+            ],
+            nowMs - 3600 * 1000
+        );
+        const text = formatAwayDigest(digest);
+        expect(text).toContain("2 trabajando");
+        expect(text).toContain("1 terminó mientras no estabas (deploy staging)");
+        expect(text).toContain("1 necesita atención");
     });
 });
