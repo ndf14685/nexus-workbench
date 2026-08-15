@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"runtime"
 	"sync"
@@ -86,6 +87,7 @@ func doShutdown(reason string) {
 		// TODO deal with flush in progress
 		clearTempFiles()
 		filestore.WFS.FlushCache(ctx)
+		wavebase.RemoveRuntimeState()
 		watcher := wconfig.GetWatcher()
 		if watcher != nil {
 			watcher.Close()
@@ -396,9 +398,44 @@ func createMainWshClient() {
 	wshfs.RpcClientRouteId = wshutil.MakeConnectionRouteId(wshrpc.LocalConnName)
 }
 
+// the scheduled task that supervises the detached runtime cannot set env vars,
+// so the dirs/paths that Electron normally injects by env arrive as flags
+func parseRuntimeArgs() {
+	flagToEnv := map[string]string{
+		"--data-home":      wavebase.WaveDataHomeEnvVar,
+		"--config-home":    wavebase.WaveConfigHomeEnvVar,
+		"--app-path":       wavebase.WaveAppPathVarName,
+		"--resources-path": wavebase.WaveAppResourcesPathVarName,
+	}
+	args := os.Args[1:]
+	for idx := 0; idx < len(args); idx++ {
+		arg := args[idx]
+		if arg == "--detached" {
+			wavebase.RuntimeDetached = true
+			continue
+		}
+		flagName := arg
+		flagValue := ""
+		if eqIdx := strings.Index(arg, "="); eqIdx >= 0 {
+			flagName = arg[:eqIdx]
+			flagValue = arg[eqIdx+1:]
+		} else if idx+1 < len(args) {
+			flagValue = args[idx+1]
+		}
+		envName, ok := flagToEnv[flagName]
+		if !ok || flagValue == "" {
+			continue
+		}
+		if !strings.Contains(arg, "=") {
+			idx++
+		}
+		os.Setenv(envName, flagValue)
+	}
+}
+
 func grabAndRemoveEnvVars() error {
 	err := authkey.SetAuthKeyFromEnv()
-	if err != nil {
+	if err != nil && !wavebase.RuntimeDetached {
 		return fmt.Errorf("setting auth key: %v", err)
 	}
 	err = wavebase.CacheAndRemoveEnvVars()
@@ -464,6 +501,7 @@ func main() {
 	wshutil.DefaultRouter = wshutil.NewWshRouter()
 	wshutil.DefaultRouter.SetAsRootRouter()
 
+	parseRuntimeArgs()
 	err := grabAndRemoveEnvVars()
 	if err != nil {
 		log.Printf("[error] %v\n", err)
@@ -478,6 +516,15 @@ func main() {
 	if err != nil {
 		log.Printf("error ensuring wave home dir: %v\n", err)
 		return
+	}
+	if wavebase.RuntimeDetached && authkey.GetAuthKey() == "" {
+		runtimeKey, keyErr := wavebase.LoadOrCreateRuntimeAuthKey()
+		if keyErr != nil {
+			log.Printf("error loading runtime authkey: %v\n", keyErr)
+			return
+		}
+		authkey.SetAuthKey(runtimeKey)
+		log.Printf("detached mode: using persistent runtime authkey\n")
 	}
 	err = wavebase.EnsureWaveDBDir()
 	if err != nil {
@@ -565,7 +612,9 @@ func main() {
 	startConfigWatcher()
 	aiusechat.InitAIModeConfigWatcher()
 	maybeStartPprofServer()
-	go stdinReadWatch()
+	if !wavebase.RuntimeDetached {
+		go stdinReadWatch()
+	}
 	go telemetryLoop()
 	go diagnosticLoop()
 	setupTelemetryConfigHandler()
@@ -602,6 +651,21 @@ func main() {
 	if err != nil {
 		log.Printf("error creating unix listener: %v\n", err)
 		return
+	}
+	if wavebase.RuntimeDetached {
+		stateErr := wavebase.WriteRuntimeState(wavebase.RuntimeState{
+			Pid:      os.Getpid(),
+			StartTs:  time.Now().UnixMilli(),
+			Web:      webListener.Addr().String(),
+			Ws:       wsListener.Addr().String(),
+			Version:  WaveVersion,
+			Protocol: wavebase.RuntimeProtocolVersion,
+		})
+		if stateErr != nil {
+			log.Printf("error writing runtime state file: %v\n", stateErr)
+			return
+		}
+		log.Printf("detached mode: runtime state written (web:%s ws:%s)\n", webListener.Addr(), wsListener.Addr())
 	}
 	go func() {
 		if BuildTime == "" {

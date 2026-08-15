@@ -24,6 +24,9 @@ const RuntimeProtocolVersion = 1
 const RuntimeStateFileName = "runtime.json"
 const RuntimeAuthKeyFileName = "runtime.authkey"
 
+// set by main-server.go when running with --detached (ADR-0006)
+var RuntimeDetached bool
+
 type RuntimeState struct {
 	Pid      int    `json:"pid"`
 	StartTs  int64  `json:"startts"`

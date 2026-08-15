@@ -34,6 +34,10 @@ func SetAuthKeyFromEnv() error {
 	return nil
 }
 
+func SetAuthKey(key string) {
+	authkey = key
+}
+
 func GetAuthKey() string {
 	return authkey
 }

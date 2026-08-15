@@ -375,3 +375,54 @@ func TestTerminalInputFailClosedWhenUnclassifiable(t *testing.T) {
 		t.Fatalf("input normal debía pasar aunque no se pueda clasificar (err=%v inputs=%d)", err, inputs)
 	}
 }
+
+func TestTerminalCreateHeadlessParksBlock(t *testing.T) {
+	var calls [][]string
+	parkErr := error(nil)
+	agent := &JarvisAgent{
+		catalog: &Catalog{},
+		tabId:   func() (string, error) { return "tab-1", nil },
+		runWsh: func(ctx context.Context, conn, tabId string, args ...string) (string, error) {
+			calls = append(calls, args)
+			if args[0] == "createblock" {
+				return "created block deadbeef", nil
+			}
+			if args[0] == "block" {
+				return "", parkErr
+			}
+			return "", nil
+		},
+	}
+	ctx := context.Background()
+
+	if _, err := agent.execute(ctx, "terminal.create", map[string]any{
+		"headless": true,
+		"meta":     map[string]any{"jarvis:mission": "m-1"}}); err != nil {
+		t.Fatalf("create headless: %v", err)
+	}
+	last := calls[len(calls)-1]
+	if last[0] != "block" || last[1] != "park" || last[2] != "block:deadbeef" {
+		t.Fatalf("esperaba block park tras el create headless: %v", calls)
+	}
+	joined := strings.Join(last, " ")
+	if !strings.Contains(joined, "--note mission m-1") {
+		t.Fatalf("park sin note de misión: %q", joined)
+	}
+
+	calls = nil
+	if _, err := agent.execute(ctx, "terminal.create", map[string]any{}); err != nil {
+		t.Fatalf("create sin headless: %v", err)
+	}
+	for _, call := range calls {
+		if call[0] == "block" {
+			t.Fatalf("create sin headless no debe parkear: %v", calls)
+		}
+	}
+
+	calls = nil
+	parkErr = fmt.Errorf("park roto")
+	created, err := agent.execute(ctx, "terminal.create", map[string]any{"headless": true})
+	if err != nil || created["block_id"] != "block:deadbeef" {
+		t.Fatalf("el fallo del park no debe tumbar el create (err=%v result=%v)", err, created)
+	}
+}
