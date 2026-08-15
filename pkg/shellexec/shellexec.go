@@ -33,6 +33,7 @@ import (
 	"github.com/wavetermdev/waveterm/pkg/wshrpc/wshclient"
 	"github.com/wavetermdev/waveterm/pkg/wshutil"
 	"github.com/wavetermdev/waveterm/pkg/wslconn"
+	"golang.org/x/crypto/ssh"
 )
 
 const DefaultGracefulKillWait = 400 * time.Millisecond
@@ -103,6 +104,9 @@ func ExitCodeFromWaitErr(err error) int {
 		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
 			return status.ExitStatus()
 		}
+	}
+	if exitErr, ok := err.(*ssh.ExitError); ok {
+		return exitErr.ExitStatus()
 	}
 	return -1
 
