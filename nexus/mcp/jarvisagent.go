@@ -246,6 +246,12 @@ func (ja *JarvisAgent) execute(ctx context.Context, capability string, args map[
 		if err != nil {
 			return nil, err
 		}
+		// el frontend solo arranca controllers de bloques que renderiza; con
+		// la UI cerrada o el bloque parkeado (headless) nadie lo haría y el
+		// primer terminal.input fallaría con "no controller found"
+		if _, err := ja.runWsh(ctx, "", tabId, "block", "start", blockID); err != nil {
+			return nil, fmt.Errorf("arrancando controller de %s: %w", blockID, err)
+		}
 		if headless, _ := args["headless"].(bool); headless {
 			note := "mission"
 			if mission, ok := meta["jarvis:mission"].(string); ok && mission != "" {

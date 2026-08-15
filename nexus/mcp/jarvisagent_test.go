@@ -167,7 +167,7 @@ func TestTerminalCreateToleratesAlreadyConnected(t *testing.T) {
 		"connection": "rig3060"}); err != nil {
 		t.Fatalf("create con conexión ya establecida: %v", err)
 	}
-	if len(calls) != 2 || calls[1][0] != "createblock" {
+	if len(calls) < 2 || calls[1][0] != "createblock" {
 		t.Fatalf("createblock debía ejecutarse igual: %v", calls)
 	}
 }
@@ -407,7 +407,7 @@ func TestTerminalCreateHeadlessParksBlock(t *testing.T) {
 			if args[0] == "createblock" {
 				return "created block deadbeef", nil
 			}
-			if args[0] == "block" {
+			if args[0] == "block" && args[1] == "park" {
 				return "", parkErr
 			}
 			return "", nil
@@ -433,10 +433,17 @@ func TestTerminalCreateHeadlessParksBlock(t *testing.T) {
 	if _, err := agent.execute(ctx, "terminal.create", map[string]any{}); err != nil {
 		t.Fatalf("create sin headless: %v", err)
 	}
+	sawStart := false
 	for _, call := range calls {
-		if call[0] == "block" {
+		if call[0] == "block" && call[1] == "park" {
 			t.Fatalf("create sin headless no debe parkear: %v", calls)
 		}
+		if call[0] == "block" && call[1] == "start" {
+			sawStart = true
+		}
+	}
+	if !sawStart {
+		t.Fatalf("todo create debe arrancar el controller (block start): %v", calls)
 	}
 
 	calls = nil
