@@ -3,6 +3,27 @@
 Cambios propios del fork; lo heredado de Wave Terminal se documenta en los
 releases de upstream.
 
+## v0.17.0-beta.1 — 2026-08-15
+
+### Arreglado
+- **Layout: las ventanas ya no quedan mal distribuidas por nodos fantasma.**
+  Los deletes de bloques encolados con la UI cerrada (jarvisd cerrando
+  workers, `wsh deleteblock` headless) se descartaban al arrancar la app
+  porque se resolvían contra los leafs renderizados (vacíos hasta montar el
+  TileLayout); el nodo muerto quedaba persistido como franja colapsada que
+  desbalanceaba el resto del tab. Ahora `DeleteNode`/`ReplaceNode`/`Split*`
+  caen al árbol directamente, y el `cleanuporphaned` de cada montaje poda
+  además los nodos cuyo bloque ya no existe (auto-cura layouts ya rotos).
+- Headless/UI cerrada: los bloques creados por agente arrancan su
+  controller (`wsh block start`); sin esto nunca ejecutaban ("no controller
+  found").
+- Park por `wsh`/agente: el remove del nodo de layout se encola
+  server-side; el bloque parkeado ya no sigue renderizado tras recargar.
+- Cierre de la app ya no cuelga tras el aviso de "el runtime sigue
+  corriendo" (closenotice se persiste antes del diálogo, con timeout).
+- Exit code real para comandos ssh remotos (SessionWrap + ssh.ExitError).
+- `EnsureConnection` tolera conexiones ya conectadas.
+
 ## v0.17.0-beta.0 — 2026-08-15 · "Detached Runtime" (ADR-0006)
 
 ### Cambiado
