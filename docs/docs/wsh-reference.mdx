@@ -401,6 +401,49 @@ This will delete the block with the specified id.
 
 ---
 
+## block
+
+Manage blocks.
+
+### park
+
+Park a block: remove it from the tab layout while keeping its controller (and any running process) alive. Parked blocks live in the Parking Lot and can be brought back with `unpark`.
+
+```sh
+wsh block park [blockid]
+```
+
+Flags:
+
+- `--note <text>` - note stored with the parked block
+
+### unpark
+
+Unpark a block back into a tab layout. Prints the tab id the block landed in.
+
+```sh
+wsh block unpark [blockid]
+```
+
+Flags:
+
+- `--tab <tabid>` - tab id to unpark the block into (default: the active tab)
+
+Examples:
+
+```sh
+# park a block by id
+wsh block park 4a9f2c1e-1111-2222-3333-444455556666 --note "mission m-1"
+
+# unpark it into the active tab
+wsh block unpark 4a9f2c1e-1111-2222-3333-444455556666
+
+# unpark into a specific tab
+wsh block unpark 4a9f2c1e-1111-2222-3333-444455556666 --tab a0459921-cc1a-48cc-ae7b-5f4821e1c9e1
+```
+
+---
+
 ## ssh
 
 ```sh

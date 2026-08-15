@@ -241,6 +241,17 @@ func (ja *JarvisAgent) execute(ctx context.Context, capability string, args map[
 		if err != nil {
 			return nil, err
 		}
+		if headless, _ := args["headless"].(bool); headless {
+			note := "mission"
+			if mission, ok := meta["jarvis:mission"].(string); ok && mission != "" {
+				note = "mission " + mission
+			}
+			// si el park falla el bloque queda visible pero la misión sigue
+			if _, err := ja.runWsh(ctx, "", tabId, "block", "park", blockID,
+				"--note", note); err != nil {
+				log.Printf("park headless de %s falló: %v", blockID, err)
+			}
+		}
 		return map[string]any{"block_id": blockID}, nil
 	case "terminal.input":
 		blockID := str("block_id")

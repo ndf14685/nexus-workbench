@@ -211,7 +211,6 @@ func TestExecuteTerminalFlowWithFakeWsh(t *testing.T) {
 	}
 }
 
-
 func TestTerminalCreateOwnershipAndDurable(t *testing.T) {
 	var createArgs []string
 	agent := &JarvisAgent{
@@ -339,7 +338,6 @@ func TestTerminalInputDestructiveGate(t *testing.T) {
 		t.Fatalf("audit incompleto: %s", raw)
 	}
 }
-
 
 func TestTerminalInputFailClosedWhenUnclassifiable(t *testing.T) {
 	auditPath := filepath.Join(t.TempDir(), "audit.jsonl")
