@@ -51,6 +51,9 @@ export function blockViewToIcon(view: string): string {
     if (view == "jarvis") {
         return "robot";
     }
+    if (view == "operator") {
+        return "compass";
+    }
     return "square";
 }
 
@@ -84,6 +87,9 @@ export function blockViewToName(view: string): string {
     }
     if (view == "jarvis") {
         return "Jarvis";
+    }
+    if (view == "operator") {
+        return "Hoy";
     }
     return view;
 }
