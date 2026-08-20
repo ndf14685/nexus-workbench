@@ -6,11 +6,14 @@ import type { TodayView } from "@/app/nexus/jarvis/brain-client";
 import {
     EmptyToday,
     actionText,
+    batchLine,
     calmLines,
     counters,
+    decisionSummary,
     dueLabel,
     hiddenNeedsYouCount,
     isCalmMode,
+    showDecisionSection,
     visibleNeedsYou,
 } from "./operator-model";
 
@@ -52,6 +55,39 @@ describe("cockpit de atención", () => {
         const lines = calmLines(view({ done_for_you: 1, running: 1 }));
         expect(lines).toContain("1 tarea resuelta automáticamente.");
         expect(lines).toContain("1 proceso sigue en ejecución.");
+    });
+
+    it("el contador principal dice NEEDS YOU NOW, no NEEDS YOU", () => {
+        const labels = counters(view({})).map((c) => c.label);
+        expect(labels[0]).toBe("NEEDS YOU NOW");
+    });
+
+    it("las decisiones para despues nunca son un contador del cockpit", () => {
+        const v = view({
+            needs_you_total: 0,
+            decisions_later: 2,
+            decision_batches: [
+                { batch: "portfolio-review", title: "Portfolio review", count: 1, cases: 16, urgent: 0, oldest_days: 3 },
+                { batch: "evidence-review", title: "Professional evidence review", count: 1, cases: 5, urgent: 0, oldest_days: 1 },
+            ],
+        });
+        expect(counters(v).map((c) => c.key)).not.toContain("decisions");
+        expect(decisionSummary(v)).toBe("2 decisiones para después · 21 casos");
+        expect(batchLine(v.decision_batches[0])).toBe("Portfolio review · 16 casos · 0 urgentes");
+    });
+
+    it("sin decisiones diferidas la seccion no existe", () => {
+        const v = view({ decisions_later: 0 });
+        expect(decisionSummary(v)).toBe("");
+        expect(showDecisionSection(v, true)).toBe(false);
+    });
+
+    it("en RECOVERY la seccion de decisiones solo aparece si se abren detalles", () => {
+        const v = view({ operator_state: "RECOVERY", decisions_later: 3 });
+        expect(showDecisionSection(v, false)).toBe(false);
+        expect(showDecisionSection(v, true)).toBe(true);
+        const normal = view({ operator_state: "NORMAL", decisions_later: 3 });
+        expect(showDecisionSection(normal, false)).toBe(true);
     });
 
     it("muestra cuatro contadores en NORMAL y esconde WATCHING en RECOVERY", () => {

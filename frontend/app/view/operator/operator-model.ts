@@ -7,7 +7,7 @@
 // Regla UX de esta vista: DISMINUIR estímulos. No es un cockpit de Boeing.
 // El detalle existe, pero hay que abrirlo a propósito.
 
-import type { NeedsYouEntry, TodayView } from "@/app/nexus/jarvis/brain-client";
+import type { DecisionBatch, NeedsYouEntry, TodayView } from "@/app/nexus/jarvis/brain-client";
 
 export type OperatorState = "NORMAL" | "FOCUS" | "RECOVERY";
 
@@ -36,6 +36,8 @@ export const EmptyToday: TodayView = {
     operator_state: "NORMAL",
     needs_you: [],
     needs_you_total: 0,
+    decisions_later: 0,
+    decision_batches: [],
     running: 0,
     running_items: [],
     done_for_you: 0,
@@ -89,7 +91,7 @@ export interface Counter {
  */
 export function counters(view: TodayView): Counter[] {
     const out: Counter[] = [
-        { key: "needs", label: "NEEDS YOU", value: view.needs_you_total, tone: view.needs_you_total > 0 ? "attention" : "neutral" },
+        { key: "needs", label: "NEEDS YOU NOW", value: view.needs_you_total, tone: view.needs_you_total > 0 ? "attention" : "neutral" },
         { key: "running", label: "RUNNING", value: view.running, tone: "neutral" },
         { key: "done", label: "DONE FOR YOU", value: view.done_for_you, tone: "good" },
     ];
@@ -111,6 +113,37 @@ export function visibleNeedsYou(view: TodayView): NeedsYouEntry[] {
 /** Cuántos pendientes quedaron fuera de la vista deliberadamente. */
 export function hiddenNeedsYouCount(view: TodayView): number {
     return Math.max(0, (view.needs_you_total ?? 0) - visibleNeedsYou(view).length);
+}
+
+/**
+ * DECISIONS FOR LATER nunca es un contador del cockpit: es una seccion aparte,
+ * colapsada. En RECOVERY ni siquiera se enuncia salvo que el operador abra los
+ * detalles — el backend ya deja de mandar los lotes en ese estado.
+ */
+export function decisionSummary(view: TodayView): string {
+    const total = view.decisions_later ?? 0;
+    if (total === 0) {
+        return "";
+    }
+    const cases = (view.decision_batches ?? []).reduce((sum, b) => sum + (b.cases || 0), 0);
+    const noun = total === 1 ? "decision" : "decisiones";
+    if (cases > total) {
+        return `${total} ${noun} para después · ${cases} casos`;
+    }
+    return `${total} ${noun} para después`;
+}
+
+export function showDecisionSection(view: TodayView, detailsOpen: boolean): boolean {
+    if ((view.decisions_later ?? 0) === 0) {
+        return false;
+    }
+    return view.operator_state !== "RECOVERY" || detailsOpen;
+}
+
+export function batchLine(batch: DecisionBatch): string {
+    const cases = batch.cases > batch.count ? ` · ${batch.cases} casos` : "";
+    const urgent = batch.urgent > 0 ? ` · ${batch.urgent} urgentes` : " · 0 urgentes";
+    return `${batch.title}${cases}${urgent}`;
 }
 
 export function dueLabel(dueAt: number | null, now: number): string {

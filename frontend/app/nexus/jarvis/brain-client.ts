@@ -90,10 +90,22 @@ export interface NeedsYouEntry {
     score: number;
 }
 
+export interface DecisionBatch {
+    batch: string;
+    title: string;
+    count: number;
+    cases: number;
+    urgent: number;
+    oldest_days: number;
+}
+
 export interface TodayView {
     operator_state: string;
     needs_you: NeedsYouEntry[];
     needs_you_total: number;
+    /** Necesitan criterio humano ALGUN dia. No son "necesita de vos ahora". */
+    decisions_later: number;
+    decision_batches: DecisionBatch[];
     running: number;
     running_items: { work_item_id: string; title: string; project: string }[];
     done_for_you: number;
@@ -137,6 +149,18 @@ export async function resolveWorkItem(workItemId: string): Promise<Record<string
         method: "POST",
         body: JSON.stringify({}),
     });
+}
+
+export interface BatchExpansion {
+    batch: string;
+    title: string;
+    total: number;
+    items: NeedsYouEntry[];
+}
+
+/** Expandir un lote es una accion deliberada del operador, nunca del cockpit. */
+export async function fetchBatch(batch: string): Promise<BatchExpansion> {
+    return (await operatorFetch(`/operator/decisions/${encodeURIComponent(batch)}`)) as unknown as BatchExpansion;
 }
 
 export async function dismissWorkItem(workItemId: string): Promise<Record<string, unknown>> {

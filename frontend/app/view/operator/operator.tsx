@@ -22,13 +22,16 @@ import { useAtomValue } from "jotai";
 import * as React from "react";
 import {
     actionText,
+    batchLine,
     calmLines,
     counters,
+    decisionSummary,
     dueLabel,
     EmptyToday,
     hiddenNeedsYouCount,
     isCalmMode,
     OperatorStates,
+    showDecisionSection,
     StateChipClasses,
     StateHints,
     StateLabels,
@@ -51,6 +54,7 @@ export class OperatorViewModel implements ViewModel {
     errorAtom: jotai.PrimitiveAtom<string>;
     loadingAtom: jotai.PrimitiveAtom<boolean>;
     detailsAtom: jotai.PrimitiveAtom<boolean>;
+    decisionsAtom: jotai.PrimitiveAtom<boolean>;
 
     disposed = false;
     timer: ReturnType<typeof setInterval> | null = null;
@@ -62,6 +66,9 @@ export class OperatorViewModel implements ViewModel {
         this.errorAtom = jotai.atom<string>(null) as jotai.PrimitiveAtom<string>;
         this.loadingAtom = jotai.atom<boolean>(true);
         this.detailsAtom = jotai.atom<boolean>(false) as jotai.PrimitiveAtom<boolean>;
+        // Colapsado por default: el backlog de decisiones no puede competir
+        // visualmente con lo que si necesita al operador ahora.
+        this.decisionsAtom = jotai.atom<boolean>(false) as jotai.PrimitiveAtom<boolean>;
         void this.refresh();
         this.timer = setInterval(() => void this.refresh(), RefreshMs);
     }
@@ -112,6 +119,10 @@ export class OperatorViewModel implements ViewModel {
         globalStore.set(this.detailsAtom, !globalStore.get(this.detailsAtom));
     }
 
+    toggleDecisions() {
+        globalStore.set(this.decisionsAtom, !globalStore.get(this.decisionsAtom));
+    }
+
     dispose() {
         this.disposed = true;
         if (this.timer != null) {
@@ -142,6 +153,30 @@ const StateSwitch: React.FC<{ model: OperatorViewModel; current: string }> = ({ 
                     {StateLabels[state]}
                 </button>
             ))}
+        </div>
+    );
+};
+
+const DecisionsForLater: React.FC<{ view: TodayView; open: boolean; onToggle: () => void }> = ({
+    view,
+    open,
+    onToggle,
+}) => {
+    return (
+        <div className="mt-4 border-t border-border pt-3">
+            <button className={`${GhostButton} w-full text-left`} onClick={onToggle}>
+                {open ? "▾" : "▸"} DECISIONS FOR LATER · {decisionSummary(view)}
+            </button>
+            {open && (
+                <div className="mt-2 text-xs text-secondary">
+                    {view.decision_batches.map((batch) => (
+                        <div key={batch.batch}>· {batchLine(batch)}</div>
+                    ))}
+                    <div className="mt-2 text-xxs text-muted">
+                        Nada de esto vence ni frena nada. Se revisa cuando vos quieras.
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -201,6 +236,11 @@ const CalmCard: React.FC<{ model: OperatorViewModel; view: TodayView }> = ({ mod
             {details && (
                 <div className="max-h-[45%] overflow-y-auto">
                     <Details view={view} />
+                    {showDecisionSection(view, details) && (
+                        <div className="mt-3 text-xs text-secondary">
+                            {decisionSummary(view)} — nada de eso vence ni frena nada.
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -256,6 +296,7 @@ const OperatorView: React.FC<ViewComponentProps<OperatorViewModel>> = ({ model }
     const error = useAtomValue(model.errorAtom);
     const loading = useAtomValue(model.loadingAtom);
     const details = useAtomValue(model.detailsAtom);
+    const decisionsOpen = useAtomValue(model.decisionsAtom);
 
     if (loading && error == null && view === EmptyToday) {
         return <div className="p-3.5 text-xs text-secondary">Cargando…</div>;
@@ -291,6 +332,13 @@ const OperatorView: React.FC<ViewComponentProps<OperatorViewModel>> = ({ model }
                 {details ? "Ocultar detalles" : "Ver detalles"}
             </button>
             {details && <Details view={view} />}
+            {showDecisionSection(view, details) && (
+                <DecisionsForLater
+                    view={view}
+                    open={decisionsOpen}
+                    onToggle={() => model.toggleDecisions()}
+                />
+            )}
         </div>
     );
 };
