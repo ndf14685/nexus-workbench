@@ -5,6 +5,8 @@ import { Tooltip } from "@/app/element/tooltip";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import { useWaveEnv, WaveEnv, WaveEnvSubset } from "@/app/waveenv/waveenv";
 import { shouldIncludeWidgetForWorkspace } from "@/app/workspace/widgetfilter";
+import { openOrFocusVisualBlock, VisualViewType } from "@/app/nexus/visual/open-visual-block";
+import { MetaSourceKey } from "@/app/view/visual/visual-model";
 import { modalsModel } from "@/store/modalmodel";
 import { fireAndForget, isBlank, makeIconClass } from "@/util/util";
 import {
@@ -57,6 +59,13 @@ type WidgetPropsType = {
 
 async function handleWidgetSelect(widget: WidgetConfigType, env: WidgetsEnv) {
     const blockDef = widget.blockdef;
+    // nexus: una fuente visual es un dispositivo exclusivo. Abrir un segundo
+    // bloque contra la misma capturadora daria DEVICE_BUSY, asi que el boton
+    // enfoca el que ya existe en vez de duplicarlo.
+    if (blockDef?.meta?.view === VisualViewType) {
+        await openOrFocusVisualBlock(blockDef.meta[MetaSourceKey] as string);
+        return;
+    }
     env.createBlock(blockDef, widget.magnified);
 }
 

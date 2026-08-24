@@ -761,6 +761,8 @@ func classifyFFmpegError(stderr string, runErr error) error {
 	case strings.Contains(low, "device or resource busy") ||
 		strings.Contains(low, "i/o error") ||
 		strings.Contains(low, "real-time buffer") ||
+		strings.Contains(low, "could not run graph") ||
+		strings.Contains(low, "already in use by other application") ||
 		strings.Contains(low, "could not run filter"):
 		return visualErr(ErrDeviceBusy, firstLine(stderr))
 	case strings.Contains(low, "permission denied") || strings.Contains(low, "access is denied"):

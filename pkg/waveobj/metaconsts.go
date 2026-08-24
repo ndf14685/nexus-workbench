@@ -44,6 +44,9 @@ const (
 
 	MetaKey_NexusWebTitle                    = "nexus:web:title"
 
+	MetaKey_VisualSource                     = "visual:source"
+	MetaKey_VisualViewer                     = "visual:viewer"
+
 	MetaKey_CmdClear                         = "cmd:*"
 	MetaKey_Cmd                              = "cmd"
 	MetaKey_CmdInteractive                   = "cmd:interactive"

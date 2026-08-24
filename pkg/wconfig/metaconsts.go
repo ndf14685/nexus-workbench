@@ -135,5 +135,6 @@ const (
 	ConfigKey_NexusEnvironments              = "nexus:environments"
 	ConfigKey_NexusBrainUrl                  = "nexus:brainurl"
 	ConfigKey_NexusRuntimeCloseNotice        = "nexus:runtime:closenotice"
+	ConfigKey_NexusVisualSources             = "nexus:visualsources"
 )
 

@@ -445,6 +445,9 @@ func TestClassifyFFmpegError(t *testing.T) {
 	}{
 		{`Could not find video device with name ["USB Video"] among source devices`, ErrDeviceRemoved},
 		{"real-time buffer [USB Video] too full", ErrDeviceBusy},
+		// texto exacto de ffmpeg 8.0.1 en el host real cuando la capturadora ya
+		// esta tomada por otro proceso (verificado con dos ffmpeg simultaneos)
+		{"[dshow @ 0] Could not run graph (sometimes caused by a device already in use by other application)", ErrDeviceBusy},
 		{"/dev/video0: Device or resource busy", ErrDeviceBusy},
 		{"Error opening input: Permission denied", ErrPermissionDenied},
 		{"Could not set video options", ErrUnsupportedFormat},

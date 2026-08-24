@@ -90,28 +90,28 @@ type SettingsType struct {
 	WaveAiShowCloudModes bool   `json:"waveai:showcloudmodes,omitempty"`
 	WaveAiDefaultMode    string `json:"waveai:defaultmode,omitempty"`
 
-	TermClear               bool     `json:"term:*,omitempty"`
-	TermFontSize            float64  `json:"term:fontsize,omitempty"`
-	TermFontFamily          string   `json:"term:fontfamily,omitempty"`
-	TermTheme               string   `json:"term:theme,omitempty"`
-	TermDisableWebGl        bool     `json:"term:disablewebgl,omitempty"`
-	TermLocalShellPath      string   `json:"term:localshellpath,omitempty"`
-	TermLocalShellOpts      []string `json:"term:localshellopts,omitempty"`
-	TermGitBashPath         string   `json:"term:gitbashpath,omitempty"`
-	TermScrollback          *int64   `json:"term:scrollback,omitempty"`
-	TermCopyOnSelect        *bool    `json:"term:copyonselect,omitempty"`
-	TermTransparency        *float64 `json:"term:transparency,omitempty"`
-	TermAllowBracketedPaste *bool    `json:"term:allowbracketedpaste,omitempty"`
-	TermShiftEnterNewline   *bool    `json:"term:shiftenternewline,omitempty"`
-	TermMacOptionIsMeta     *bool    `json:"term:macoptionismeta,omitempty"`
-	TermCursor              string   `json:"term:cursor,omitempty"`
-	TermCursorBlink         *bool    `json:"term:cursorblink,omitempty"`
-	TermBellSound           *bool    `json:"term:bellsound,omitempty"`
-	TermBellIndicator       *bool    `json:"term:bellindicator,omitempty"`
-	TermOsc52               string   `json:"term:osc52,omitempty" jsonschema:"enum=focus,enum=always"`
-	TermDurable                    *bool    `json:"term:durable,omitempty"`
-	TermShowSplitButtons           bool     `json:"term:showsplitbuttons,omitempty"`
-	TermTrimTrailingWhitespace     *bool    `json:"term:trimtrailingwhitespace,omitempty"`
+	TermClear                  bool     `json:"term:*,omitempty"`
+	TermFontSize               float64  `json:"term:fontsize,omitempty"`
+	TermFontFamily             string   `json:"term:fontfamily,omitempty"`
+	TermTheme                  string   `json:"term:theme,omitempty"`
+	TermDisableWebGl           bool     `json:"term:disablewebgl,omitempty"`
+	TermLocalShellPath         string   `json:"term:localshellpath,omitempty"`
+	TermLocalShellOpts         []string `json:"term:localshellopts,omitempty"`
+	TermGitBashPath            string   `json:"term:gitbashpath,omitempty"`
+	TermScrollback             *int64   `json:"term:scrollback,omitempty"`
+	TermCopyOnSelect           *bool    `json:"term:copyonselect,omitempty"`
+	TermTransparency           *float64 `json:"term:transparency,omitempty"`
+	TermAllowBracketedPaste    *bool    `json:"term:allowbracketedpaste,omitempty"`
+	TermShiftEnterNewline      *bool    `json:"term:shiftenternewline,omitempty"`
+	TermMacOptionIsMeta        *bool    `json:"term:macoptionismeta,omitempty"`
+	TermCursor                 string   `json:"term:cursor,omitempty"`
+	TermCursorBlink            *bool    `json:"term:cursorblink,omitempty"`
+	TermBellSound              *bool    `json:"term:bellsound,omitempty"`
+	TermBellIndicator          *bool    `json:"term:bellindicator,omitempty"`
+	TermOsc52                  string   `json:"term:osc52,omitempty" jsonschema:"enum=focus,enum=always"`
+	TermDurable                *bool    `json:"term:durable,omitempty"`
+	TermShowSplitButtons       bool     `json:"term:showsplitbuttons,omitempty"`
+	TermTrimTrailingWhitespace *bool    `json:"term:trimtrailingwhitespace,omitempty"`
 
 	EditorMinimapEnabled      bool    `json:"editor:minimapenabled,omitempty"`
 	EditorStickyScrollEnabled bool    `json:"editor:stickyscrollenabled,omitempty"`
@@ -183,9 +183,10 @@ type SettingsType struct {
 	TsunamiSdkVersion     string `json:"tsunami:sdkversion,omitempty"`
 	TsunamiGoPath         string `json:"tsunami:gopath,omitempty"`
 
-	NexusEnvironments       []NexusEnvType `json:"nexus:environments,omitempty"`
-	NexusBrainUrl           string         `json:"nexus:brainurl,omitempty"`
-	NexusRuntimeCloseNotice bool           `json:"nexus:runtime:closenotice,omitempty"`
+	NexusEnvironments       []NexusEnvType          `json:"nexus:environments,omitempty"`
+	NexusBrainUrl           string                  `json:"nexus:brainurl,omitempty"`
+	NexusRuntimeCloseNotice bool                    `json:"nexus:runtime:closenotice,omitempty"`
+	NexusVisualSources      []NexusVisualSourceType `json:"nexus:visualsources,omitempty"`
 }
 
 // NexusEnvType is a Nexus Workbench extension: one entry of the environment
@@ -200,6 +201,42 @@ type NexusEnvType struct {
 	Conn       string   `json:"conn,omitempty"`
 	Color      string   `json:"color,omitempty"`
 	Workspaces []string `json:"workspaces,omitempty"`
+}
+
+// NexusVisualSourceType is a Nexus Workbench extension: one configured visual
+// source (an HDMI/UVC capture card, a monitor, a remote stream). The Workbench
+// consumes these sources; the provider that owns the device lives in the
+// jarvis-agent, so both read this same list.
+//
+// Device identity is multi-key on purpose: Windows rewrites the friendly name
+// and the PnP path when the card is replugged, but vid/pid survives.
+type NexusVisualSourceType struct {
+	Id     string                 `json:"id"`
+	Type   string                 `json:"type,omitempty"`
+	Label  string                 `json:"label,omitempty"`
+	Device *NexusVisualDeviceType `json:"device,omitempty"`
+	Audio  *NexusVisualAudioType  `json:"audio,omitempty"`
+	// AIVision gates AI observation independently of human viewing:
+	// off | on_demand | changes. Empty means on_demand.
+	AIVision string `json:"aivision,omitempty"`
+	Width    int    `json:"width,omitempty"`
+	Height   int    `json:"height,omitempty"`
+	FPS      int    `json:"fps,omitempty"`
+}
+
+type NexusVisualDeviceType struct {
+	HardwareId string `json:"hardwareid,omitempty"`
+	Name       string `json:"name,omitempty"`
+	Vid        string `json:"vid,omitempty"`
+	Pid        string `json:"pid,omitempty"`
+	Path       string `json:"path,omitempty"`
+	DeviceId   string `json:"deviceid,omitempty"`
+}
+
+type NexusVisualAudioType struct {
+	Name       string `json:"name,omitempty"`
+	HardwareId string `json:"hardwareid,omitempty"`
+	Enabled    bool   `json:"enabled,omitempty"`
 }
 
 func (s *SettingsType) GetAiSettings() *AiSettingsType {

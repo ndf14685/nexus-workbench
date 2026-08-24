@@ -50,5 +50,16 @@
                 "view": "processviewer"
             }
         }
+    },
+    "defwidget@hmi": {
+        "display:order": 0,
+        "icon": "display",
+        "label": "HMI",
+        "description": "Fuente visual externa (HDMI/UVC)",
+        "blockdef": {
+            "meta": {
+                "view": "visual"
+            }
+        }
     }
 }

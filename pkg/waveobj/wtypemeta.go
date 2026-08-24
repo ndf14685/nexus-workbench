@@ -49,6 +49,13 @@ type MetaTSType struct {
 	// persisted for context capture; frame:title stays user-owned identity
 	NexusWebTitle string `json:"nexus:web:title,omitempty"`
 
+	// nexus: visual source shown by an HMI block, and whether that block
+	// currently holds the device open. A UVC capture card admits a single
+	// consumer, so the host provider reads the viewer flag before capturing
+	// instead of fighting the human viewer for the device.
+	VisualSource string `json:"visual:source,omitempty"`
+	VisualViewer bool   `json:"visual:viewer,omitempty"`
+
 	CmdClear            bool     `json:"cmd:*,omitempty"`
 	Cmd                 string   `json:"cmd,omitempty"`
 	CmdInteractive      bool     `json:"cmd:interactive,omitempty"`
@@ -115,8 +122,8 @@ type MetaTSType struct {
 	BgActiveBorderColor string  `json:"bg:activebordercolor,omitempty"` // frame:activebordercolor
 
 	// for workspace
-	LayoutVTabBarWidth      int  `json:"layout:vtabbarwidth,omitempty"`
-	LayoutWidgetsVisible    *bool `json:"layout:widgetsvisible,omitempty"`
+	LayoutVTabBarWidth   int   `json:"layout:vtabbarwidth,omitempty"`
+	LayoutWidgetsVisible *bool `json:"layout:widgetsvisible,omitempty"`
 
 	// for tabs+waveai
 	WaveAiPanelOpen     bool   `json:"waveai:panelopen,omitempty"`

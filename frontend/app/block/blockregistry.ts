@@ -11,6 +11,7 @@ import { PreviewModel } from "@/app/view/preview/preview-model";
 import { ProcessViewerViewModel } from "@/app/view/processviewer/processviewer";
 import { SysinfoViewModel } from "@/app/view/sysinfo/sysinfo";
 import { TsunamiViewModel } from "@/app/view/tsunami/tsunami";
+import { VisualSourceViewModel } from "@/app/view/visual/visual-model";
 import { VDomModel } from "@/app/view/vdom/vdom-model";
 import { WaveEnv } from "@/app/waveenv/waveenv";
 import { atom } from "jotai";
@@ -38,6 +39,7 @@ BlockRegistry.set("aifilediff", AiFileDiffViewModel);
 BlockRegistry.set("waveconfig", WaveConfigViewModel);
 BlockRegistry.set("processviewer", ProcessViewerViewModel);
 BlockRegistry.set("nexusaudit", NexusAuditViewModel); // nexus: auditoría del MCP
+BlockRegistry.set("visual", VisualSourceViewModel); // nexus: fuentes visuales (HMI)
 BlockRegistry.set("jarvis", JarvisViewModel); // nexus: panel Mission Supervisor
 
 function makeDefaultViewModel(viewType: string): ViewModel {

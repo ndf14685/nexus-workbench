@@ -48,6 +48,9 @@ export function blockViewToIcon(view: string): string {
     if (view == "nexusaudit") {
         return "clipboard-list";
     }
+    if (view == "visual") {
+        return "display";
+    }
     if (view == "jarvis") {
         return "robot";
     }
@@ -55,6 +58,9 @@ export function blockViewToIcon(view: string): string {
 }
 
 export function blockViewToName(view: string): string {
+    if (view == "visual") {
+        return "HMI";
+    }
     if (util.isBlank(view)) {
         return "(No View)";
     }

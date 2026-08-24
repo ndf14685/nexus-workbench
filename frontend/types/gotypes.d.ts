@@ -1140,6 +1140,8 @@ declare global {
         "frame:activity:source"?: string;
         "frame:activity:enabled"?: boolean;
         "nexus:web:title"?: string;
+        "visual:source"?: string;
+        "visual:viewer"?: boolean;
         "cmd:*"?: boolean;
         cmd?: string;
         "cmd:interactive"?: boolean;
@@ -1266,6 +1268,36 @@ declare global {
         conn?: string;
         color?: string;
         workspaces?: string[];
+    };
+
+    // wconfig.NexusVisualAudioType
+    type NexusVisualAudioType = {
+        name?: string;
+        hardwareid?: string;
+        enabled?: boolean;
+    };
+
+    // wconfig.NexusVisualDeviceType
+    type NexusVisualDeviceType = {
+        hardwareid?: string;
+        name?: string;
+        vid?: string;
+        pid?: string;
+        path?: string;
+        deviceid?: string;
+    };
+
+    // wconfig.NexusVisualSourceType
+    type NexusVisualSourceType = {
+        id: string;
+        type?: string;
+        label?: string;
+        device?: NexusVisualDeviceType;
+        audio?: NexusVisualAudioType;
+        aivision?: string;
+        width?: number;
+        height?: number;
+        fps?: number;
     };
 
     // waveobj.ORef
@@ -1536,6 +1568,7 @@ declare global {
         "nexus:environments"?: NexusEnvType[];
         "nexus:brainurl"?: string;
         "nexus:runtime:closenotice"?: boolean;
+        "nexus:visualsources"?: NexusVisualSourceType[];
     };
 
     // waveobj.StickerClickOptsType
