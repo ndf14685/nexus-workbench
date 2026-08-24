@@ -154,3 +154,36 @@ func TestJarvisContextResultBadJSON(t *testing.T) {
 		t.Fatal("json invalido deberia dar error")
 	}
 }
+
+// El flujo real: sesion de agente lanzada a mano, prompt tipeado en la TUI.
+// La metadata no tiene instruccion, pero SI agente y scrollback.
+func TestJarvisTaskFromMetaTuiSession(t *testing.T) {
+	task := jarvisTaskFromMeta(map[string]any{
+		metaTaskAgent:     "claude-code",
+		metaTaskRawOutput: "block:tui",
+		metaTaskStatus:    "completed",
+	})
+	if task == nil {
+		t.Fatal("una sesion de agente sin instruccion sigue siendo una tarea")
+	}
+	if task["instruction"] != "" {
+		t.Errorf("instruction deberia venir vacia, es %v", task["instruction"])
+	}
+	if task["raw_output_ref"] != "block:tui" {
+		t.Errorf("falta raw_output_ref, hay %v", task["raw_output_ref"])
+	}
+	if task["agent"] != "claude-code" {
+		t.Errorf("agent = %v", task["agent"])
+	}
+}
+
+func TestJarvisTaskFromMetaNeedsAgentAndRef(t *testing.T) {
+	// Solo agente, sin donde leer: no alcanza.
+	if task := jarvisTaskFromMeta(map[string]any{metaTaskAgent: "claude-code"}); task != nil {
+		t.Errorf("sin raw_output_ref no deberia haber task, hay %v", task)
+	}
+	// Solo referencia, sin agente: tampoco.
+	if task := jarvisTaskFromMeta(map[string]any{metaTaskRawOutput: "block:x"}); task != nil {
+		t.Errorf("sin agente no deberia haber task, hay %v", task)
+	}
+}

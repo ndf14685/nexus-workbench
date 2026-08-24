@@ -150,6 +150,7 @@ const (
 	metaTaskCompletedAt = "jarvis:task:completed_at"
 	metaTaskAgent       = "jarvis:task:agent"
 	metaTaskResult      = "jarvis:task:result_summary"
+	metaTaskRawOutput   = "jarvis:task:raw_output_ref"
 	metaMission         = "jarvis:mission"
 )
 
@@ -183,14 +184,25 @@ func metaNumber(meta map[string]any, key string) (float64, bool) {
 // status es ruido, no contexto.
 func jarvisTaskFromMeta(meta map[string]any) map[string]any {
 	instruction := metaString(meta, metaTaskInstruction)
-	if instruction == "" {
+	agent := metaString(meta, metaTaskAgent)
+	rawOutput := metaString(meta, metaTaskRawOutput)
+	// Sin instruccion PERO con agente y scrollback tambien es una tarea: es el
+	// flujo real, donde el prompt se tipea dentro de la TUI del agente y la
+	// shell integration solo ve `claude`. Exigir instruccion dejaba afuera
+	// justo el caso que este track vino a resolver. Lo que no es tarea es un
+	// bloque sin nada.
+	if instruction == "" && !(agent != "" && rawOutput != "") {
 		return nil
 	}
 	task := map[string]any{
 		"instruction": instruction,
 		"status":      metaString(meta, metaTaskStatus),
 	}
-	if agent := metaString(meta, metaTaskAgent); agent != "" {
+	if rawOutput != "" {
+		// La salida cruda NO viaja: viaja donde encontrarla.
+		task["raw_output_ref"] = rawOutput
+	}
+	if agent != "" {
 		task["agent"] = agent
 	}
 	if mission := metaString(meta, metaMission); mission != "" {
