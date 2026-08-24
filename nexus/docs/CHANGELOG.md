@@ -3,6 +3,60 @@
 Cambios propios del fork; lo heredado de Wave Terminal se documenta en los
 releases de upstream.
 
+## v0.17.0-beta.2 — 2026-08-24 · "Visual Sources" (HMI)
+
+### Agregado
+- **Una fuente visual es una clase de objeto del Workbench**, del mismo rango
+  que una terminal o un navegador: se configura una vez, se muestra en un
+  bloque que dockea/mueve/redimensiona/persiste como cualquier otro, y puede
+  ser observada por Jarvis bajo gobernanza explícita. El caso que la motivó es
+  una notebook externa entregando su pantalla por HDMI a una capturadora UVC,
+  pero nada en la arquitectura sabe qué es un "banco": eso es un label.
+- **El provider vive en el jarvis-agent, no en el renderer.** Corre en el host
+  donde está el dispositivo y sobrevive al cierre de la UI (ADR-0006): el
+  Workbench es consumidor de la fuente, no su dueño. Enumerar, capturar y
+  vigilar siguen funcionando con la app cerrada.
+- **Bloque HMI** (`view: visual`) con video en vivo, estado de conexión,
+  reconexión con backoff, selección de fuente y errores contenidos: que falle
+  la capturadora nunca tumba el Workbench.
+- **Botón HMI en la botonera.** Presionarlo dos veces no abre dos bloques: un
+  device UVC admite un solo consumidor, así que enfoca el que ya existe.
+- **Capabilities `visual.sources.list` / `visual.snapshot` / `visual.observe` /
+  `visual.watch`**, registradas con su clase de riesgo y proyectadas al registry
+  de gobernanza del cerebro (PEP + audit_ref en cada llamada). Ninguna acepta
+  "la cámara por defecto": sin `source_id` explícito no hay captura.
+- **Ver la señal y dejar que la IA mire son permisos distintos.** El modo
+  `aivision` de la fuente (`off` | `on_demand` | `changes`) es independiente de
+  tener el bloque abierto: con `off` ni siquiera se abre el dispositivo, y la
+  denegación queda auditada. El bloque muestra siempre el indicador.
+- **Detección de cambios barata en el agente**: hash perceptual + distancia de
+  Hamming + dedup + cooldown antes de molestar a un modelo de visión. El evento
+  `visual.change` lleva metadata, nunca el frame; el cerebro decide después si
+  el cambio merece una mirada cara.
+- **Las fuentes visuales viajan en el contexto del Workbench** (`visual_sources`
+  + módulo `visual` del bloque enfocado), que es lo que permite resolver "mirá
+  la pantalla del banco" o "mirá esto" contra la fuente correcta.
+- `wsh screenshot`: expone por CLI la captura de bloque que el motor ya
+  implementaba. Es el único camino posible para obtener un frame mientras el
+  viewer humano tiene tomado el device.
+- `nexus-workbench-mcp visual devices|list|snapshot`: diagnóstico del provider
+  sin abrir la app ni el cerebro.
+
+### Seguridad
+- No se graba video ni se persisten frames: el snapshot va a un temporal que se
+  borra siempre, y el CLI sin `-out` sólo devuelve metadata.
+- El contexto publica metadata; el contenido visual sale únicamente por una
+  capability explícita y auditada.
+- El permiso de cámara reutiliza el sistema de permisos por origen existente.
+- El análisis va por el Observer Fabric del cerebro (routing de proveedores +
+  política de privacidad). No se agregaron API keys.
+
+### Notas
+- Configuración en `settings.json` bajo `nexus:visualsources` (mismo mecanismo
+  que `nexus:environments`, con schema).
+- Requiere `ffmpeg` en el host del agente para capturar sin la UI abierta.
+- Documentación: `nexus/docs/VISUAL_SOURCES.md`.
+
 ## v0.17.0-beta.1 — 2026-08-15
 
 ### Arreglado

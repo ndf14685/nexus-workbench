@@ -59,3 +59,6 @@ nexus/reports/*.local.md
 .signing/
 *.pfx
 *.p12
+
+# binario suelto de  en la raiz
+/wsh
