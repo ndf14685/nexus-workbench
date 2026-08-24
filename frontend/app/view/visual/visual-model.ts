@@ -341,7 +341,9 @@ export class VisualSourceViewModel implements ViewModel {
         }
         RpcApi.SetMetaCommand(TabRpcClient, {
             oref: WOS.makeORef("block", this.blockId),
-            meta: { [MetaViewerKey]: attached ? true : null },
+            meta: attached
+                ? { [MetaViewerKey]: true, [MetaSourceKey]: sourceId }
+                : { [MetaViewerKey]: null },
         }).catch(() => {
             // Que falle el aviso no puede tumbar el viewer: el peor caso es que
             // un snapshot devuelva DEVICE_BUSY, que ya es un estado contemplado.

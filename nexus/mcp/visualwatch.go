@@ -19,7 +19,9 @@ import (
 	"bytes"
 	"fmt"
 
-	"image/jpeg"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"math/bits"
 	"time"
 )
@@ -31,7 +33,7 @@ const phashSize = 8
 // PerceptualHash calcula el aHash del frame. Devuelve "" si el frame no se
 // puede decodificar: un hash inventado sería peor que no tener hash.
 func PerceptualHash(data []byte) string {
-	img, err := jpeg.Decode(bytes.NewReader(data))
+	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return ""
 	}

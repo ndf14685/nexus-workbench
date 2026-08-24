@@ -10,6 +10,7 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
+	"image/png"
 	"strings"
 	"sync"
 	"testing"
@@ -535,4 +536,39 @@ func TestVisualWatchStopAllLeavesNothingRunning(t *testing.T) {
 	if len(out["watches"].([]map[string]any)) != 0 {
 		t.Fatalf("al apagar el agente no queda nada mirando: %+v", out)
 	}
+}
+
+// pngFrame/pngHalfFrame: el viewer entrega PNG (captura de bloque del motor).
+func pngFrame(t *testing.T, c color.Color) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 64, 36))
+	for y := 0; y < 36; y++ {
+		for x := 0; x < 64; x++ {
+			img.Set(x, y, c)
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func pngHalfFrame(t *testing.T, left, right color.Color) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, 64, 36))
+	for y := 0; y < 36; y++ {
+		for x := 0; x < 64; x++ {
+			if x < 32 {
+				img.Set(x, y, left)
+			} else {
+				img.Set(x, y, right)
+			}
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
 }

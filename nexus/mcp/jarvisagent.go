@@ -219,6 +219,68 @@ func jarvisParseCreatedBlock(out string) (string, error) {
 	return "", fmt.Errorf("createblock sin block id en la salida: %q", out)
 }
 
+// --- puente con el viewer humano ---
+
+// visualViewerBlock pregunta al motor qué bloque tiene abierta esta fuente. Se
+// resuelve por la meta del bloque (`wsh blocks list`), que es la misma
+// superficie que ya usa classForBlock: sin canal nuevo ni estado compartido.
+func (ja *JarvisAgent) visualViewerBlock(ctx context.Context, sourceId string) string {
+	tabId, err := ja.tabId()
+	if err != nil {
+		return ""
+	}
+	out, err := ja.runWsh(ctx, "", tabId, "blocks", "list", "--json")
+	if err != nil {
+		return ""
+	}
+	return parseVisualViewerBlock(out, sourceId)
+}
+
+// parseVisualViewerBlock es puro para poder fijar la regla con la salida real de
+// `wsh blocks list --json`.
+func parseVisualViewerBlock(blocksJSON string, sourceId string) string {
+	var entries []struct {
+		BlockId string         `json:"blockid"`
+		Meta    map[string]any `json:"meta"`
+	}
+	if err := json.Unmarshal([]byte(blocksJSON), &entries); err != nil {
+		return ""
+	}
+	for _, entry := range entries {
+		if view, _ := entry.Meta["view"].(string); view != "visual" {
+			continue
+		}
+		// Sólo cuenta si el bloque declara tener el device tomado: un bloque
+		// HMI offline no puede entregar ningún frame.
+		if attached, _ := entry.Meta["visual:viewer"].(bool); !attached {
+			continue
+		}
+		if bound, _ := entry.Meta["visual:source"].(string); bound == sourceId {
+			return entry.BlockId
+		}
+	}
+	return ""
+}
+
+// visualViewerCapture le pide al bloque su propia imagen. El motor ya sabe
+// capturar un bloque (CaptureBlockScreenshotCommand); `wsh screenshot` lo
+// expone. La imagen sale del compositor, así que incluye el video en vivo.
+func (ja *JarvisAgent) visualViewerCapture(ctx context.Context, blockId string) ([]byte, error) {
+	tabId, err := ja.tabId()
+	if err != nil {
+		return nil, visualErr(ErrStreamFailed, err.Error())
+	}
+	out, err := ja.runWsh(ctx, "", tabId, "screenshot", "-b", blockId, "--raw")
+	if err != nil {
+		return nil, visualErr(ErrStreamFailed, "capturando el bloque del viewer: "+err.Error())
+	}
+	data, decErr := base64.StdEncoding.DecodeString(strings.TrimSpace(out))
+	if decErr != nil || len(data) == 0 {
+		return nil, visualErr(ErrStreamFailed, "el viewer no devolvió una imagen válida")
+	}
+	return data, nil
+}
+
 // --- ejecución de capabilities ---
 
 func (ja *JarvisAgent) execute(ctx context.Context, capability string, args map[string]any) (map[string]any, error) {
@@ -597,6 +659,8 @@ func runJarvisAgent(argv []string) {
 	// ingest /events que el protocolo ya tiene.
 	settingsPath := ResolveSettingsPath(configDir, dev)
 	visualReg := NewVisualSourceRegistry(settingsPath, ffmpegBin)
+	// Con el bloque HMI abierto el device es del viewer: el frame se le pide a él.
+	visualReg.SetViewerBridge(agent.visualViewerBlock, agent.visualViewerCapture)
 	agent.visual = NewVisualCapabilities(visualReg,
 		brainEventSink(agent.brainURL, agent.token, clientID, agent.httpc),
 		agent.auditLog)

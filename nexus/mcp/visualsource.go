@@ -20,7 +20,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"image/jpeg"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -498,7 +500,23 @@ type VisualSourceRegistry struct {
 	// no admite dos consumidores; con el viewer abierto, capturar por ffmpeg
 	// devolvería DEVICE_BUSY o le robaría la imagen al usuario.
 	viewerHeld map[string]bool
-	snapshotFn func(ctx context.Context, r *VisualSourceRegistry, res *ResolvedSource) ([]byte, error)
+	// viewerProbe pregunta al motor qué bloque tiene tomada la fuente. Devuelve
+	// el blockId del viewer, o "" si nadie la tiene.
+	viewerProbe func(ctx context.Context, sourceId string) string
+	// viewerCapture le pide la imagen al bloque que ya tiene el device abierto.
+	// Es el único camino posible mientras el viewer está adjunto.
+	viewerCapture func(ctx context.Context, blockId string) ([]byte, error)
+	viewerCache   map[string]viewerCacheEntry
+	snapshotFn    func(ctx context.Context, r *VisualSourceRegistry, res *ResolvedSource) ([]byte, error)
+}
+
+// viewerProbeTTL acota cuánto se confía en la última respuesta del motor sobre
+// quién tiene el device. Corto: abrir o cerrar el bloque tiene que notarse.
+const viewerProbeTTL = 1500 * time.Millisecond
+
+type viewerCacheEntry struct {
+	blockId string
+	at      time.Time
 }
 
 func NewVisualSourceRegistry(settingsPath, ffmpegBin string) *VisualSourceRegistry {
@@ -537,6 +555,7 @@ func (r *VisualSourceRegistry) Reload() error {
 func (r *VisualSourceRegistry) SetViewerAttached(sourceId string, attached bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	delete(r.viewerCache, sourceId)
 	if attached {
 		r.viewerHeld[sourceId] = true
 		return
@@ -545,9 +564,50 @@ func (r *VisualSourceRegistry) SetViewerAttached(sourceId string, attached bool)
 }
 
 func (r *VisualSourceRegistry) ViewerAttached(sourceId string) bool {
+	return r.viewerBlock(context.Background(), sourceId) != ""
+}
+
+// SetViewerBridge conecta el registry con el motor: cómo preguntar quién tiene
+// el device y cómo pedirle la imagen a ese bloque.
+func (r *VisualSourceRegistry) SetViewerBridge(
+	probe func(ctx context.Context, sourceId string) string,
+	capture func(ctx context.Context, blockId string) ([]byte, error)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.viewerProbe = probe
+	r.viewerCapture = capture
+	r.viewerCache = map[string]viewerCacheEntry{}
+}
+
+// viewerBlock resuelve qué bloque tiene tomada la fuente. La marca en memoria
+// (tests, uso directo) gana sobre el probe para poder forzar el estado.
+func (r *VisualSourceRegistry) viewerBlock(ctx context.Context, sourceId string) string {
 	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.viewerHeld[sourceId]
+	held := r.viewerHeld[sourceId]
+	probe := r.viewerProbe
+	r.mu.RUnlock()
+	if held {
+		return "in-memory"
+	}
+	if probe == nil {
+		return ""
+	}
+	// Cache corto: sin esto, cada tick del watch y cada snapshot dispararían un
+	// `wsh blocks list` propio.
+	r.mu.RLock()
+	cached, ok := r.viewerCache[sourceId]
+	r.mu.RUnlock()
+	if ok && time.Since(cached.at) < viewerProbeTTL {
+		return cached.blockId
+	}
+	blockId := probe(ctx, sourceId)
+	r.mu.Lock()
+	if r.viewerCache == nil {
+		r.viewerCache = map[string]viewerCacheEntry{}
+	}
+	r.viewerCache[sourceId] = viewerCacheEntry{blockId: blockId, at: time.Now()}
+	r.mu.Unlock()
+	return blockId
 }
 
 // List contrasta configuración contra host. Nunca devuelve error por un
@@ -605,8 +665,10 @@ func (r *VisualSourceRegistry) List(ctx context.Context) ([]ResolvedSource, erro
 		}
 		r.mu.Lock()
 		r.lastSeen[s.Id] = true
-		held := r.viewerHeld[s.Id]
 		r.mu.Unlock()
+		// El estado publicado tiene que reflejar quién tiene el device de
+		// verdad, no sólo la marca en memoria de este proceso.
+		held := r.viewerBlock(ctx, s.Id) != ""
 		res.Device = dev
 		res.MatchedBy = how
 		res.Available = true
@@ -662,12 +724,23 @@ func (r *VisualSourceRegistry) Snapshot(ctx context.Context, id string) ([]byte,
 		}
 		return nil, res, visualErr(code, "la fuente "+id+" no está disponible")
 	}
-	if r.ViewerAttached(id) {
-		// El viewer humano tiene el dispositivo. Capturar por ffmpeg acá sería
-		// pelearle el device y devolver DEVICE_BUSY: el frame lo tiene que dar
-		// quien ya lo tiene abierto.
-		return nil, res, visualErr(ErrDeviceBusy,
-			"la fuente "+id+" está tomada por un viewer; el frame debe pedirse al viewer adjunto")
+	if blockId := r.viewerBlock(ctx, id); blockId != "" {
+		// El viewer humano tiene el dispositivo abierto. Abrir un segundo
+		// consumidor no es una opción (verificado contra el hardware: dshow
+		// responde "device already in use"), así que el frame lo entrega el
+		// bloque que ya lo tiene.
+		r.mu.RLock()
+		capture := r.viewerCapture
+		r.mu.RUnlock()
+		if capture == nil || blockId == "in-memory" {
+			return nil, res, visualErr(ErrDeviceBusy,
+				"la fuente "+id+" está tomada por un viewer y no hay puente para pedirle el frame")
+		}
+		data, err := capture(ctx, blockId)
+		if err != nil {
+			return nil, res, err
+		}
+		return data, res, nil
 	}
 	if r.snapshotFn != nil {
 		data, err := r.snapshotFn(ctx, r, res)
@@ -804,9 +877,15 @@ func DescribeFrame(data []byte) FrameMeta {
 		ContentHash: hex.EncodeToString(sum[:16]),
 		CapturedAt:  time.Now().UnixMilli(),
 	}
-	if cfg, err := jpeg.DecodeConfig(bytes.NewReader(data)); err == nil {
+	// El frame puede venir del provider (JPEG por ffmpeg) o del viewer (PNG por
+	// la captura de bloque del motor). El formato lo dice la imagen, no el
+	// camino por el que llegó.
+	if cfg, format, err := image.DecodeConfig(bytes.NewReader(data)); err == nil {
 		meta.Width = cfg.Width
 		meta.Height = cfg.Height
+		if format != "" {
+			meta.Format = format
+		}
 	}
 	return meta
 }
