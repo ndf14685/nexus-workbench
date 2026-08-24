@@ -30,7 +30,12 @@ const config = {
         {
             from: "./dist",
             to: "./dist",
-            filter: ["**/*", "!bin/*", "bin/wavesrv.${arch}*", "bin/wsh*", "!tsunamiscaffold/**/*"],
+            // `!bin/*` apaga todo el directorio y despues se re-incluye lo que
+            // sale: es una allowlist. Un binario nuevo en dist/bin NO viaja
+            // salvo que se lo nombre aca, y el paquete se genera igual, sin
+            // ruido. El puente (nexus-workbench-mcp) se quedo afuera por esto.
+            filter: ["**/*", "!bin/*", "bin/wavesrv.${arch}*", "bin/wsh*",
+                     "bin/nexus-workbench-mcp*", "!tsunamiscaffold/**/*"],
         },
         {
             from: ".",
