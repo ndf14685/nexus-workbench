@@ -48,6 +48,8 @@ var jarvisCapabilities = []map[string]any{
 		"risk_class": "reversible-write"},
 	{"name": "terminal.close", "description": "cerrar un bloque terminal",
 		"risk_class": "reversible-write"},
+	{"name": "workbench.context", "description": "snapshot operativo: bloque enfocado, tarea en curso y resultado reciente",
+		"risk_class": "read"},
 }
 
 // JarvisAgent es transporte puro: recibe capability.invoke por SSE, ejecuta
@@ -137,6 +139,164 @@ func jarvisEnvListResult(catalog *Catalog) map[string]any {
 	return map[string]any{"environments": envs, "agents": agents}
 }
 
+// Claves de meta donde vive la tarea de un bloque. Se eligio meta EXPLICITA y
+// no inferencia sobre stdout: quien lanza la tarea la escribe, y el snapshot
+// solo lee. Inferir el prompt parseando scrollback es fragil ante TUIs,
+// colores y agentes distintos, y ya hay precedente de que sale mal.
+const (
+	metaTaskInstruction = "jarvis:task:instruction"
+	metaTaskStatus      = "jarvis:task:status"
+	metaTaskStartedAt   = "jarvis:task:started_at"
+	metaTaskCompletedAt = "jarvis:task:completed_at"
+	metaTaskAgent       = "jarvis:task:agent"
+	metaTaskResult      = "jarvis:task:result_summary"
+	metaMission         = "jarvis:mission"
+)
+
+func metaString(meta map[string]any, key string) string {
+	if meta == nil {
+		return ""
+	}
+	value, _ := meta[key].(string)
+	return strings.TrimSpace(value)
+}
+
+func metaNumber(meta map[string]any, key string) (float64, bool) {
+	if meta == nil {
+		return 0, false
+	}
+	switch v := meta[key].(type) {
+	case float64:
+		return v, true
+	case string:
+		f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+		if err != nil {
+			return 0, false
+		}
+		return f, true
+	}
+	return 0, false
+}
+
+// jarvisTaskFromMeta arma el sub-objeto `task` de un bloque, o nil si el bloque
+// no tiene tarea registrada. Sin instruccion no hay tarea: un bloque con solo
+// status es ruido, no contexto.
+func jarvisTaskFromMeta(meta map[string]any) map[string]any {
+	instruction := metaString(meta, metaTaskInstruction)
+	if instruction == "" {
+		return nil
+	}
+	task := map[string]any{
+		"instruction": instruction,
+		"status":      metaString(meta, metaTaskStatus),
+	}
+	if agent := metaString(meta, metaTaskAgent); agent != "" {
+		task["agent"] = agent
+	}
+	if mission := metaString(meta, metaMission); mission != "" {
+		task["mission"] = mission
+	}
+	if started, ok := metaNumber(meta, metaTaskStartedAt); ok {
+		task["started_at"] = started
+	}
+	if completed, ok := metaNumber(meta, metaTaskCompletedAt); ok {
+		task["completed_at"] = completed
+	}
+	// El resumen viaja; la salida cruda NO. El cerebro pide detalle con
+	// terminal.read sobre raw_output_ref si de verdad lo necesita (ADR: no
+	// mandar 20k tokens de scrollback a cada resolucion de deixis).
+	if summary := metaString(meta, metaTaskResult); summary != "" {
+		task["result_summary"] = summary
+	}
+	return task
+}
+
+// jarvisContextResult arma el snapshot operativo del Workbench: que bloque esta
+// enfocado, que tarea tiene, y que hay alrededor.
+//
+// Existe porque el contexto rico del Workbench vivia SOLO en el renderer
+// (captureFocusedContext en frontend/app/nexus/jarvis/context.ts) y viajaba
+// unicamente cuando el dueno escribia en el overlay. Por voz, el cerebro
+// entraba por GET /workbench/context, que devuelve una lista de cwd sin foco,
+// sin ultimo comando y sin tarea: de ahi el "no tengo en el contexto cuales son
+// esos 3 items". Este snapshot es el mismo dato, por el canal que TODAS las
+// superficies comparten.
+func jarvisContextResult(blocksJSON string, tabID string) (map[string]any, error) {
+	var entries []struct {
+		BlockId     string         `json:"blockid"`
+		WorkspaceId string         `json:"workspaceid"`
+		TabId       string         `json:"tabid"`
+		View        string         `json:"view"`
+		Focused     bool           `json:"focused"`
+		Meta        map[string]any `json:"meta"`
+	}
+	if err := json.Unmarshal([]byte(blocksJSON), &entries); err != nil {
+		return nil, fmt.Errorf("parseando blocks list: %w", err)
+	}
+
+	blocks := make([]map[string]any, 0, len(entries))
+	var focused map[string]any
+	workspaceID := ""
+
+	for _, e := range entries {
+		// Solo el tab activo: los bloques de otros tabs no son "lo que tenes
+		// delante", y meterlos convertiria el snapshot en un inventario.
+		if tabID != "" && e.TabId != "" && e.TabId != tabID {
+			continue
+		}
+		if workspaceID == "" {
+			workspaceID = e.WorkspaceId
+		}
+		view := e.View
+		if view == "" {
+			view = metaString(e.Meta, "view")
+		}
+		block := map[string]any{
+			"block_id":   "block:" + e.BlockId,
+			"view":       view,
+			"focused":    e.Focused,
+			"connection": metaString(e.Meta, "connection"),
+		}
+		if cwd := metaString(e.Meta, "cmd:cwd"); cwd != "" {
+			block["cwd"] = cwd
+		}
+		if controller := metaString(e.Meta, "controller"); controller != "" {
+			block["controller"] = controller
+		}
+		title := metaString(e.Meta, "frame:title")
+		if title == "" {
+			title = metaString(e.Meta, "nexus:web:title")
+		}
+		if title != "" {
+			block["title"] = title
+		}
+		if url := metaString(e.Meta, "url"); url != "" {
+			block["url"] = url
+		}
+		if task := jarvisTaskFromMeta(e.Meta); task != nil {
+			block["task"] = task
+		}
+		blocks = append(blocks, block)
+		if e.Focused {
+			focused = block
+		}
+	}
+
+	out := map[string]any{
+		"workspace_id": workspaceID,
+		"tab_id":       tabID,
+		"blocks":       blocks,
+		// focused_block_available deja que el health (y el resolver) distingan
+		// "no hay foco" de "no pude leerlo": son dos fallas distintas y una es
+		// normal (ningun bloque enfocado) y la otra no.
+		"focused_block_available": focused != nil,
+	}
+	if focused != nil {
+		out["focused_block"] = focused
+	}
+	return out, nil
+}
+
 // jarvisBlocksResult adapta la salida de `wsh blocks list --json` al contrato
 // terminal.list del cerebro ({blocks: [{block_id, meta, connection}]}).
 func jarvisBlocksResult(blocksJSON string) (map[string]any, error) {
@@ -222,6 +382,16 @@ func (ja *JarvisAgent) execute(ctx context.Context, capability string, args map[
 			return nil, err
 		}
 		return jarvisBlocksResult(out)
+	case "workbench.context":
+		tabId, err := ja.tabId()
+		if err != nil {
+			return nil, err
+		}
+		out, err := ja.runWsh(ctx, "", tabId, "blocks", "list", "--json")
+		if err != nil {
+			return nil, err
+		}
+		return jarvisContextResult(out, tabId)
 	case "terminal.create":
 		tabId, err := ja.tabId()
 		if err != nil {

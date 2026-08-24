@@ -33,6 +33,7 @@ type BlockDetails struct {
 	TabId       string              `json:"tabid"`       // ID of the tab containing the block
 	View        string              `json:"view"`        // Canonical view type (term, web, preview, edit, sysinfo, waveai)
 	Meta        waveobj.MetaMapType `json:"meta"`        // Block metadata including view type
+	Focused     bool                `json:"focused,omitempty"` // Block holds focus in its tab
 }
 
 // blocksListCmd represents the 'blocks list' command
@@ -180,6 +181,7 @@ func blocksListRun(cmd *cobra.Command, args []string) error {
 				TabId:       b.TabId,
 				View:        v,
 				Meta:        b.Meta,
+				Focused:     b.Focused,
 			})
 		}
 	}

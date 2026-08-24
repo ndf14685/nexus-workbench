@@ -953,6 +953,46 @@ func (ws *WshServer) MacOSVersionCommand(ctx context.Context) (string, error) {
 
 // BlocksListCommand returns every block visible in the requested
 // scope (current workspace by default).
+// focusedBlockForTab devuelve el blockId enfocado de un tab, o "" si no se
+// puede determinar.
+//
+// El foco vive en dos lugares y solo uno sirve aca. El renderer lo tiene en un
+// atom (`getFocusedBlockId()` en frontend/app/store/global.ts) y lo expone por
+// `getfocusedblockdata`, que SOLO responde el TabRpcClient: con la UI cerrada
+// ese camino no existe. Pero el layout ya persiste `FocusedNodeId` en el store
+// (waveobj.LayoutState), y `LeafOrder` ya es el mapeo nodeId->blockId. O sea:
+// el dato esta en la fuente de verdad y nadie lo estaba leyendo.
+//
+// Un fallo aca no es fatal: sin foco el consumidor degrada a "no se cual
+// mirabas", que es exactamente el comportamiento anterior.
+func focusedBlockForTab(ctx context.Context, tab *waveobj.Tab) string {
+	if tab == nil || tab.LayoutState == "" {
+		return ""
+	}
+	layout, err := wstore.DBMustGet[*waveobj.LayoutState](ctx, tab.LayoutState)
+	if err != nil {
+		return ""
+	}
+	return focusedBlockInLayout(layout)
+}
+
+// focusedBlockInLayout es la parte pura: traduce FocusedNodeId a blockId con el
+// LeafOrder. Separada del acceso al store para poder testear la traduccion sin
+// levantar una base.
+func focusedBlockInLayout(layout *waveobj.LayoutState) string {
+	if layout == nil || layout.FocusedNodeId == "" || layout.LeafOrder == nil {
+		return ""
+	}
+	for _, entry := range *layout.LeafOrder {
+		if entry.NodeId == layout.FocusedNodeId {
+			return entry.BlockId
+		}
+	}
+	// Foco apuntando a un nodo que ya no es hoja (se cerro el bloque, o el
+	// nodo es un split): no hay bloque enfocado, y decir "" es correcto.
+	return ""
+}
+
 func (ws *WshServer) BlocksListCommand(
 	ctx context.Context,
 	req wshrpc.BlocksListRequest) ([]wshrpc.BlocksListEntry, error) {
@@ -1000,6 +1040,7 @@ func (ws *WshServer) BlocksListCommand(
 			if err != nil {
 				return nil, err
 			}
+			focusedBlockID := focusedBlockForTab(ctx, tab)
 			for _, blkID := range tab.BlockIds {
 				blk, err := wstore.DBMustGet[*waveobj.Block](ctx, blkID)
 				if err != nil {
@@ -1011,6 +1052,7 @@ func (ws *WshServer) BlocksListCommand(
 					TabId:       tabID,
 					BlockId:     blkID,
 					Meta:        blk.Meta,
+					Focused:     focusedBlockID != "" && blkID == focusedBlockID,
 				})
 			}
 		}

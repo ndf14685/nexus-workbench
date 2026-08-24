@@ -513,6 +513,11 @@ type BlocksListEntry struct {
 	TabId       string              `json:"tabid"`
 	BlockId     string              `json:"blockid"`
 	Meta        waveobj.MetaMapType `json:"meta"`
+	// Focused marca el bloque que tiene el foco en su tab. Se resuelve desde
+	// el LayoutState persistido, NO desde el renderer: asi el foco sigue
+	// disponible con la UI cerrada, que es lo que necesita un asistente
+	// headless para resolver "esto" sin que el Workbench este abierto.
+	Focused bool `json:"focused,omitempty"`
 }
 
 type AiMessageData struct {
