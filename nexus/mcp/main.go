@@ -214,6 +214,12 @@ func main() {
 		runJarvisAgent(os.Args[2:])
 		return
 	}
+	// Subcomando visual: diagnostico del provider de fuentes visuales sin
+	// levantar la app ni el cerebro.
+	if len(os.Args) > 1 && os.Args[1] == "visual" {
+		runVisualCLI(os.Args[2:])
+		return
+	}
 	var dataDir, wshPath, envsPath, auditPath, workspace, runbooksPath, approvalsDir string
 	var dev bool
 	flag.StringVar(&dataDir, "data-dir", "", "data dir de la app (default: autodetectar)")
