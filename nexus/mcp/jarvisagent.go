@@ -63,6 +63,9 @@ type JarvisAgent struct {
 	tabId     func() (string, error)
 	httpc     *http.Client
 	since     int64
+	// visual: provider de fuentes visuales del host. Nil = el agente corre sin
+	// soporte visual y las capabilities visual.* ni siquiera se registran.
+	visual *VisualCapabilities
 }
 
 func (ja *JarvisAgent) auditLog(tool, env, detail, decision string) {
@@ -111,11 +114,25 @@ func (ja *JarvisAgent) classForBlock(ctx context.Context, blockID string) (strin
 // protocolo jarvisd v1.4: register con version negociable (ADR-0006 §7)
 const jarvisProtocolVersion = "1.4"
 
+// jarvisAllCapabilities: terminal.* + visual.*. Se registran juntas porque el
+// cerebro necesita ver de una toda la superficie que este cliente ofrece.
+func jarvisAllCapabilities(withVisual bool) []map[string]any {
+	caps := append([]map[string]any(nil), jarvisCapabilities...)
+	if withVisual {
+		caps = append(caps, visualCapabilityDefs...)
+	}
+	return caps
+}
+
 func jarvisRegisterPayload(clientID string) []byte {
+	return jarvisRegisterPayloadWith(clientID, true)
+}
+
+func jarvisRegisterPayloadWith(clientID string, withVisual bool) []byte {
 	body, _ := json.Marshal(map[string]any{
 		"client_id":        clientID,
 		"client_type":      jarvisClientType,
-		"capabilities":     jarvisCapabilities,
+		"capabilities":     jarvisAllCapabilities(withVisual),
 		"protocol_version": jarvisProtocolVersion,
 		"agent_version":    ServerVersion,
 	})
@@ -208,6 +225,13 @@ func (ja *JarvisAgent) execute(ctx context.Context, capability string, args map[
 	str := func(key string) string {
 		value, _ := args[key].(string)
 		return value
+	}
+	// Las visual.* se atienden en su propio modulo: el provider no tiene nada
+	// que ver con wsh ni con los bloques de terminal.
+	if ja.visual != nil {
+		if out, handled, err := ja.visual.Execute(ctx, capability, args); handled {
+			return out, err
+		}
 	}
 	switch capability {
 	case "env.list":
@@ -509,6 +533,7 @@ func (ja *JarvisAgent) Run(ctx context.Context) {
 func runJarvisAgent(argv []string) {
 	flags := flag.NewFlagSet("jarvis-agent", flag.ExitOnError)
 	var dataDir, wshPath, envsPath, brainURL, clientID, workspace string
+	var configDir, ffmpegBin string
 	var dev bool
 	flags.StringVar(&dataDir, "data-dir", "", "data dir de la app (default: autodetectar)")
 	flags.StringVar(&wshPath, "wsh", "", "ruta al binario wsh (default: autodetectar)")
@@ -516,6 +541,8 @@ func runJarvisAgent(argv []string) {
 	flags.StringVar(&brainURL, "brain", "", "URL del cerebro (default: JARVIS_BRAIN_URL o http://127.0.0.1:8770)")
 	flags.StringVar(&clientID, "client-id", "", "client_id del protocolo (default: wb-<hostname>)")
 	flags.StringVar(&workspace, "workspace", "", "workspace destino (default: primero activo)")
+	flags.StringVar(&configDir, "config-dir", "", "config dir del motor (default: autodetectar)")
+	flags.StringVar(&ffmpegBin, "ffmpeg", "", "ruta al binario ffmpeg para las fuentes visuales")
 	flags.BoolVar(&dev, "dev", false, "usar los directorios waveterm-dev")
 	_ = flags.Parse(argv)
 
@@ -565,5 +592,16 @@ func runJarvisAgent(argv []string) {
 		tabId:     func() (string, error) { return wave.ActiveTabId(workspace) },
 		httpc:     &http.Client{Timeout: 15 * time.Second},
 	}
+	// Provider visual: lee las fuentes del settings.json del motor (misma
+	// convencion que nexus:environments) y emite eventos de cambio por el
+	// ingest /events que el protocolo ya tiene.
+	settingsPath := ResolveSettingsPath(configDir, dev)
+	visualReg := NewVisualSourceRegistry(settingsPath, ffmpegBin)
+	agent.visual = NewVisualCapabilities(visualReg,
+		brainEventSink(agent.brainURL, agent.token, clientID, agent.httpc),
+		agent.auditLog)
+	// Ninguna goroutine mirando una capturadora sobrevive al proceso.
+	defer agent.visual.StopAll()
+	log.Printf("visual: fuentes desde %s", settingsPath)
 	agent.Run(context.Background())
 }

@@ -18,6 +18,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image/jpeg"
 	"os"
@@ -817,4 +818,10 @@ func firstLine(s string) string {
 		return strings.TrimSpace(s[:i])
 	}
 	return s
+}
+
+// AsVisualError expone errors.As sin obligar a cada consumidor a importar
+// errors sólo para leer el código de la taxonomía.
+func AsVisualError(err error, target **VisualError) bool {
+	return errors.As(err, target)
 }
