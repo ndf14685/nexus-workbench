@@ -15,6 +15,7 @@ import {
 import { base64ToString, fireAndForget, isSshConnName, isWslConnName } from "@/util/util";
 import debug from "debug";
 import type { TermWrap } from "./termwrap";
+import { recordTaskFinish, recordTaskStart } from "@/app/nexus/jarvis/task-writer";
 
 const dlog = debug("wave:termwrap");
 
@@ -121,6 +122,9 @@ function handleShellIntegrationCommandStart(
                 const isCC = isClaudeCodeCommand(decodedCmd);
                 globalStore.set(termWrap.claudeCodeActiveAtom, isCC);
                 checkCommandForTelemetry(decodedCmd);
+                // Deja escrito en el bloque QUE tarea arranco, para que Jarvis
+                // pueda resolver "esto" sin que se lo expliquen.
+                recordTaskStart(blockId, decodedCmd);
             } catch (e) {
                 console.error("Error decoding cmd64:", e);
                 rtInfo["shell:lastcmd"] = null;
@@ -352,6 +356,7 @@ export function handleOsc16162Command(data: string, blockId: string, loaded: boo
             } else {
                 rtInfo["shell:lastcmdexitcode"] = null;
             }
+            recordTaskFinish(blockId, cmd.data.exitcode ?? null);
             break;
         case "I":
             if (cmd.data.inputempty != null) {
