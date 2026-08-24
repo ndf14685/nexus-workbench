@@ -138,10 +138,29 @@ tasks:
             - npm:install
 
     build:backend:
-        desc: Build the wavesrv and wsh components.
+        desc: Build the wavesrv, wsh and nexus-workbench-mcp components.
         cmds:
             - task: build:server
             - task: build:wsh
+            - task: build:mcp
+
+    build:mcp:
+        # El puente Workbench <-> cerebro se construia DESPUES de empaquetar,
+        # asi que nunca entraba al instalador: quedaba como una copia suelta
+        # que ningun release actualizaba. El resultado fue un binario nueve
+        # dias viejo hablando con un wavesrv nuevo, y el canal reportando
+        # connected=true con todo el contexto vacio. Construirlo aca lo mete
+        # en dist/bin, que `asarUnpack` empaqueta y el auto-update reemplaza.
+        desc: Build the nexus-workbench-mcp component (Workbench <-> brain bridge).
+        cmds:
+            - cmd: '{{.RMRF}} dist/bin/nexus-workbench-mcp{{exeExt}}'
+              ignore_error: true
+            - cmd: cd nexus/mcp && CGO_ENABLED=0 go build -ldflags="-s -w" -o ../../dist/bin/nexus-workbench-mcp{{exeExt}} .
+        sources:
+            - "nexus/mcp/**/*.go"
+            - "nexus/mcp/go.mod"
+        generates:
+            - "dist/bin/nexus-workbench-mcp{{exeExt}}"
 
     build:backend:quickdev:
         desc: Build only the wavesrv component for quickdev (arm64 macOS only, no generate, no wsh).

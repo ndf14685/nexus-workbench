@@ -81,10 +81,23 @@ jobs:
                   if ($env:EXPECTED_PUBLISHER -and $sig.SignerCertificate.Subject -notlike "*$($env:EXPECTED_PUBLISHER)*") {
                       throw "el subject firmado no coincide con NEXUS_PUBLISHER_NAME; el updater rechazaria cada actualizacion"
                   }
-            - name: Build MCP server
-              run: cd nexus/mcp; go build -ldflags="-s -w" -o ../../make/nexus-workbench-mcp.exe .
-              env:
-                  CGO_ENABLED: "0"
+            - name: Verificar que el MCP quedó DENTRO del paquete
+              # Antes este paso COMPILABA el MCP, despues de empaquetar y
+              # directo a make/. El binario salia como artefacto suelto y no
+              # entraba al instalador, asi que ningun release ni auto-update
+              # lo tocaba: cada maquina se quedaba con la copia que alguien
+              # habia puesto a mano. Ahora lo construye `build:mcp` dentro de
+              # `task package`, y esto es la cota que impide que se vuelva a
+              # salir del paquete en silencio. El artefacto suelto se saca de
+              # ADENTRO del paquete: asi no puede divergir de lo instalado.
+              run: |
+                  $dentro = Get-ChildItem -Path make -Recurse -Filter nexus-workbench-mcp.exe -ErrorAction SilentlyContinue |
+                      Where-Object { $_.FullName -like "*app.asar.unpacked*dist*bin*" }
+                  if (-not $dentro) {
+                      throw "el MCP no quedo dentro del paquete; revisar build:mcp en el Taskfile"
+                  }
+                  Write-Host "MCP empaquetado en: $($dentro[0].FullName)"
+                  Copy-Item $dentro[0].FullName make/nexus-workbench-mcp.exe -Force
               shell: powershell
             - name: Generate SBOM
               uses: anchore/sbom-action@v0
