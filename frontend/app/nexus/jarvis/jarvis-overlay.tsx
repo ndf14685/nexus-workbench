@@ -6,7 +6,12 @@ import { modalsModel } from "@/app/store/modalmodel";
 import { useEffect, useRef, useState } from "react";
 import { getBrainConfig, saveBrainConfig } from "./brain-config";
 import { postIntent } from "./brain-client";
-import { captureFocusedContext, describeContext, type JarvisContextModule } from "./context";
+import {
+    captureFocusedContext,
+    captureVisualSources,
+    describeContext,
+    type JarvisFocusedContext,
+} from "./context";
 import { listParked, matchParkIntent, parkBlock, restorePark, closeParked, type ParkedEntry } from "./parking";
 import { JarvisStatusModel } from "./status-model";
 import { jarvisLog } from "./telemetry";
@@ -60,7 +65,7 @@ export function JarvisOverlay() {
     const [input, setInput] = useState("");
     const [turns, setTurns] = useState<Turn[]>([]);
     const [busy, setBusy] = useState(false);
-    const [context, setContext] = useState<JarvisContextModule>({ kind: "empty" });
+    const [context, setContext] = useState<JarvisFocusedContext>({ kind: "empty" });
     const [configured, setConfigured] = useState<boolean>(null);
     const [parked, setParked] = useState<ParkedEntry[]>([]);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -128,7 +133,14 @@ export function JarvisOverlay() {
             return;
         }
         try {
-            const contexts = context.kind == "empty" ? [] : [context];
+            // El catalogo de fuentes visuales viaja siempre: permite resolver
+            // "la pantalla del banco" por etiqueta aunque el HMI no este en foco.
+            const focusedBlockId = context.kind == "empty" ? undefined : context.blockid;
+            const visualCtx = captureVisualSources(focusedBlockId);
+            const contexts = [
+                ...(context.kind == "empty" ? [] : [context]),
+                ...(visualCtx.kind == "empty" ? [] : [visualCtx]),
+            ];
             const sentAt = Date.now() / 1000;
             const resp = await postIntent(text, contexts);
             jarvisLog("jarvis.intent.resolve", { handled: resp.handled, needsConfirmation: resp.needs_confirmation });
