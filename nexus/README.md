@@ -9,6 +9,7 @@ con diff mínimo). Empezar por:
 - [docs/WINDOWS_BUILD.md](docs/WINDOWS_BUILD.md) — instalador Windows
 - [docs/UPSTREAM_SYNC.md](docs/UPSTREAM_SYNC.md) — sync con Wave
 - [docs/SECURITY.md](docs/SECURITY.md) — reglas y modelo de amenazas
+- [docs/VISUAL_SOURCES.md](docs/VISUAL_SOURCES.md) — fuentes visuales (HMI) y observacion por IA
 - [docs/INVENTORY_WAVETERM.md](docs/INVENTORY_WAVETERM.md) — inventario del motor
 - [docs/adr/](docs/adr/) — decisiones de arquitectura
 
