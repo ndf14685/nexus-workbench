@@ -3,7 +3,12 @@
 
 import { scrubSecrets } from "@/app/block/panelactivity-util";
 import { atoms, getBlockComponentModel, getSettingsKeyAtom, globalStore, WOS } from "@/app/store/global";
-import { normalizeAIVision, sourceLabel, visualSourcesAtom } from "@/app/nexus/visual/visual-types";
+import {
+    normalizeAIVision,
+    sourceLabel,
+    visualSourcesAtom,
+    type VisualSourceConfig,
+} from "@/app/nexus/visual/visual-types";
 import { MetaSourceKey, type VisualSourceViewModel } from "@/app/view/visual/visual-model";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { makeFeBlockRouteId, makeTabRouteId } from "@/app/store/wshrouter";
@@ -173,16 +178,54 @@ function captureVisualContext(fbd: FocusedBlockData): JarvisFocusedContext {
     };
 }
 
-// captureVisualSources arma el catalogo con lo que el Workbench sabe: que
-// fuentes hay configuradas, cuales estan visibles en un bloque y cual esta
-// enfocada. La disponibilidad real del dispositivo la sabe el provider del
-// host, no el renderer.
-export function captureVisualSources(focusedBlockId?: string): JarvisContextModule {
-    const sources = globalStore.get(visualSourcesAtom);
+// OpenVisualBlock: un bloque HMI abierto, ya resuelto contra el store. Se separa
+// de la lectura del store para que la regla de visible/focused sea pura.
+export interface OpenVisualBlock {
+    blockId: string;
+    sourceId: string;
+    status: string;
+    available?: boolean;
+}
+
+// buildVisualSourcesContext es la regla, sin store: que fuentes hay, cuales
+// estan visibles y cual esta enfocada. La disponibilidad real del dispositivo la
+// sabe el provider del host, no el renderer.
+export function buildVisualSourcesContext(
+    sources: VisualSourceConfig[],
+    openBlocks: OpenVisualBlock[],
+    focusedBlockId?: string
+): JarvisContextModule {
     if (sources.length === 0) {
         return { kind: "empty" };
     }
-    const openBlocks = new Map<string, string>();
+    const bySource = new Map<string, OpenVisualBlock>();
+    for (const block of openBlocks) {
+        if (block.sourceId && !bySource.has(block.sourceId)) {
+            bySource.set(block.sourceId, block);
+        }
+    }
+    return {
+        kind: "visual_sources",
+        sources: sources.map((src) => {
+            const open = bySource.get(src.id);
+            return {
+                id: src.id,
+                label: sourceLabel(src),
+                type: src.type ?? "uvc",
+                ai_vision: normalizeAIVision(src.aivision),
+                visible: open != null,
+                focused: open != null && open.blockId === focusedBlockId,
+                status: open?.status ?? "closed",
+                available: open?.available,
+            };
+        }),
+    };
+}
+
+// openVisualBlocks lee del store los bloques HMI del tab actual. Es el pegamento
+// con el motor; la decision vive en buildVisualSourcesContext.
+function openVisualBlocks(sources: { id: string }[]): OpenVisualBlock[] {
+    const out: OpenVisualBlock[] = [];
     try {
         const tabId = globalStore.get(atoms.staticTabId);
         const tab = tabId ? globalStore.get(WOS.getWaveObjectAtom<Tab>(WOS.makeORef("tab", tabId))) : null;
@@ -191,31 +234,23 @@ export function captureVisualSources(focusedBlockId?: string): JarvisContextModu
             if (block?.meta?.view !== "visual") {
                 continue;
             }
-            const bound = (block.meta[MetaSourceKey] as string) || sources[0]?.id;
-            if (bound && !openBlocks.has(bound)) {
-                openBlocks.set(bound, blockId);
-            }
+            const sourceId = (block.meta[MetaSourceKey] as string) || sources[0]?.id || "";
+            const state = visualBlockState(blockId);
+            out.push({ blockId, sourceId, status: state.status, available: state.available });
         }
     } catch {
-        // sin tab legible el catalogo sigue siendo util: solo pierde visible/focused
+        // sin tab legible el catalogo sigue sirviendo: solo pierde visible/focused
     }
-    return {
-        kind: "visual_sources",
-        sources: sources.map((src) => {
-            const blockId = openBlocks.get(src.id);
-            const state = blockId ? visualBlockState(blockId) : { status: "closed" as string, available: undefined };
-            return {
-                id: src.id,
-                label: sourceLabel(src),
-                type: src.type ?? "uvc",
-                ai_vision: normalizeAIVision(src.aivision),
-                visible: blockId != null,
-                focused: blockId != null && blockId === focusedBlockId,
-                status: state.status,
-                available: state.available,
-            };
-        }),
-    };
+    return out;
+}
+
+export function captureVisualSources(focusedBlockId?: string): JarvisContextModule {
+    const sources = globalStore.get(visualSourcesAtom);
+    if (sources.length === 0) {
+        // Sin fuentes no hace falta ni mirar el tab: nada que publicar.
+        return { kind: "empty" };
+    }
+    return buildVisualSourcesContext(sources, openVisualBlocks(sources), focusedBlockId);
 }
 
 export async function captureFocusedContext(): Promise<JarvisFocusedContext> {
