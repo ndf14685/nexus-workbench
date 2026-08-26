@@ -66,6 +66,9 @@ type JarvisAgent struct {
 	// visual: provider de fuentes visuales del host. Nil = el agente corre sin
 	// soporte visual y las capabilities visual.* ni siquiera se registran.
 	visual *VisualCapabilities
+	// notify: entrega de avisos al escritorio. El agente no decide nada sobre
+	// ellos; solo los muestra o los hace sonar.
+	notify *NotificationCapabilities
 }
 
 func (ja *JarvisAgent) auditLog(tool, env, detail, decision string) {
@@ -121,7 +124,8 @@ func jarvisAllCapabilities(withVisual bool) []map[string]any {
 	if withVisual {
 		caps = append(caps, visualCapabilityDefs...)
 	}
-	return caps
+	// Avisar no depende de tener capturadora: se registra siempre.
+	return append(caps, notificationCapabilityDefs...)
 }
 
 func jarvisRegisterPayload(clientID string) []byte {
@@ -292,6 +296,11 @@ func (ja *JarvisAgent) execute(ctx context.Context, capability string, args map[
 	// que ver con wsh ni con los bloques de terminal.
 	if ja.visual != nil {
 		if out, handled, err := ja.visual.Execute(ctx, capability, args); handled {
+			return out, err
+		}
+	}
+	if ja.notify != nil {
+		if out, handled, err := ja.notify.Execute(ctx, capability, args); handled {
 			return out, err
 		}
 	}
@@ -654,6 +663,10 @@ func runJarvisAgent(argv []string) {
 		tabId:     func() (string, error) { return wave.ActiveTabId(workspace) },
 		httpc:     &http.Client{Timeout: 15 * time.Second},
 	}
+	// Avisos: el ding se guarda junto al resto de los datos del motor, y si
+	// esta plataforma no puede sonar el player queda nil (el cerebro lo sabe).
+	agent.notify = NewNotificationCapabilities(wave.RunWsh, agent.tabId,
+		MakeChimePlayer(ResolveDataDir(dataDir, dev)), agent.auditLog)
 	// Provider visual: lee las fuentes del settings.json del motor (misma
 	// convencion que nexus:environments) y emite eventos de cambio por el
 	// ingest /events que el protocolo ya tiene.
