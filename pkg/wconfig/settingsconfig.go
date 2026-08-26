@@ -897,6 +897,27 @@ func convertJsonNumber(num json.Number, ctype reflect.Type) (interface{}, error)
 	return nil, fmt.Errorf("cannot convert number to %s", ctype)
 }
 
+// isStructuredKind: los tipos de config que NO son escalares y por lo tanto
+// llegan desde JSON como []interface{} o map[string]interface{}.
+func isStructuredKind(k reflect.Kind) bool {
+	return k == reflect.Slice || k == reflect.Map || k == reflect.Struct
+}
+
+// validateStructuredValue comprueba que un valor generico decodificado de JSON
+// encaje en el tipo declarado en SettingsType. No transforma nada: valida y
+// devuelve el error tal cual, para que el llamador guarde el valor original.
+func validateStructuredValue(val any, ctype reflect.Type) error {
+	barr, err := json.Marshal(val)
+	if err != nil {
+		return err
+	}
+	target := reflect.New(ctype)
+	if err := json.Unmarshal(barr, target.Interface()); err != nil {
+		return err
+	}
+	return nil
+}
+
 func SetBaseConfigValue(toMerge waveobj.MetaMapType) error {
 	m, cerrs := ReadWaveHomeConfigFile(SettingsFile)
 	if len(cerrs) > 0 {
@@ -925,6 +946,23 @@ func SetBaseConfigValue(toMerge waveobj.MetaMapType) error {
 			if rtype != ctype {
 				if ctype == reflect.PointerTo(rtype) {
 					m[configKey] = &val
+				} else if isStructuredKind(ctype.Kind()) {
+					// Una clave estructurada (lista de objetos, como
+					// nexus:visualsources) llega desde el cliente como
+					// []interface{}: comparar el tipo con el declarado nunca
+					// matchea y toda la clave quedaba SIN camino de escritura.
+					// Eso dejaba inoperable el toggle de "Yoshi Vision", que es
+					// el control con el que se concede o se revoca la
+					// observacion por IA — un permiso que no se puede cambiar
+					// no es un permiso.
+					//
+					// Se valida re-decodificando contra el tipo declarado (un
+					// tipo equivocado sigue siendo un error) y se guarda el
+					// valor original, para no perder campos que alguien haya
+					// agregado a mano en settings.json.
+					if err := validateStructuredValue(val, ctype); err != nil {
+						return fmt.Errorf("invalid value for %s: %v", configKey, err)
+					}
 				} else {
 					return fmt.Errorf("invalid value type for %s: %T", configKey, val)
 				}

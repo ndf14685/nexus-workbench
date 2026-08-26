@@ -324,11 +324,15 @@ func TestVisualCapabilityDefsDeclareRiskClasses(t *testing.T) {
 }
 
 func TestJarvisRegisterPayloadIncludesVisualCapabilities(t *testing.T) {
-	if got := len(jarvisAllCapabilities(true)); got != len(jarvisCapabilities)+len(visualCapabilityDefs) {
-		t.Fatalf("el registro tiene que declarar terminal.* y visual.*: %d", got)
+	if got := len(jarvisAllCapabilities(true)); got != len(jarvisCapabilities)+
+		len(visualCapabilityDefs)+len(notificationCapabilityDefs) {
+		t.Fatalf("el registro tiene que declarar terminal.* + visual.* + notification.*: %d", got)
 	}
-	if got := len(jarvisAllCapabilities(false)); got != len(jarvisCapabilities) {
-		t.Fatalf("sin soporte visual no se declaran capabilities que no se pueden cumplir: %d", got)
+	// Sin soporte visual no se declara lo que no se puede cumplir; avisar, en
+	// cambio, no depende de ninguna capturadora.
+	if got := len(jarvisAllCapabilities(false)); got != len(jarvisCapabilities)+
+		len(notificationCapabilityDefs) {
+		t.Fatalf("sin soporte visual quedan terminal.* + notification.*: %d", got)
 	}
 }
 
