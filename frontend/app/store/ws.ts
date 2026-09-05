@@ -91,8 +91,18 @@ class WSControl {
         this.wsConn.onclose = (e: CloseEvent) => {
             this.onclose(e);
         };
-        // turns out onerror is not necessary (onclose always follows onerror)
-        // this.wsConn.onerror = this.onerror;
+        // in the browser onclose always follows onerror, so this handler is
+        // just a log line there; in Node (`ws`, the Electron main process) an
+        // 'error' event with no listener is rethrown as an uncaught exception
+        // and emain quits the whole app — the runtime stopping for an update
+        // took the Workbench down with it (ECONNREFUSED on the reconnect)
+        this.wsConn.onerror = (e: any) => {
+            this.onerror(e);
+        };
+    }
+
+    onerror(event: any) {
+        dlog("connection error", event?.message ?? event?.error?.message ?? "");
     }
 
     reconnect(forceClose?: boolean) {
