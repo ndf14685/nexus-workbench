@@ -3,6 +3,27 @@
 Cambios propios del fork; lo heredado de Wave Terminal se documenta en los
 releases de upstream.
 
+## v0.17.0-beta.5 — 2026-09-05 · "El Workbench no se cae cuando el runtime se va"
+
+### Corregido
+- **La app entera moría cuando el runtime detached se detenía**, por ejemplo
+  al aceptar "Restart" para instalar una actualización. El cliente WebSocket
+  que el proceso principal comparte con el frontend no registraba `onerror`
+  porque en el navegador `onclose` siempre lo sigue; en Electron corre sobre
+  el paquete `ws` de Node, donde un `error` sin oyente es una excepción no
+  capturada y emain cierra la app ("Uncaught Exception, shutting down:
+  connect ECONNREFUSED"). Visto en la actualización a beta.4: la app se
+  cerraba a los segundos en cada reapertura hasta que el instalador terminó,
+  porque cada reapertura levantaba otra vez un runtime viejo que trababa
+  `wavesrv.exe` y el instalador lo mataba de nuevo. Test en Node real contra
+  un puerto cerrado: `frontend/app/store/ws.test.ts`.
+
+### Nota para actualizar desde beta.4
+- La app beta.4 todavía corre el código viejo: al aceptar "Restart" va a
+  cerrarse sola y el instalador sigue en segundo plano (`installonquit`).
+  Esperar un par de minutos antes de volver a abrirla; reabrirla durante la
+  instalación vuelve a trabar `wavesrv.exe` y alarga el ciclo.
+
 ## v0.17.0-beta.2 — 2026-08-24 · "Visual Sources" (HMI)
 
 ### Agregado
