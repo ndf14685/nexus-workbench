@@ -43,10 +43,18 @@ var redactPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`([a-zA-Z][a-zA-Z0-9+.-]*://[^\s:/@]+:)[^\s@/]+(@)`),
 	// campos de kubeconfig y similares en YAML/JSON
 	regexp.MustCompile(`(?i)((?:client-key-data|client-certificate-data|token|id-token|refresh-token)\s*:\s*)\S{16,}`),
-	// asignaciones genéricas: NOMBRE=valor / "nombre": "valor"
-	regexp.MustCompile(`(?i)(\b[A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key|credential)[A-Za-z0-9_.-]*\s*[:=]\s*)"[^"]{6,}"`),
-	regexp.MustCompile(`(?i)(\b[A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key|credential)[A-Za-z0-9_.-]*\s*[:=]\s*)'[^']{6,}'`),
-	regexp.MustCompile(`(?i)(\b[A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key|credential)[A-Za-z0-9_.-]*\s*[:=]\s*)[^\s"';]{6,}`),
+	// asignaciones genéricas: NOMBRE=valor / "nombre": "valor".
+	//
+	// El VALOR tiene que parecer un secreto: una tira de caracteres de token
+	// (letras, dígitos, ._~+/=-) sin espacios ni paréntesis ni corchetes.
+	// Antes valía "cualquier cosa sin espacios de 6+", y eso tachaba código:
+	// `tokens = int(usage["total_tokens"])` salía como
+	// `tokens = «REDACTADO»"total_tokens")` y el juez de una misión pedía tres
+	// veces el archivo "sin redactar" (2026-09-04). Un secreto real no trae
+	// `(` ni `[`; un contador (`max_tokens = 4096`) no llega a 16 chars.
+	regexp.MustCompile(`(?i)(\b[A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key|credential)[A-Za-z0-9_.-]*"?\s*[:=]\s*)"[A-Za-z0-9._~+/=-]{8,}"`),
+	regexp.MustCompile(`(?i)(\b[A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key|credential)[A-Za-z0-9_.-]*\s*[:=]\s*)'[A-Za-z0-9._~+/=-]{8,}'`),
+	regexp.MustCompile(`(?i)(\b[A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|apikey|access[_-]?key|private[_-]?key|credential)[A-Za-z0-9_.-]*\s*[:=]\s*)[A-Za-z0-9._~+/=-]{16,}`),
 }
 
 // Redact devuelve el texto con las credenciales reemplazadas y cuántas se

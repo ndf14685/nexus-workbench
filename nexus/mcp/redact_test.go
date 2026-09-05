@@ -87,3 +87,41 @@ func TestRedactPreservesAssignmentKeyName(t *testing.T) {
 		t.Fatalf("se perdió el nombre de la variable: %q", out)
 	}
 }
+
+func TestRedactLeavesCodeAboutTokensAlone(t *testing.T) {
+	// 2026-09-04: el patrón genérico tachaba código porque el nombre de la
+	// variable contenía "token" y el valor era "cualquier cosa sin espacios".
+	// El juez de una misión vio `tokens = «REDACTADO»"total_tokens")` y pidió
+	// tres veces el archivo "sin redactar": no había nada que redactar.
+	ordinary := []string{
+		`tokens = int(usage["total_tokens"])`,
+		`token_delta = enabled["total_tokens"] - disabled["total_tokens"]`,
+		`context_max_tokens=replay["context_max_tokens"],`,
+		`max_tokens = 4096`,
+		`"total_tokens": 8129,`,
+		`tokens used: 4,406`,
+		`self.token_count += len(chunk)`,
+		`api_key = os.environ.get("OPENAI_API_KEY")`,
+	}
+	for _, line := range ordinary {
+		out, n := Redact(line)
+		if n != 0 || out != line {
+			t.Fatalf("se redactó código que no contiene ningún secreto:\ninput:  %s\noutput: %s", line, out)
+		}
+	}
+}
+
+func TestRedactStillHidesRealAssignedSecrets(t *testing.T) {
+	cases := []struct{ input, leak string }{
+		{"GITHUB_TOKEN=9f8e7d6c5b4a392817065544332211aa", "9f8e7d6c5b4a392817065544332211aa"},
+		{`api_key = "sk-live-0123456789abcdef"`, "sk-live-0123456789abcdef"},
+		{"token: 9f8e7d6c5b4a39281706", "9f8e7d6c5b4a39281706"},
+		{`"password": "correct-horse-battery"`, "correct-horse-battery"},
+	}
+	for _, tc := range cases {
+		out, n := Redact(tc.input)
+		if n == 0 || strings.Contains(out, tc.leak) {
+			t.Fatalf("el secreto sobrevivió:\ninput:  %s\noutput: %s", tc.input, out)
+		}
+	}
+}
