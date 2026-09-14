@@ -3,6 +3,28 @@
 Cambios propios del fork; lo heredado de Wave Terminal se documenta en los
 releases de upstream.
 
+## v0.17.0-beta.6 — 2026-09-13 · "¿Jarvis realmente está trabajando?"
+
+### Agregado
+- **El panel Jarvis y la tab bar muestran el estado REAL de ejecución** de cada
+  misión, no sólo su `status`. jarvisd manda por misión una vista `execution`
+  (DISPATCHED · STARTING · RUNNING · WAITING · WAITING FOR APPROVAL · BLOCKED ·
+  START FAILED …) con host, shell, intento, fase, última actividad con su
+  fuente, ejecutor/modelo, consumo y desde dónde se pidió. El panel muestra
+  «RUNNING · rig3060 · 3m 12s», la fase y «Última actividad: hace 8s»; el
+  tooltip de la tab bar dice el estado de cada misión y «trabajando» cuenta
+  sólo workers en marcha. Una misión que no arranca notifica «No arrancó» con
+  host/shell y «sin consumo de modelo». Lógica pura en
+  `frontend/app/nexus/jarvis/execution.ts` (+ tests); sin vista (cerebro
+  viejo) todo cae al status de siempre.
+
+### Motivo
+- Incidente `m-55abf16276`: una misión pedida con foco en una PowerShell del
+  home figuró «trabajando» 7,5 h con un worker que nunca arrancó (comando bash
+  esperando una comilla en PowerShell). Lo único visible era `running`. El
+  arreglo de routing/lifecycle vive en jarvisd
+  (`docs/worker-lifecycle.md` de jarvis-openclaw-desktop).
+
 ## v0.17.0-beta.5 — 2026-09-05 · "El Workbench no se cae cuando el runtime se va"
 
 ### Corregido
