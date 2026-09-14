@@ -5,6 +5,8 @@
 // El panel es una VISTA del cerebro (:8770): acá no hay decisiones ni estado
 // propio — ADR "un cerebro, N shells" / adr-mission-supervisor.
 
+import { isWorking, needsAttention, type MissionExecution } from "@/app/nexus/jarvis/execution";
+
 export type MissionWorker = {
     id: string;
     agent: string;
@@ -30,6 +32,7 @@ export type MissionSnapshot = {
     last_decision: Record<string, any> | null;
     needs_attention: string | null;
     updated_at: number;
+    execution?: MissionExecution | null;
 };
 
 export const MissionStatusColors: Record<string, string> = {
@@ -70,8 +73,10 @@ export function summarizeMissions(missions: MissionSnapshot[]): {
     needsAttention: number;
 } {
     return {
-        running: missions.filter((m) => m.status === "running" || m.status === "recovering").length,
-        needsAttention: missions.filter((m) => m.needs_attention != null).length,
+        running: missions.filter((m) => isWorking(m)).length,
+        needsAttention: missions.filter((m) =>
+            m.execution ? needsAttention(m) : m.needs_attention != null
+        ).length,
     };
 }
 

@@ -12,6 +12,13 @@ import * as jotai from "jotai";
 import { useAtomValue } from "jotai";
 import * as React from "react";
 import {
+    ExecutionStateColors,
+    executionDetailLines,
+    executorText,
+    originText,
+    tokensText,
+} from "@/app/nexus/jarvis/execution";
+import {
     dodProgress,
     lastDecisionText,
     mergeMissionUpdate,
@@ -99,25 +106,54 @@ export class JarvisViewModel implements ViewModel {
     }
 }
 
-const statusChip = (status: string): React.CSSProperties => ({
+const statusChip = (color: string): React.CSSProperties => ({
     display: "inline-block",
     padding: "1px 8px",
     borderRadius: 8,
     fontSize: 11,
     fontWeight: 600,
     color: "#0d1117",
-    background: MissionStatusColors[status] ?? "#8b949e",
+    background: color ?? "#8b949e",
 });
 
+// «¿Jarvis realmente está trabajando?»: estado de ejecución · host · duración,
+// qué está haciendo, desde cuándo hay actividad real y cuánto consumió. Las
+// líneas las arma el cerebro; sin vista (cerebro viejo) queda el status.
+function ExecutionBlock({ mission }: { mission: MissionSnapshot }) {
+    const e = mission.execution;
+    if (!e) {
+        return null;
+    }
+    const meta = [executorText(e), tokensText(e.tokens), originText(e)].filter(Boolean);
+    return (
+        <div style={{ fontSize: 12, marginBottom: 6 }}>
+            <div style={{ fontFamily: "var(--fixed-font)", color: ExecutionStateColors[e.state] ?? "#c9d1d9" }}>
+                {e.summary_line}
+            </div>
+            {executionDetailLines(mission).map((line, i) => (
+                <div key={i} style={{ color: "#c9d1d9" }}>
+                    {line}
+                </div>
+            ))}
+            {meta.length > 0 && <div style={{ color: "#8b949e" }}>{meta.join(" · ")}</div>}
+        </div>
+    );
+}
+
 function MissionCard({ mission }: { mission: MissionSnapshot }) {
+    const e = mission.execution;
+    const chipColor = e ? ExecutionStateColors[e.state] : MissionStatusColors[mission.status];
+    const chipText = e ? e.label : mission.status.toUpperCase();
     return (
         <div style={{ border: "1px solid #30363d", borderRadius: 6, padding: 10, marginBottom: 10 }}>
             <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-                <span style={statusChip(mission.status)}>{mission.status.toUpperCase()}</span>
+                <span style={statusChip(chipColor)}>{chipText}</span>
                 <span style={{ fontWeight: 600 }}>{mission.objective}</span>
             </div>
+            <ExecutionBlock mission={mission} />
             <div style={{ fontSize: 12, color: "#8b949e", marginBottom: 6 }}>
-                target: {mission.execution_target || "?"} · DoD {dodProgress(mission)}
+                target: {mission.execution_target || "?"}
+                {e?.routing_reason ? ` (${e.routing_reason})` : ""} · DoD {dodProgress(mission)}
                 {mission.strategy ? ` · estrategia: ${mission.strategy}` : ""}
             </div>
             {mission.workers.length > 0 && (

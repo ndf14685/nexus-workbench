@@ -5,7 +5,8 @@ import { Tooltip } from "@/app/element/tooltip";
 import { modalsModel } from "@/app/store/modalmodel";
 import { useAtomValue } from "jotai";
 import { memo, useEffect } from "react";
-import { JarvisStatusModel, missionLabel } from "./status-model";
+import { isWorking, needsAttention } from "./execution";
+import { JarvisStatusModel, tooltipLine } from "./status-model";
 
 const JarvisIndicatorComponent = () => {
     const model = JarvisStatusModel.getInstance();
@@ -24,13 +25,13 @@ const JarvisIndicatorComponent = () => {
     const parts = [];
     if (working > 0) parts.push(`${working} trabajando`);
     if (attention > 0) parts.push(`${attention} atención`);
-    const active = missions.filter((m) =>
-        ["running", "recovering", "needs_input", "blocked"].includes(m.status)
+    const active = missions.filter(
+        (m) =>
+            isWorking(m) ||
+            needsAttention(m) ||
+            ["running", "recovering", "needs_input", "blocked"].includes(m.status)
     );
-    const tooltip = active
-        .slice(0, 8)
-        .map((m) => `${missionLabel(m)} — ${m.status == "running" ? "trabajando" : m.status == "recovering" ? "reconectando" : m.status == "blocked" ? "bloqueada" : "necesita decisión"}`)
-        .join("\n");
+    const tooltip = active.slice(0, 8).map(tooltipLine).join("\n");
 
     return (
         <Tooltip

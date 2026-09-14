@@ -3,6 +3,7 @@
 
 import { getBrainConfig } from "./brain-config";
 import { fetchInbox, fetchMissions, type InboxMessage } from "./brain-client";
+import { executionLine, isWorking, needsAttention, type MissionExecution } from "./execution";
 import { jarvisLog } from "./telemetry";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
@@ -20,10 +21,10 @@ export interface MissionSnapshot {
     needs_attention?: string;
     updated_at?: number;
     workers?: { id: string; block_id?: string; status: string; role: string }[];
+    execution?: MissionExecution | null;
 }
 
 const PollMs = 3000;
-const WorkingStatuses = ["running", "recovering"];
 const AttentionStatuses = ["needs_input", "blocked"];
 // estados que merecen interrumpir al usuario (§8: solo atención real, jamás pasos)
 const NotifyStatuses = ["completed", "failed", "needs_input", "blocked"];
@@ -67,10 +68,16 @@ export function computeTransitions(
                 status: mission.status,
             });
         } else if (mission.status == "failed") {
+            const startFailed = mission.execution?.state == "START_FAILED";
             out.push({
                 missionId: mission.mission_id,
-                title: `✗ ${label}`,
-                body: mission.needs_attention || "La misión falló.",
+                title: startFailed ? `✗ No arrancó: ${label}` : `✗ ${label}`,
+                body:
+                    mission.needs_attention ||
+                    [executionLine(mission), mission.execution?.detail, mission.execution?.activity_line]
+                        .filter(Boolean)
+                        .join(" — ") ||
+                    "La misión falló.",
                 status: mission.status,
             });
         } else {
@@ -95,11 +102,33 @@ export function pickInboxAnswer(messages: InboxMessage[], sinceTs: number): stri
     return fresh[fresh.length - 1].text;
 }
 
+// «Trabajando» cuenta workers de verdad en marcha (con la vista de ejecución
+// del cerebro): una misión DISPATCHED que nunca arrancó ya no infla el número
+// sin decir nada — el tooltip dice en qué estado está cada una.
 export function summarizeCounts(missions: MissionSnapshot[]): { working: number; attention: number } {
     return {
-        working: missions.filter((m) => WorkingStatuses.includes(m.status)).length,
-        attention: missions.filter((m) => AttentionStatuses.includes(m.status)).length,
+        working: missions.filter((m) => isWorking(m)).length,
+        attention: missions.filter((m) => needsAttention(m)).length,
     };
+}
+
+// Una línea por misión para el tooltip de la tab bar: el estado REAL de
+// ejecución y qué está haciendo, no sólo «trabajando».
+export function tooltipLine(m: MissionSnapshot): string {
+    const line = executionLine(m);
+    if (line) {
+        const phase = m.execution?.phase_line ? ` — ${m.execution.phase_line.slice(0, 60)}` : "";
+        return `${missionLabel(m)} — ${line}${phase}`;
+    }
+    const legacy =
+        m.status == "running"
+            ? "trabajando"
+            : m.status == "recovering"
+              ? "reconectando"
+              : m.status == "blocked"
+                ? "bloqueada"
+                : "necesita decisión";
+    return `${missionLabel(m)} — ${legacy}`;
 }
 
 export interface AwayDigest {
