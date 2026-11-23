@@ -3,6 +3,19 @@
 Cambios propios del fork; lo heredado de Wave Terminal se documenta en los
 releases de upstream.
 
+## v0.17.0-beta.8 — 2026-11-23 · "Terminales reconocibles de un vistazo"
+
+### Agregado
+- **Identidad visual por terminal:** marca de sistema vectorial y tinte tenue
+  para Windows, Ubuntu, Debian y Linux; los paneles desconocidos quedan
+  neutros. La marca se atenúa con salida y no se mueve durante el trabajo.
+- **Foco más claro:** borde interior y realce estable incluso entre dos
+  terminales del mismo sistema.
+- **Distintivos de herramienta:** Codex y Claude aparecen sobre el tinte del
+  sistema mientras la integración del shell confirma que están activos.
+- `term:environment` permite fijar la identidad de una conexión sin hacer un
+  probe remoto.
+
 ## v0.17.0-beta.7 — 2026-11-23 · "Dictado directo a terminal"
 
 ### Agregado
