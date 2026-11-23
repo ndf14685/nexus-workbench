@@ -26,6 +26,7 @@ const Osc52MaxRawLength = 128 * 1024; // includes selector + base64 + whitespace
 export type ShellIntegrationStatus = "ready" | "running-command";
 
 const ClaudeCodeRegex = /^claude\b/;
+const CodexRegex = /^codex\b/;
 
 type Osc16162Command =
     | { command: "A"; data: Record<string, never> }
@@ -120,18 +121,21 @@ function handleShellIntegrationCommandStart(
                 globalStore.set(termWrap.lastCommandAtom, decodedCmd);
                 const isCC = isClaudeCodeCommand(decodedCmd);
                 globalStore.set(termWrap.claudeCodeActiveAtom, isCC);
+                globalStore.set(termWrap.recognizedToolAtom, CodexRegex.test(normalizeCmd(decodedCmd)) ? "codex" : isCC ? "claude" : null);
                 checkCommandForTelemetry(decodedCmd);
             } catch (e) {
                 console.error("Error decoding cmd64:", e);
                 rtInfo["shell:lastcmd"] = null;
                 globalStore.set(termWrap.lastCommandAtom, null);
                 globalStore.set(termWrap.claudeCodeActiveAtom, false);
+                globalStore.set(termWrap.recognizedToolAtom, null);
             }
         }
     } else {
         rtInfo["shell:lastcmd"] = null;
         globalStore.set(termWrap.lastCommandAtom, null);
         globalStore.set(termWrap.claudeCodeActiveAtom, false);
+    globalStore.set(termWrap.recognizedToolAtom, null);
     }
     rtInfo["shell:lastcmdexitcode"] = null;
 }
@@ -309,6 +313,7 @@ export function handleOsc16162Command(data: string, blockId: string, loaded: boo
             rtInfo["shell:state"] = "ready";
             globalStore.set(termWrap.shellIntegrationStatusAtom, "ready");
             globalStore.set(termWrap.claudeCodeActiveAtom, false);
+            globalStore.set(termWrap.recognizedToolAtom, null);
             const marker = terminal.registerMarker(0);
             if (marker) {
                 termWrap.promptMarkers.push(marker);
@@ -347,6 +352,7 @@ export function handleOsc16162Command(data: string, blockId: string, loaded: boo
             break;
         case "D":
             globalStore.set(termWrap.claudeCodeActiveAtom, false);
+            globalStore.set(termWrap.recognizedToolAtom, null);
             if (cmd.data.exitcode != null) {
                 rtInfo["shell:lastcmdexitcode"] = cmd.data.exitcode;
             } else {

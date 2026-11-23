@@ -446,11 +446,12 @@ type ConnKeywords struct {
 	DisplayHidden *bool   `json:"display:hidden,omitempty"`
 	DisplayOrder  float32 `json:"display:order,omitempty"`
 
-	TermClear      bool    `json:"term:*,omitempty"`
-	TermFontSize   float64 `json:"term:fontsize,omitempty"`
-	TermFontFamily string  `json:"term:fontfamily,omitempty"`
-	TermTheme      string  `json:"term:theme,omitempty"`
-	TermDurable    *bool   `json:"term:durable,omitempty"`
+	TermClear       bool    `json:"term:*,omitempty"`
+	TermFontSize    float64 `json:"term:fontsize,omitempty"`
+	TermFontFamily  string  `json:"term:fontfamily,omitempty"`
+	TermTheme       string  `json:"term:theme,omitempty"`
+	TermEnvironment string  `json:"term:environment,omitempty"` // windows, ubuntu, debian, linux, neutral
+	TermDurable     *bool   `json:"term:durable,omitempty"`
 
 	CmdEnv            map[string]string `json:"cmd:env,omitempty"`
 	CmdInitScript     string            `json:"cmd:initscript,omitempty"`

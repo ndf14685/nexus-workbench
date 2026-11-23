@@ -856,6 +856,7 @@ declare global {
         "term:fontsize"?: number;
         "term:fontfamily"?: string;
         "term:theme"?: string;
+        "term:environment"?: string;
         "term:durable"?: boolean;
         "cmd:env"?: {[key: string]: string};
         "cmd:initscript"?: string;

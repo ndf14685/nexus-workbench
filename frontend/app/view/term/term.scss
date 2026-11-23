@@ -18,6 +18,21 @@
     height: 100%;
     overflow: hidden;
     position: relative;
+    --term-identity-tint: rgb(100 116 139 / 7%);
+    --term-identity-mark: rgb(203 213 225 / 13%);
+    background: var(--term-identity-tint);
+    box-shadow: inset 0 0 0 1px rgb(148 163 184 / 14%);
+
+    &.term-identity-windows { --term-identity-tint: rgb(30 96 170 / 10%); --term-identity-mark: rgb(96 165 250 / 17%); }
+    &.term-identity-ubuntu { --term-identity-tint: rgb(77 25 57 / 14%); --term-identity-mark: rgb(251 146 60 / 17%); }
+    &.term-identity-debian { --term-identity-tint: rgb(92 18 47 / 14%); --term-identity-mark: rgb(244 114 182 / 16%); }
+    &.term-identity-linux { --term-identity-tint: rgb(71 85 105 / 9%); --term-identity-mark: rgb(226 232 240 / 14%); }
+    &.term-identity-focused { box-shadow: inset 0 0 0 2px var(--accent-color), inset 0 0 30px rgb(from var(--accent-color) r g b / 13%); }
+
+    .term-identity { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: radial-gradient(circle at 78% 24%, var(--term-identity-tint), transparent 48%); }
+    .term-identity svg { position: absolute; right: 8%; bottom: 10%; width: min(42%, 260px); height: auto; fill: none; stroke: var(--term-identity-mark); stroke-width: 3; opacity: .8; filter: drop-shadow(0 0 18px var(--term-identity-mark)); }
+    .term-identity svg rect, .term-identity svg circle, .term-identity svg ellipse { fill: var(--term-identity-mark); stroke: none; }
+    .term-identity-has-content svg { opacity: .35; }
 
     .term-header {
         display: flex;
@@ -55,6 +70,8 @@
     }
 
     .term-connectelem {
+        position: relative;
+        z-index: 1;
         flex-grow: 1;
         min-height: 0;
         overflow: hidden;

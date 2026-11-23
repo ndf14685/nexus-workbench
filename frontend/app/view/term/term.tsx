@@ -22,6 +22,7 @@ import debug from "debug";
 import * as jotai from "jotai";
 import * as React from "react";
 import { TermLinkTooltip } from "./term-tooltip";
+import { resolveTerminalOsIdentity, TerminalIdentity } from "./terminal-identity";
 import { TermStickers } from "./termsticker";
 import { TermThemeUpdater } from "./termtheme";
 import { audioBlobToBase64, TerminalDictationEvent } from "./terminal-dictation";
@@ -205,6 +206,10 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
     const [dictationError, setDictationError] = React.useState<string | null>(null);
     const recorderRef = React.useRef<MediaRecorder | null>(null);
     const streamRef = React.useRef<MediaStream | null>(null);
+    const [hasContent, setHasContent] = React.useState(false);
+    const recognizedTool = useAtomValueSafe(termWrapInst?.recognizedToolAtom) ?? null;
+    const environmentOverride = fullConfig.connections?.[blockData?.meta?.connection]?.["term:environment"];
+    const osIdentity = resolveTerminalOsIdentity(blockData?.meta?.connection, environmentOverride, blockData?.meta?.["term:localshellpath"]);
 
     const finishDictation = React.useCallback(async (recorder: MediaRecorder, chunks: BlobPart[]) => {
         const stream = streamRef.current;
@@ -422,6 +427,9 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
             globalStore.set(searchProps.resultsCount, results.resultCount);
         };
         fireAndForget(termWrap.initTerminal.bind(termWrap));
+        const contentDisposable = termWrap.terminal.onWriteParsed(() => {
+            if (termWrap.terminal.buffer.active.length > 1) setHasContent(true);
+        });
         if (wasFocused) {
             setTimeout(() => {
                 model.giveFocus();
@@ -429,6 +437,7 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
         }
         return () => {
             termWrap.dispose();
+            contentDisposable.dispose();
             rszObs.disconnect();
             setTermWrapInst(null);
         };
@@ -475,8 +484,9 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
     );
 
     return (
-        <div className={clsx("view-term", "term-mode-" + termMode)} ref={viewRef} onContextMenu={handleContextMenu}>
+        <div className={clsx("view-term", "term-mode-" + termMode, `term-identity-${osIdentity}`, { "term-identity-focused": isFocused })} ref={viewRef} onContextMenu={handleContextMenu}>
             {termBg && <div key="term-bg" className="absolute inset-0 z-0 pointer-events-none" style={termBg} />}
+            <TerminalIdentity os={osIdentity} tool={recognizedTool} hasContent={hasContent} />
             <TermResyncHandler blockId={blockId} model={model} />
             <TermThemeUpdater blockId={blockId} model={model} termRef={model.termRef} />
             <TermStickers config={stickerConfig} />

@@ -102,6 +102,7 @@ export class TermWrap {
     shellIntegrationStatusAtom: jotai.PrimitiveAtom<ShellIntegrationStatus | null>;
     lastCommandAtom: jotai.PrimitiveAtom<string | null>;
     claudeCodeActiveAtom: jotai.PrimitiveAtom<boolean>;
+    recognizedToolAtom: jotai.PrimitiveAtom<"codex" | "claude" | null>;
     nodeModel: BlockNodeModel; // this can be null
     hoveredLinkUri: string | null = null;
     onLinkHover?: (uri: string | null, mouseX: number, mouseY: number) => void;
@@ -142,6 +143,7 @@ export class TermWrap {
         this.shellIntegrationStatusAtom = jotai.atom(null) as jotai.PrimitiveAtom<ShellIntegrationStatus | null>;
         this.lastCommandAtom = jotai.atom(null) as jotai.PrimitiveAtom<string | null>;
         this.claudeCodeActiveAtom = jotai.atom(false);
+        this.recognizedToolAtom = jotai.atom(null) as jotai.PrimitiveAtom<"codex" | "claude" | null>;
         this.webglEnabledAtom = jotai.atom(false) as jotai.PrimitiveAtom<boolean>;
         this.terminal = new Terminal(options);
         this.fitAddon = new FitAddon();
@@ -429,6 +431,7 @@ export class TermWrap {
             const isCC = shellState === "running-command" && isClaudeCodeCommand(lastCmd);
             globalStore.set(this.lastCommandAtom, lastCmd || null);
             globalStore.set(this.claudeCodeActiveAtom, isCC);
+            globalStore.set(this.recognizedToolAtom, shellState === "running-command" && /^\s*codex\b/i.test(lastCmd ?? "") ? "codex" : isCC ? "claude" : null);
         } catch (e) {
             console.log("Error loading runtime info:", e);
         }
