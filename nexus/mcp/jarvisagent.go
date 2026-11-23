@@ -60,9 +60,12 @@ type JarvisAgent struct {
 	catalog   *Catalog
 	audit     *Auditor
 	runWsh    func(ctx context.Context, conn string, tabId string, args ...string) (string, error)
-	tabId     func() (string, error)
-	httpc     *http.Client
-	since     int64
+	// runWshForBlock propaga WAVETERM_BLOCKID al proceso wsh. Sólo se usa
+	// cuando el subcomando necesita resolver una referencia relativa al bloque.
+	runWshForBlock func(ctx context.Context, conn string, tabId string, blockId string, args ...string) (string, error)
+	tabId          func() (string, error)
+	httpc          *http.Client
+	since          int64
 	// visual: provider de fuentes visuales del host. Nil = el agente corre sin
 	// soporte visual y las capabilities visual.* ni siquiera se registran.
 	visual *VisualCapabilities
@@ -274,7 +277,10 @@ func (ja *JarvisAgent) visualViewerCapture(ctx context.Context, blockId string) 
 	if err != nil {
 		return nil, visualErr(ErrStreamFailed, err.Error())
 	}
-	out, err := ja.runWsh(ctx, "", tabId, "screenshot", "-b", blockId, "--raw")
+	if ja.runWshForBlock == nil {
+		return nil, visualErr(ErrStreamFailed, "el bridge no tiene ejecución wsh con contexto de bloque")
+	}
+	out, err := ja.runWshForBlock(ctx, "", tabId, blockId, "screenshot", "-b", blockId, "--raw")
 	if err != nil {
 		return nil, visualErr(ErrStreamFailed, "capturando el bloque del viewer: "+err.Error())
 	}
@@ -653,15 +659,16 @@ func runJarvisAgent(argv []string) {
 		log.Fatalf("no puedo acceder al motor: %v", err)
 	}
 	agent := &JarvisAgent{
-		brainURL:  strings.TrimRight(brainURL, "/"),
-		token:     strings.TrimSpace(os.Getenv("NEXUS_BRAIN_TOKEN")),
-		clientID:  clientID,
-		workspace: workspace,
-		catalog:   catalog,
-		audit:     MakeAuditor(filepath.Join(ResolveDataDir(dataDir, dev), "nexus-mcp-audit.jsonl")),
-		runWsh:    wave.RunWsh,
-		tabId:     func() (string, error) { return wave.ActiveTabId(workspace) },
-		httpc:     &http.Client{Timeout: 15 * time.Second},
+		brainURL:       strings.TrimRight(brainURL, "/"),
+		token:          strings.TrimSpace(os.Getenv("NEXUS_BRAIN_TOKEN")),
+		clientID:       clientID,
+		workspace:      workspace,
+		catalog:        catalog,
+		audit:          MakeAuditor(filepath.Join(ResolveDataDir(dataDir, dev), "nexus-mcp-audit.jsonl")),
+		runWsh:         wave.RunWsh,
+		runWshForBlock: wave.RunWshForBlock,
+		tabId:          func() (string, error) { return wave.ActiveTabId(workspace) },
+		httpc:          &http.Client{Timeout: 15 * time.Second},
 	}
 	// Avisos: el ding se guarda junto al resto de los datos del motor, y si
 	// esta plataforma no puede sonar el player queda nil (el cerebro lo sabe).

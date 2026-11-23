@@ -13,7 +13,7 @@ import { waveEventSubscribeSingle } from "@/app/store/wps";
 import { RpcApi } from "@/app/store/wshclientapi";
 import { TabRpcClient } from "@/app/store/wshrpcutil";
 import type { TermViewModel } from "@/app/view/term/term-model";
-import { atoms, getOverrideConfigAtom, getSettingsPrefixAtom, WOS } from "@/store/global";
+import { atoms, getApi, getOverrideConfigAtom, getSettingsPrefixAtom, WOS } from "@/store/global";
 import { fireAndForget, useAtomValueSafe } from "@/util/util";
 import { computeBgStyleFromMeta } from "@/util/waveutil";
 import { ISearchOptions } from "@xterm/addon-search";
@@ -24,11 +24,14 @@ import * as React from "react";
 import { TermLinkTooltip } from "./term-tooltip";
 import { TermStickers } from "./termsticker";
 import { TermThemeUpdater } from "./termtheme";
+import { audioBlobToBase64, TerminalDictationEvent } from "./terminal-dictation";
 import { computeTheme, normalizeCursorStyle } from "./termutil";
 import { TermWrap } from "./termwrap";
 import "./xterm.css";
 
 const dlog = debug("wave:term");
+
+let activeDictationBlockId: string | null = null;
 
 interface TerminalViewProps {
     blockId: string;
@@ -198,6 +201,93 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
     const isFocused = jotai.useAtomValue(model.nodeModel.isFocused);
     const isMI = jotai.useAtomValue(tabModel.isTermMultiInput);
     const isBasicTerm = termMode != "vdom" && blockData?.meta?.controller != "cmd"; // needs to match isBasicTerm
+    const [dictationState, setDictationState] = React.useState<"idle" | "recording" | "transcribing">("idle");
+    const [dictationError, setDictationError] = React.useState<string | null>(null);
+    const recorderRef = React.useRef<MediaRecorder | null>(null);
+    const streamRef = React.useRef<MediaStream | null>(null);
+
+    const finishDictation = React.useCallback(async (recorder: MediaRecorder, chunks: BlobPart[]) => {
+        const stream = streamRef.current;
+        streamRef.current = null;
+        stream?.getTracks().forEach((track) => track.stop());
+        recorderRef.current = null;
+        if (activeDictationBlockId === blockId) activeDictationBlockId = null;
+        const audio = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        if (audio.size === 0) {
+            setDictationState("idle");
+            return;
+        }
+        setDictationState("transcribing");
+        try {
+            const result = await getApi().transcribeAudio(await audioBlobToBase64(audio), audio.type);
+            const text = result.text.trim();
+            if (text) model.sendDataToController(text);
+            model.giveFocus();
+        } catch (e) {
+            setDictationError(e instanceof Error ? e.message : "No se pudo transcribir el audio.");
+        } finally {
+            setDictationState("idle");
+        }
+    }, [blockId, model]);
+
+    const toggleDictation = React.useCallback(async () => {
+        if (dictationState === "recording") {
+            recorderRef.current?.stop();
+            return;
+        }
+        if (dictationState === "transcribing") return;
+        if (activeDictationBlockId && activeDictationBlockId !== blockId) {
+            setDictationError("Hay otro dictado en curso. Terminálo antes de iniciar este.");
+            return;
+        }
+        if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+            setDictationError("Este sistema no ofrece grabación de audio para el dictado.");
+            return;
+        }
+        setDictationError(null);
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const opus = "audio/webm;codecs=opus";
+            const mimeType = MediaRecorder.isTypeSupported(opus)
+                ? opus
+                : MediaRecorder.isTypeSupported("audio/webm")
+                  ? "audio/webm"
+                  : undefined;
+            const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+            const chunks: BlobPart[] = [];
+            streamRef.current = stream;
+            recorderRef.current = recorder;
+            activeDictationBlockId = blockId;
+            recorder.ondataavailable = (event) => {
+                if (event.data.size > 0) chunks.push(event.data);
+            };
+            recorder.onstop = () => void finishDictation(recorder, chunks);
+            recorder.start();
+            setDictationState("recording");
+        } catch (e) {
+            activeDictationBlockId = null;
+            setDictationError(e instanceof Error ? e.message : "No se pudo acceder al micrófono.");
+        }
+    }, [blockId, dictationState, finishDictation]);
+
+    React.useEffect(() => {
+        const onDictationToggle = (event: Event) => {
+            const targetBlockId = (event as CustomEvent<{ blockId?: string }>).detail?.blockId;
+            if (targetBlockId === blockId) void toggleDictation();
+        };
+        window.addEventListener(TerminalDictationEvent, onDictationToggle);
+        return () => window.removeEventListener(TerminalDictationEvent, onDictationToggle);
+    }, [blockId, toggleDictation]);
+
+    React.useEffect(() => () => {
+        const recorder = recorderRef.current;
+        if (recorder?.state === "recording") {
+            recorder.onstop = null;
+            recorder.stop();
+        }
+        streamRef.current?.getTracks().forEach((track) => track.stop());
+        if (activeDictationBlockId === blockId) activeDictationBlockId = null;
+    }, [blockId]);
 
     // search
     const searchProps = useSearch({
@@ -392,6 +482,21 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
             <TermStickers config={stickerConfig} />
             <TermToolbarVDomNode key="vdom-toolbar" blockId={blockId} model={model} />
             <TermVDomNode key="vdom" blockId={blockId} model={model} />
+            {isBasicTerm && (
+                <div className="absolute right-2 top-2 z-20 flex max-w-64 items-center gap-1">
+                    {dictationError && <span className="rounded bg-red-950/90 px-2 py-1 text-xs text-red-100">{dictationError}</span>}
+                    <button
+                        type="button"
+                        className={clsx("rounded border px-2 py-1 text-xs shadow", dictationState === "recording" ? "border-red-400 bg-red-700 text-white" : "border-border bg-panel text-foreground hover:bg-hover")}
+                        onClick={() => void toggleDictation()}
+                        title={dictationState === "recording" ? "Detener dictado (Ctrl+|)" : "Iniciar dictado (Ctrl+|)"}
+                        aria-label={dictationState === "recording" ? "Detener dictado" : "Iniciar dictado"}
+                        disabled={dictationState === "transcribing"}
+                    >
+                        {dictationState === "recording" ? "■ Detener" : dictationState === "transcribing" ? "Transcribiendo…" : "🎙 Dictar"}
+                    </button>
+                </div>
+            )}
             <div key="connect-elem" className="term-connectelem" ref={connectElemRef} />
             <NullErrorBoundary debugName="TermLinkTooltip">
                 <TermLinkTooltip termWrap={termWrapInst} />

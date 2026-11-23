@@ -95,6 +95,7 @@ describe("global webview key registration", () => {
         const keys = getRegisteredShortcutKeys();
         expect(keys).toContain("Ctrl:Alt:g");
         expect(keys).toContain("Ctrl:Shift:p");
+        expect(keys).toContain("Ctrl:Shift:|");
     });
 
     // keyutil infers Shift from an upper-case letter, so "Ctrl:Alt:J" would
@@ -106,5 +107,7 @@ describe("global webview key registration", () => {
         expect(keys.some((desc) => checkKeyPressed(ctrlAltJ, desc))).toBe(true);
         const ctrlShiftP = electronKeyDown("P", { control: true, shift: true });
         expect(keys.some((desc) => checkKeyPressed(ctrlShiftP, desc))).toBe(true);
+        const ctrlPipe = electronKeyDown("|", { control: true, shift: true });
+        expect(keys.some((desc) => checkKeyPressed(ctrlPipe, desc))).toBe(true);
     });
 });

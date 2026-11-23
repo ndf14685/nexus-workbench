@@ -24,6 +24,7 @@ describe("ShortcutManager", () => {
     it("normalizes shortcuts", () => {
         expect(normalizeShortcut("ctrl+shift+p")).toBe("Ctrl+Shift+P");
         expect(normalizeShortcut("Ctrl+K Ctrl+S")).toBe("Ctrl+K Ctrl+S");
+        expect(normalizeShortcut("Ctrl+|")).toBe("Ctrl+|");
     });
 
     it("detects conflicts", () => {
@@ -35,6 +36,14 @@ describe("ShortcutManager", () => {
         expect(mgr.match({ control: true, shift: true, key: "P" } as WaveKeyboardEvent, commands, "global")?.id).toBe("a");
         expect(mgr.match({ control: true, key: "K" } as WaveKeyboardEvent, commands, "global")).toBeNull();
         expect(mgr.match({ control: true, key: "S" } as WaveKeyboardEvent, commands, "global")?.id).toBe("c");
+    });
+
+    it("matches Ctrl+| when the keyboard needs Shift to produce a pipe", () => {
+        const dictation: CommandDefinition = {
+            id: "dictation", title: "Dictation", description: "", category: "T", defaultShortcut: "Ctrl+|", contexts: ["terminal"], editable: true, handler: () => true,
+        };
+        const mgr = new ShortcutManager(memoryStorage());
+        expect(mgr.match({ control: true, shift: true, key: "|" } as WaveKeyboardEvent, [dictation], "terminal")?.id).toBe("dictation");
     });
 
     it("persists customizations and tolerates invalid config", () => {

@@ -172,7 +172,10 @@ func TestViewerCaptureDecodesTheWshOutput(t *testing.T) {
 	encoded := base64.StdEncoding.EncodeToString(raw) + "\n"
 	agent := &JarvisAgent{
 		tabId: func() (string, error) { return "tab-1", nil },
-		runWsh: func(_ context.Context, _ string, _ string, args ...string) (string, error) {
+		runWshForBlock: func(_ context.Context, _ string, _ string, blockId string, args ...string) (string, error) {
+			if blockId != "b-hmi" {
+				t.Fatalf("contexto de bloque inesperado: %q", blockId)
+			}
 			if args[0] != "screenshot" {
 				t.Fatalf("comando inesperado: %v", args)
 			}
@@ -187,8 +190,10 @@ func TestViewerCaptureDecodesTheWshOutput(t *testing.T) {
 
 func TestViewerCaptureRejectsGarbage(t *testing.T) {
 	agent := &JarvisAgent{
-		tabId:  func() (string, error) { return "tab-1", nil },
-		runWsh: func(context.Context, string, string, ...string) (string, error) { return "no-base64!!", nil },
+		tabId: func() (string, error) { return "tab-1", nil },
+		runWshForBlock: func(context.Context, string, string, string, ...string) (string, error) {
+			return "no-base64!!", nil
+		},
 	}
 	_, err := agent.visualViewerCapture(context.Background(), "b-hmi")
 	var ve *VisualError

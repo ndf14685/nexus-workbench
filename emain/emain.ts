@@ -27,6 +27,7 @@ import {
     setWasInFg,
 } from "./emain-activity";
 import { initIpcHandlers } from "./emain-ipc";
+import { initDictationIpcHandlers } from "./emain-dictation";
 import { log } from "./emain-log";
 import { initMenuEventSubscriptions, makeAndSetAppMenu, makeDockTaskbar } from "./emain-menu";
 import { initPermissionIpc, initPermissionStore, installSessionPermissionHandlers } from "./emain-permissions"; // nexus:
@@ -445,6 +446,7 @@ async function appMain() {
     initPermissionIpc(); // nexus: Configuración > Privacidad y permisos
     installSessionPermissionHandlers(electron.session.defaultSession, { moduleId: "browser" }); // nexus: webviews sin partición propia
     initIpcHandlers();
+    initDictationIpcHandlers();
 
     await sleep(10); // wait a bit for wavesrv to be ready
     try {

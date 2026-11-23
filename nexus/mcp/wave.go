@@ -273,6 +273,18 @@ func ignoreAlreadyConnected(err error) error {
 }
 
 func (wa *WaveAccess) RunWsh(ctx context.Context, conn string, tabId string, args ...string) (string, error) {
+	return wa.runWsh(ctx, conn, tabId, "", args...)
+}
+
+// RunWshForBlock ejecuta wsh con el contexto del bloque indicado. Algunos
+// subcomandos (por ejemplo `screenshot -b <id>`) resuelven el identificador
+// relativo mediante WAVETERM_BLOCKID; el proceso bridge no hereda ese entorno
+// de una terminal, así que debe propagarlo explícitamente.
+func (wa *WaveAccess) RunWshForBlock(ctx context.Context, conn string, tabId string, blockId string, args ...string) (string, error) {
+	return wa.runWsh(ctx, conn, tabId, blockId, args...)
+}
+
+func (wa *WaveAccess) runWsh(ctx context.Context, conn string, tabId string, blockId string, args ...string) (string, error) {
 	token, err := wa.MintJWT(conn)
 	if err != nil {
 		return "", fmt.Errorf("acuñando JWT: %w", err)
@@ -284,6 +296,9 @@ func (wa *WaveAccess) RunWsh(ctx context.Context, conn string, tabId string, arg
 		"WAVETERM_JWT="+token,
 		"WAVETERM_TABID="+tabId,
 	)
+	if blockId != "" {
+		cmd.Env = append(cmd.Env, "WAVETERM_BLOCKID="+strings.TrimPrefix(blockId, "block:"))
+	}
 	out, err := cmd.CombinedOutput()
 	sout := strings.TrimSpace(string(out))
 	if err != nil {

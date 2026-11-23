@@ -3,6 +3,20 @@
 Cambios propios del fork; lo heredado de Wave Terminal se documenta en los
 releases de upstream.
 
+## v0.17.0-beta.7 — 2026-11-23 · "Dictado directo a terminal"
+
+### Agregado
+- **Dictado en terminales del Workbench.** El botón `🎙 Dictar` y el atajo
+  **Ctrl+|** capturan una frase, la transcriben con OpenAI y escriben el texto
+  resultante en la terminal enfocada. La captura se detiene antes de iniciar
+  la transcripción, sólo hay un dictado activo a la vez y un error no deja el
+  micrófono abierto.
+
+### Corregido
+- El bridge de fuentes visuales ahora propaga el contexto del bloque al pedir
+  un screenshot con `wsh`; por eso Jarvis puede capturar el viewer HMI correcto
+  en vez de depender de una terminal activa.
+
 ## v0.17.0-beta.6 — 2026-09-13 · "¿Jarvis realmente está trabajando?"
 
 ### Agregado

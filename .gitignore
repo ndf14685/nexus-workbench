@@ -20,6 +20,7 @@ mikework/
 aiplans/
 manifests/
 .env
+.env.local
 out
 .kilocode/package-lock.json
 

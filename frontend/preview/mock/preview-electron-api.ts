@@ -66,6 +66,7 @@ const previewElectronApi: ElectronApi = {
     doRefresh: () => {},
     saveTextFile: (_fileName: string, _content: string) => Promise.resolve(false),
     setIsActive: async () => {},
+    transcribeAudio: () => Promise.reject(new Error("El dictado no está disponible en la vista previa.")),
 };
 
 function installPreviewElectronApi() {

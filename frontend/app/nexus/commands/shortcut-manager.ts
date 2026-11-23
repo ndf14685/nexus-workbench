@@ -38,7 +38,11 @@ function eventMatchesPart(event: WaveKeyboardEvent, part: string): boolean {
     const key = bits.pop();
     const mods = new Set(bits);
     if (!!event.control !== mods.has("Ctrl")) return false;
-    if (!!event.shift !== mods.has("Shift")) return false;
+    // `|` is a printable key, but on common layouts it is produced by
+    // Shift+Backslash. Keep the user-facing shortcut as Ctrl+| while allowing
+    // the physical Shift needed to generate that character.
+    const shiftedPipe = key === "|" && event.shift && !mods.has("Shift");
+    if (!!event.shift !== mods.has("Shift") && !shiftedPipe) return false;
     if (!!event.alt !== mods.has("Alt")) return false;
     if (!!event.meta !== mods.has("Meta")) return false;
     const eventKey = event.key === " " ? "Space" : event.key?.length === 1 ? event.key.toUpperCase() : event.key;

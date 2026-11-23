@@ -15,6 +15,7 @@ import {
 import { getLayoutModelForStaticTab, NavigateDirection } from "@/layout/index";
 import type { CommandDefinition } from "./command-types";
 import { commandRegistry } from "./command-registry";
+import { requestTerminalDictation } from "@/app/view/term/terminal-dictation";
 
 let registered = false;
 
@@ -112,6 +113,16 @@ function unavailable(title: string) {
     };
 }
 
+function toggleFocusedTerminalDictation() {
+    const block = focusedBlockData();
+    if (block?.meta?.view !== "term") {
+        notify("Enfocá una terminal para iniciar el dictado.");
+        return false;
+    }
+    requestTerminalDictation(block.oid);
+    return true;
+}
+
 function register(command: CommandDefinition) {
     try {
         commandRegistry.register(command);
@@ -161,6 +172,7 @@ export function registerWorkbenchCommands() {
         { id: "terminal.newSession", title: "Nueva conexión o sesión", description: "Abrir selector de conexiones", category: "Terminal", defaultShortcut: "Ctrl+Shift+N", contexts: ["terminal"], editable: true, handler: () => openConfig("connections.json") },
         { id: "terminal.copySelection", title: "Copiar selección", description: "Copiar texto seleccionado en terminal", category: "Terminal", defaultShortcut: "Ctrl+Shift+C", contexts: ["terminal"], editable: true, handler: () => document.execCommand("copy") },
         { id: "terminal.paste", title: "Pegar", description: "Pegar en terminal", category: "Terminal", defaultShortcut: "Ctrl+Shift+V", contexts: ["terminal"], editable: true, handler: () => getApi().nativePaste() },
+        { id: "terminal.toggleDictation", title: "Iniciar/detener dictado", description: "Grabar voz y escribir la transcripción en la terminal enfocada", category: "Terminal", defaultShortcut: "Ctrl+|", contexts: ["terminal"], editable: true, handler: toggleFocusedTerminalDictation },
         { id: "terminal.find", title: "Buscar en terminal", description: "Abrir búsqueda del panel", category: "Terminal", defaultShortcut: "Ctrl+Shift+F", contexts: ["terminal"], editable: true, handler: unavailable("Buscar en terminal") },
         { id: "terminal.clear", title: "Limpiar terminal", description: "Limpiar la pantalla de terminal", category: "Terminal", defaultShortcut: "Ctrl+Shift+K", contexts: ["terminal"], editable: true, handler: unavailable("Limpiar terminal") },
         { id: "terminal.reconnect", title: "Reconectar sesión", description: "Reconectar la terminal", category: "Terminal", defaultShortcut: "Ctrl+Shift+Backspace", contexts: ["terminal"], editable: true, handler: unavailable("Reconectar sesión") },

@@ -53,6 +53,12 @@ export function dispatchWorkbenchCommandShortcut(waveEvent: WaveKeyboardEvent, t
 function toWaveKeyDescriptor(shortcut: string): string {
     const parts = shortcut.split("+");
     const key = parts[parts.length - 1];
+    // A pipe is generated with Shift on the standard physical keyboard. The
+    // command registry deliberately calls it Ctrl+|, so add that modifier only
+    // when registering the key with an embedded webview.
+    if (key === "|" && !parts.includes("Shift")) {
+        parts.splice(parts.length - 1, 0, "Shift");
+    }
     if (key.length == 1) {
         parts[parts.length - 1] = key == " " ? "Space" : key.toLowerCase();
     }

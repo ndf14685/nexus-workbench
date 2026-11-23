@@ -79,6 +79,7 @@ contextBridge.exposeInMainWorld("api", {
     getPathForFile: (file: File): string => webUtils.getPathForFile(file),
     saveTextFile: (fileName: string, content: string) => ipcRenderer.invoke("save-text-file", fileName, content),
     setIsActive: () => ipcRenderer.invoke("set-is-active"),
+    transcribeAudio: (audioBase64, mimeType) => ipcRenderer.invoke("nexus-transcribe-audio", { audioBase64, mimeType }),
 });
 
 // Custom event for "new-window"
