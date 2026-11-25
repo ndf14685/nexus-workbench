@@ -5,10 +5,13 @@ package wshremote
 
 import (
 	"log"
+	"os"
+	"runtime"
 	"strconv"
 	"time"
 
 	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/disk"
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/wavetermdev/waveterm/pkg/wps"
 	"github.com/wavetermdev/waveterm/pkg/wshrpc"
@@ -46,11 +49,30 @@ func getMemData(values map[string]float64) {
 	values["mem:free"] = float64(memData.Free) / BYTES_PER_GB
 }
 
+func getDiskData(values map[string]float64) {
+	rootPath := "/"
+	if runtime.GOOS == "windows" {
+		rootPath = os.Getenv("SystemDrive")
+		if rootPath == "" {
+			rootPath = "C:"
+		}
+		rootPath += `\`
+	}
+	usage, err := disk.Usage(rootPath)
+	if err != nil {
+		return
+	}
+	values["disk:usedpct"] = usage.UsedPercent
+	values["disk:total"] = float64(usage.Total) / BYTES_PER_GB
+	values["disk:free"] = float64(usage.Free) / BYTES_PER_GB
+}
+
 func generateSingleServerData(client *wshutil.WshRpc, connName string) {
 	now := time.Now()
 	values := make(map[string]float64)
 	getCpuData(values)
 	getMemData(values)
+	getDiskData(values)
 	tsData := wshrpc.TimeSeriesData{Ts: now.UnixMilli(), Values: values}
 	event := wps.WaveEvent{
 		Event:   wps.Event_SysInfo,

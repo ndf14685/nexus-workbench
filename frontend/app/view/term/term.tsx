@@ -22,10 +22,11 @@ import debug from "debug";
 import * as jotai from "jotai";
 import * as React from "react";
 import { TermLinkTooltip } from "./term-tooltip";
+import { audioBlobToBase64, TerminalDictationEvent } from "./terminal-dictation";
 import { resolveTerminalOsIdentity, TerminalIdentity } from "./terminal-identity";
+import { normalizeTerminalMetricsMode, TerminalMetrics } from "./terminal-metrics";
 import { TermStickers } from "./termsticker";
 import { TermThemeUpdater } from "./termtheme";
-import { audioBlobToBase64, TerminalDictationEvent } from "./terminal-dictation";
 import { computeTheme, normalizeCursorStyle } from "./termutil";
 import { TermWrap } from "./termwrap";
 import "./xterm.css";
@@ -209,31 +210,39 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
     const [hasContent, setHasContent] = React.useState(false);
     const recognizedTool = useAtomValueSafe(termWrapInst?.recognizedToolAtom) ?? null;
     const environmentOverride = fullConfig.connections?.[blockData?.meta?.connection]?.["term:environment"];
-    const osIdentity = resolveTerminalOsIdentity(blockData?.meta?.connection, environmentOverride, blockData?.meta?.["term:localshellpath"]);
+    const osIdentity = resolveTerminalOsIdentity(
+        blockData?.meta?.connection,
+        environmentOverride,
+        blockData?.meta?.["term:localshellpath"]
+    );
+    const metricsMode = normalizeTerminalMetricsMode(blockData?.meta?.["term:metrics"]);
 
-    const finishDictation = React.useCallback(async (recorder: MediaRecorder, chunks: BlobPart[]) => {
-        const stream = streamRef.current;
-        streamRef.current = null;
-        stream?.getTracks().forEach((track) => track.stop());
-        recorderRef.current = null;
-        if (activeDictationBlockId === blockId) activeDictationBlockId = null;
-        const audio = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
-        if (audio.size === 0) {
-            setDictationState("idle");
-            return;
-        }
-        setDictationState("transcribing");
-        try {
-            const result = await getApi().transcribeAudio(await audioBlobToBase64(audio), audio.type);
-            const text = result.text.trim();
-            if (text) model.sendDataToController(text);
-            model.giveFocus();
-        } catch (e) {
-            setDictationError(e instanceof Error ? e.message : "No se pudo transcribir el audio.");
-        } finally {
-            setDictationState("idle");
-        }
-    }, [blockId, model]);
+    const finishDictation = React.useCallback(
+        async (recorder: MediaRecorder, chunks: BlobPart[]) => {
+            const stream = streamRef.current;
+            streamRef.current = null;
+            stream?.getTracks().forEach((track) => track.stop());
+            recorderRef.current = null;
+            if (activeDictationBlockId === blockId) activeDictationBlockId = null;
+            const audio = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+            if (audio.size === 0) {
+                setDictationState("idle");
+                return;
+            }
+            setDictationState("transcribing");
+            try {
+                const result = await getApi().transcribeAudio(await audioBlobToBase64(audio), audio.type);
+                const text = result.text.trim();
+                if (text) model.sendDataToController(text);
+                model.giveFocus();
+            } catch (e) {
+                setDictationError(e instanceof Error ? e.message : "No se pudo transcribir el audio.");
+            } finally {
+                setDictationState("idle");
+            }
+        },
+        [blockId, model]
+    );
 
     const toggleDictation = React.useCallback(async () => {
         if (dictationState === "recording") {
@@ -284,15 +293,18 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
         return () => window.removeEventListener(TerminalDictationEvent, onDictationToggle);
     }, [blockId, toggleDictation]);
 
-    React.useEffect(() => () => {
-        const recorder = recorderRef.current;
-        if (recorder?.state === "recording") {
-            recorder.onstop = null;
-            recorder.stop();
-        }
-        streamRef.current?.getTracks().forEach((track) => track.stop());
-        if (activeDictationBlockId === blockId) activeDictationBlockId = null;
-    }, [blockId]);
+    React.useEffect(
+        () => () => {
+            const recorder = recorderRef.current;
+            if (recorder?.state === "recording") {
+                recorder.onstop = null;
+                recorder.stop();
+            }
+            streamRef.current?.getTracks().forEach((track) => track.stop());
+            if (activeDictationBlockId === blockId) activeDictationBlockId = null;
+        },
+        [blockId]
+    );
 
     // search
     const searchProps = useSearch({
@@ -484,9 +496,16 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
     );
 
     return (
-        <div className={clsx("view-term", "term-mode-" + termMode, `term-identity-${osIdentity}`, { "term-identity-focused": isFocused })} ref={viewRef} onContextMenu={handleContextMenu}>
+        <div
+            className={clsx("view-term", "term-mode-" + termMode, `term-identity-${osIdentity}`, {
+                "term-identity-focused": isFocused,
+            })}
+            ref={viewRef}
+            onContextMenu={handleContextMenu}
+        >
             {termBg && <div key="term-bg" className="absolute inset-0 z-0 pointer-events-none" style={termBg} />}
             <TerminalIdentity os={osIdentity} tool={recognizedTool} hasContent={hasContent} />
+            {isBasicTerm && <TerminalMetrics mode={metricsMode} connection={blockData?.meta?.connection} />}
             <TermResyncHandler blockId={blockId} model={model} />
             <TermThemeUpdater blockId={blockId} model={model} termRef={model.termRef} />
             <TermStickers config={stickerConfig} />
@@ -494,16 +513,27 @@ const TerminalView = ({ blockId, model }: ViewComponentProps<TermViewModel>) => 
             <TermVDomNode key="vdom" blockId={blockId} model={model} />
             {isBasicTerm && (
                 <div className="absolute right-2 top-2 z-20 flex max-w-64 items-center gap-1">
-                    {dictationError && <span className="rounded bg-red-950/90 px-2 py-1 text-xs text-red-100">{dictationError}</span>}
+                    {dictationError && (
+                        <span className="rounded bg-red-950/90 px-2 py-1 text-xs text-red-100">{dictationError}</span>
+                    )}
                     <button
                         type="button"
-                        className={clsx("rounded border px-2 py-1 text-xs shadow", dictationState === "recording" ? "border-red-400 bg-red-700 text-white" : "border-border bg-panel text-foreground hover:bg-hover")}
+                        className={clsx(
+                            "rounded border px-2 py-1 text-xs shadow",
+                            dictationState === "recording"
+                                ? "border-red-400 bg-red-700 text-white"
+                                : "border-border bg-panel text-foreground hover:bg-hover"
+                        )}
                         onClick={() => void toggleDictation()}
                         title={dictationState === "recording" ? "Detener dictado (Ctrl+|)" : "Iniciar dictado (Ctrl+|)"}
                         aria-label={dictationState === "recording" ? "Detener dictado" : "Iniciar dictado"}
                         disabled={dictationState === "transcribing"}
                     >
-                        {dictationState === "recording" ? "■ Detener" : dictationState === "transcribing" ? "Transcribiendo…" : "🎙 Dictar"}
+                        {dictationState === "recording"
+                            ? "■ Detener"
+                            : dictationState === "transcribing"
+                              ? "Transcribiendo…"
+                              : "🎙 Dictar"}
                     </button>
                 </div>
             )}

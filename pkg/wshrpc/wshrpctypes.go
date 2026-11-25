@@ -129,6 +129,8 @@ type WshRpcInterface interface {
 	BadgeWatchPidCommand(ctx context.Context, data CommandBadgeWatchPidData) error
 	RemoteProcessListCommand(ctx context.Context, data CommandRemoteProcessListData) (*ProcessListResponse, error)
 	RemoteProcessSignalCommand(ctx context.Context, data CommandRemoteProcessSignalData) error
+	RemoteKubeOverviewCommand(ctx context.Context, data KubeOverviewRequest) (*KubeOverview, error)
+	RemoteKubeLogsCommand(ctx context.Context, data KubeLogsRequest) (string, error)
 
 	// emain
 	WebSelectorCommand(ctx context.Context, data CommandWebSelectorData) ([]string, error)
@@ -225,6 +227,42 @@ type WshRpcInterface interface {
 // for frontend
 type WshServerCommandMeta struct {
 	CommandType string `json:"commandtype"`
+}
+
+// KubeOverviewRequest is intentionally read-only. Context and namespace are
+// passed as discrete kubectl arguments after strict validation.
+type KubeOverviewRequest struct {
+	Context   string `json:"context,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
+}
+
+type KubeLogsRequest struct {
+	Context   string `json:"context,omitempty"`
+	Namespace string `json:"namespace"`
+	Pod       string `json:"pod"`
+	Container string `json:"container,omitempty"`
+	TailLines int    `json:"taillines,omitempty"`
+}
+
+type KubeResource struct {
+	Kind      string `json:"kind"`
+	Namespace string `json:"namespace,omitempty"`
+	Name      string `json:"name"`
+	Ready     string `json:"ready,omitempty"`
+	Status    string `json:"status,omitempty"`
+	Restarts  int    `json:"restarts,omitempty"`
+	Age       string `json:"age,omitempty"`
+	Message   string `json:"message,omitempty"`
+}
+
+type KubeOverview struct {
+	Available      bool           `json:"available"`
+	KubectlPath    string         `json:"kubectlpath,omitempty"`
+	CurrentContext string         `json:"currentcontext,omitempty"`
+	Contexts       []string       `json:"contexts,omitempty"`
+	Namespaces     []string       `json:"namespaces,omitempty"`
+	Resources      []KubeResource `json:"resources,omitempty"`
+	Events         []KubeResource `json:"events,omitempty"`
 }
 
 type RpcOpts struct {
@@ -349,7 +387,6 @@ type CommandEventReadHistoryData struct {
 	Scope    string `json:"scope"`
 	MaxItems int    `json:"maxitems"`
 }
-
 
 type CpuDataRequest struct {
 	Id    string `json:"id"`
@@ -495,10 +532,10 @@ type WorkspaceInfoData struct {
 // workspace import). Blocks lays out the initial tab as a flat row; richer
 // layouts can be added later without breaking the wire format.
 type CommandWorkspaceCreateData struct {
-	Name    string             `json:"name"`
-	Icon    string             `json:"icon,omitempty"`
-	Color   string             `json:"color,omitempty"`
-	TabName string             `json:"tabname,omitempty"`
+	Name    string              `json:"name"`
+	Icon    string              `json:"icon,omitempty"`
+	Color   string              `json:"color,omitempty"`
+	TabName string              `json:"tabname,omitempty"`
 	Blocks  []*waveobj.BlockDef `json:"blocks,omitempty"`
 }
 

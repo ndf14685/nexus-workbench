@@ -4,24 +4,26 @@
 import { BlockNodeModel } from "@/app/block/blocktypes";
 import type { TabModel } from "@/app/store/tab-model";
 import { AiFileDiffViewModel } from "@/app/view/aifilediff/aifilediff";
-import { LauncherViewModel } from "@/app/view/launcher/launcher";
 import { JarvisViewModel } from "@/app/view/jarvis/jarvis";
+import { KubernetesViewModel } from "@/app/view/kubernetes/kubernetes";
+import { LauncherViewModel } from "@/app/view/launcher/launcher";
 import { NexusAuditViewModel } from "@/app/view/nexusaudit/nexusaudit";
 import { PreviewModel } from "@/app/view/preview/preview-model";
 import { ProcessViewerViewModel } from "@/app/view/processviewer/processviewer";
 import { SysinfoViewModel } from "@/app/view/sysinfo/sysinfo";
 import { TsunamiViewModel } from "@/app/view/tsunami/tsunami";
-import { VisualSourceViewModel } from "@/app/view/visual/visual-model";
 import { VDomModel } from "@/app/view/vdom/vdom-model";
+import { VisualSourceViewModel } from "@/app/view/visual/visual-model";
+import { WorkspaceExplorerViewModel } from "@/app/view/workspaceexplorer/workspace-explorer";
 import { WaveEnv } from "@/app/waveenv/waveenv";
-import { atom } from "jotai";
-import { QuickTipsViewModel } from "../view/quicktipsview/quicktipsview";
-import { WaveConfigViewModel } from "../view/waveconfig/waveconfig-model";
-import { blockViewToIcon, blockViewToName } from "./blockutil";
 import { HelpViewModel } from "@/view/helpview/helpview";
 import { TermViewModel } from "@/view/term/term-model";
 import { WaveAiModel } from "@/view/waveai/waveai";
 import { WebViewModel } from "@/view/webview/webview";
+import { atom } from "jotai";
+import { QuickTipsViewModel } from "../view/quicktipsview/quicktipsview";
+import { WaveConfigViewModel } from "../view/waveconfig/waveconfig-model";
+import { blockViewToIcon, blockViewToName } from "./blockutil";
 
 const BlockRegistry: Map<string, ViewModelClass> = new Map();
 BlockRegistry.set("term", TermViewModel);
@@ -40,6 +42,8 @@ BlockRegistry.set("waveconfig", WaveConfigViewModel);
 BlockRegistry.set("processviewer", ProcessViewerViewModel);
 BlockRegistry.set("nexusaudit", NexusAuditViewModel); // nexus: auditoría del MCP
 BlockRegistry.set("visual", VisualSourceViewModel); // nexus: fuentes visuales (HMI)
+BlockRegistry.set("workspaceexplorer", WorkspaceExplorerViewModel);
+BlockRegistry.set("kubernetes", KubernetesViewModel);
 BlockRegistry.set("jarvis", JarvisViewModel); // nexus: panel Mission Supervisor
 
 function makeDefaultViewModel(viewType: string): ViewModel {

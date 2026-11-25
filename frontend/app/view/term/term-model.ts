@@ -13,6 +13,7 @@ import { makeFeBlockRouteId } from "@/app/store/wshrouter";
 import { DefaultRouter, TabRpcClient } from "@/app/store/wshrpcutil";
 import { TermClaudeIcon, TerminalView } from "@/app/view/term/term";
 import { TermWshClient } from "@/app/view/term/term-wsh";
+import { terminalProfileMeta, TerminalProfileName } from "@/app/view/term/terminal-profiles";
 import { VDomModel } from "@/app/view/vdom/vdom-model";
 import { WorkspaceLayoutModel } from "@/app/workspace/workspace-layout-model";
 import {
@@ -926,6 +927,7 @@ export class TermViewModel implements ViewModel {
         const transparencyMeta = globalStore.get(getBlockMetaKeyAtom(this.blockId, "term:transparency"));
         const blockData = globalStore.get(this.blockAtom);
         const overrideFontSize = blockData?.meta?.["term:fontsize"];
+        const terminalMetricsMode = blockData?.meta?.["term:metrics"] ?? "off";
 
         termThemeKeys.sort((a, b) => {
             return (termThemes[a]["display:order"] ?? 0) - (termThemes[b]["display:order"] ?? 0);
@@ -938,6 +940,22 @@ export class TermViewModel implements ViewModel {
         };
 
         const fullMenu: ContextMenuItem[] = [];
+        const profileSubMenu: ContextMenuItem[] = [
+            { label: "Default", value: "default" },
+            { label: "Focus", value: "focus" },
+            { label: "Developer", value: "developer" },
+            { label: "Operations", value: "operations" },
+        ].map((profile) => ({
+            label: profile.label,
+            click: () => {
+                RpcApi.SetMetaCommand(TabRpcClient, {
+                    oref: WOS.makeORef("block", this.blockId),
+                    meta: terminalProfileMeta(profile.value as TerminalProfileName),
+                });
+            },
+        }));
+        fullMenu.push({ label: "Terminal Profile", submenu: profileSubMenu });
+        fullMenu.push({ type: "separator" });
         fullMenu.push({
             label: "Split Horizontally",
             click: () => {
@@ -1090,6 +1108,21 @@ export class TermViewModel implements ViewModel {
                 });
             },
         });
+        const metricsSubMenu: ContextMenuItem[] = [
+            { label: "Off", value: "off" },
+            { label: "Compact (CPU + RAM)", value: "compact" },
+            { label: "Full (CPU + RAM + Disk)", value: "full" },
+        ].map((item) => ({
+            label: item.label,
+            type: "radio",
+            checked: terminalMetricsMode === item.value,
+            click: () => {
+                RpcApi.SetMetaCommand(TabRpcClient, {
+                    oref: WOS.makeORef("block", this.blockId),
+                    meta: { "term:metrics": item.value },
+                });
+            },
+        }));
         const overrideCursor = blockData?.meta?.["term:cursor"] as string | null | undefined;
         const overrideCursorBlink = blockData?.meta?.["term:cursorblink"] as boolean | null | undefined;
         const isCursorDefault = overrideCursor == null && overrideCursorBlink == null;
@@ -1182,6 +1215,10 @@ export class TermViewModel implements ViewModel {
         fullMenu.push({
             label: "Font Size",
             submenu: fontSizeSubMenu,
+        });
+        fullMenu.push({
+            label: "System Metrics",
+            submenu: metricsSubMenu,
         });
         fullMenu.push({
             label: "Cursor",

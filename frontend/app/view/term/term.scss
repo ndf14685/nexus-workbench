@@ -23,16 +23,57 @@
     background: var(--term-identity-tint);
     box-shadow: inset 0 0 0 1px rgb(148 163 184 / 14%);
 
-    &.term-identity-windows { --term-identity-tint: rgb(30 96 170 / 10%); --term-identity-mark: rgb(96 165 250 / 17%); }
-    &.term-identity-ubuntu { --term-identity-tint: rgb(77 25 57 / 14%); --term-identity-mark: rgb(251 146 60 / 17%); }
-    &.term-identity-debian { --term-identity-tint: rgb(92 18 47 / 14%); --term-identity-mark: rgb(244 114 182 / 16%); }
-    &.term-identity-linux { --term-identity-tint: rgb(71 85 105 / 9%); --term-identity-mark: rgb(226 232 240 / 14%); }
-    &.term-identity-focused { box-shadow: inset 0 0 0 2px var(--accent-color), inset 0 0 30px rgb(from var(--accent-color) r g b / 13%); }
+    &.term-identity-windows {
+        --term-identity-tint: rgb(30 96 170 / 10%);
+        --term-identity-mark: rgb(96 165 250 / 17%);
+    }
+    &.term-identity-ubuntu {
+        --term-identity-tint: rgb(77 25 57 / 14%);
+        --term-identity-mark: rgb(251 146 60 / 17%);
+    }
+    &.term-identity-debian {
+        --term-identity-tint: rgb(92 18 47 / 14%);
+        --term-identity-mark: rgb(244 114 182 / 16%);
+    }
+    &.term-identity-linux {
+        --term-identity-tint: rgb(71 85 105 / 9%);
+        --term-identity-mark: rgb(226 232 240 / 14%);
+    }
+    &.term-identity-focused {
+        box-shadow:
+            inset 0 0 0 2px var(--accent-color),
+            inset 0 0 30px rgb(from var(--accent-color) r g b / 13%);
+    }
 
-    .term-identity { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: radial-gradient(circle at 78% 24%, var(--term-identity-tint), transparent 48%); }
-    .term-identity svg { position: absolute; right: 8%; bottom: 10%; width: min(42%, 260px); height: auto; fill: none; stroke: var(--term-identity-mark); stroke-width: 3; opacity: .8; filter: drop-shadow(0 0 18px var(--term-identity-mark)); }
-    .term-identity svg rect, .term-identity svg circle, .term-identity svg ellipse { fill: var(--term-identity-mark); stroke: none; }
-    .term-identity-has-content svg { opacity: .35; }
+    .term-identity {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        overflow: hidden;
+        pointer-events: none;
+        background: radial-gradient(circle at 78% 24%, var(--term-identity-tint), transparent 48%);
+    }
+    .term-identity svg {
+        position: absolute;
+        right: 8%;
+        bottom: 10%;
+        width: min(42%, 260px);
+        height: auto;
+        fill: none;
+        stroke: var(--term-identity-mark);
+        stroke-width: 3;
+        opacity: 0.8;
+        filter: drop-shadow(0 0 18px var(--term-identity-mark));
+    }
+    .term-identity svg rect,
+    .term-identity svg circle,
+    .term-identity svg ellipse {
+        fill: var(--term-identity-mark);
+        stroke: none;
+    }
+    .term-identity-has-content svg {
+        opacity: 0.35;
+    }
 
     .term-header {
         display: flex;
@@ -77,6 +118,81 @@
         overflow: hidden;
         line-height: 1;
         margin: 5px 1px 5px 4px;
+    }
+
+    .term-metrics {
+        position: absolute;
+        z-index: 19;
+        left: 8px;
+        bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        max-width: calc(100% - 16px);
+        min-height: 24px;
+        padding: 3px 8px;
+        border: 1px solid color-mix(in srgb, var(--border-color) 75%, transparent);
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--main-bg-color) 88%, transparent);
+        color: var(--secondary-text-color);
+        font: var(--fixed-font);
+        font-size: 10px;
+        line-height: 1;
+        pointer-events: none;
+        backdrop-filter: blur(5px);
+        opacity: 0.88;
+    }
+
+    .term-metrics-host {
+        max-width: 120px;
+        overflow: hidden;
+        color: var(--main-text-color);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .term-metric {
+        display: grid;
+        grid-template-columns: auto auto;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .term-metric-value {
+        color: var(--main-text-color);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .term-metric-track {
+        grid-column: 1 / -1;
+        width: 58px;
+        height: 2px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--border-color) 65%, transparent);
+    }
+
+    .term-metric-fill {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--accent-color);
+    }
+
+    .term-metrics-compact .term-metric-track,
+    .term-metrics-compact .term-metric-label {
+        display: none;
+    }
+
+    .term-metrics-stale {
+        opacity: 0.55;
+    }
+
+    @media (prefers-reduced-transparency: reduce) {
+        .term-metrics {
+            background: var(--main-bg-color);
+            backdrop-filter: none;
+        }
     }
 
     .term-htmlelem {

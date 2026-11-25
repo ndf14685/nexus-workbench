@@ -1084,6 +1084,44 @@ declare global {
         jobmanagerstatus: string;
     };
 
+    // wshrpc.KubeLogsRequest
+    type KubeLogsRequest = {
+        context?: string;
+        namespace: string;
+        pod: string;
+        container?: string;
+        taillines?: number;
+    };
+
+    // wshrpc.KubeOverview
+    type KubeOverview = {
+        available: boolean;
+        kubectlpath?: string;
+        currentcontext?: string;
+        contexts?: string[];
+        namespaces?: string[];
+        resources?: KubeResource[];
+        events?: KubeResource[];
+    };
+
+    // wshrpc.KubeOverviewRequest
+    type KubeOverviewRequest = {
+        context?: string;
+        namespace?: string;
+    };
+
+    // wshrpc.KubeResource
+    type KubeResource = {
+        kind: string;
+        namespace?: string;
+        name: string;
+        ready?: string;
+        status?: string;
+        restarts?: number;
+        age?: string;
+        message?: string;
+    };
+
     // waveobj.LayoutActionData
     type LayoutActionData = {
         actiontype: string;
@@ -1209,6 +1247,7 @@ declare global {
         "term:fontfamily"?: string;
         "term:mode"?: string;
         "term:theme"?: string;
+        "term:metrics"?: string;
         "term:localshellpath"?: string;
         "term:localshellopts"?: string[];
         "term:scrollback"?: number;

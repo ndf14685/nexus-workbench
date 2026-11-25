@@ -137,6 +137,7 @@ type MetaTSType struct {
 	TermFontFamily          string   `json:"term:fontfamily,omitempty"`
 	TermMode                string   `json:"term:mode,omitempty"`
 	TermTheme               string   `json:"term:theme,omitempty"`
+	TermMetrics             string   `json:"term:metrics,omitempty"`
 	TermLocalShellPath      string   `json:"term:localshellpath,omitempty"` // matches settings
 	TermLocalShellOpts      []string `json:"term:localshellopts,omitempty"` // matches settings
 	TermScrollback          *int     `json:"term:scrollback,omitempty"`

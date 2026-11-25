@@ -12,11 +12,12 @@
     },
     "defwidget@files": {
         "display:order": -4,
-        "icon": "folder",
-        "label": "files",
+        "icon": "folder-tree",
+        "label": "workspace",
+        "description": "Browse the active workspace",
         "blockdef": {
             "meta": {
-                "view": "preview",
+                "view": "workspaceexplorer",
                 "file": "~"
             }
         }
@@ -38,6 +39,17 @@
         "blockdef": {
             "meta": {
                 "view": "sysinfo"
+            }
+        }
+    },
+    "defwidget@kubernetes": {
+        "display:order": -1.5,
+        "icon": "dharmachakra",
+        "label": "kubernetes",
+        "description": "Inspect contexts, workloads, events and logs",
+        "blockdef": {
+            "meta": {
+                "view": "kubernetes"
             }
         }
     },

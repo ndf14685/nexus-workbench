@@ -3,9 +3,41 @@
 Cambios propios del fork; lo heredado de Wave Terminal se documenta en los
 releases de upstream.
 
+## v0.17.0-beta.9 — 2026-11-25 · "Workbench operativo"
+
+### Agregado
+
+- **Perfiles por terminal:** presets Focus, Developer y Operations sobre la
+  configuración individual existente de fuente, transparencia y cursor.
+- **Métricas por terminal:** modos apagado, compacto y completo con CPU, RAM y
+  disco del host local o de la conexión remota. La suscripción sólo existe
+  cuando el bloque la habilita y muestra estado degradado si los datos vencen.
+- **Workspace Explorer:** el botón `workspace` de la barra lateral abre un
+  árbol virtualizado y navegable por teclado; permite explorar filesystem
+  local/remoto, abrir archivos en preview/editor y lanzar una terminal en la
+  raíz seleccionada.
+- **Kubernetes Explorer:** detecta `kubectl` y los contextos configurados,
+  permite filtrar namespaces y presenta pods, deployments, statefulsets,
+  daemonsets, jobs, eventos y logs. La beta es deliberadamente de lectura.
+
+### Seguridad y rendimiento
+
+- El renderer no recibe una shell genérica: Kubernetes usa RPC tipado,
+  argumentos `kubectl` separados y validados, timeout y límites de salida.
+- No se muestran tokens ni contenido del kubeconfig y no existen acciones de
+  borrado, escala o edición de recursos en esta beta.
+- Las vistas actualizan bajo demanda; Kubernetes refresca cada 15 segundos y
+  el árbol de archivos carga directorios sólo al expandirlos.
+
+### Rollback
+
+- `v0.17.0-beta.8` permanece como base estable. Reinstalar esa versión revierte
+  la aplicación sin borrar workspaces ni configuración del usuario.
+
 ## v0.17.0-beta.8 — 2026-11-23 · "Terminales reconocibles de un vistazo"
 
 ### Agregado
+
 - **Identidad visual por terminal:** marca de sistema vectorial y tinte tenue
   para Windows, Ubuntu, Debian y Linux; los paneles desconocidos quedan
   neutros. La marca se atenúa con salida y no se mueve durante el trabajo.
@@ -19,6 +51,7 @@ releases de upstream.
 ## v0.17.0-beta.7 — 2026-11-23 · "Dictado directo a terminal"
 
 ### Agregado
+
 - **Dictado en terminales del Workbench.** El botón `🎙 Dictar` y el atajo
   **Ctrl+|** capturan una frase, la transcriben con OpenAI y escriben el texto
   resultante en la terminal enfocada. La captura se detiene antes de iniciar
@@ -26,6 +59,7 @@ releases de upstream.
   micrófono abierto.
 
 ### Corregido
+
 - El bridge de fuentes visuales ahora propaga el contexto del bloque al pedir
   un screenshot con `wsh`; por eso Jarvis puede capturar el viewer HMI correcto
   en vez de depender de una terminal activa.
@@ -33,6 +67,7 @@ releases de upstream.
 ## v0.17.0-beta.6 — 2026-09-13 · "¿Jarvis realmente está trabajando?"
 
 ### Agregado
+
 - **El panel Jarvis y la tab bar muestran el estado REAL de ejecución** de cada
   misión, no sólo su `status`. jarvisd manda por misión una vista `execution`
   (DISPATCHED · STARTING · RUNNING · WAITING · WAITING FOR APPROVAL · BLOCKED ·
@@ -46,6 +81,7 @@ releases de upstream.
   viejo) todo cae al status de siempre.
 
 ### Motivo
+
 - Incidente `m-55abf16276`: una misión pedida con foco en una PowerShell del
   home figuró «trabajando» 7,5 h con un worker que nunca arrancó (comando bash
   esperando una comilla en PowerShell). Lo único visible era `running`. El
@@ -55,6 +91,7 @@ releases de upstream.
 ## v0.17.0-beta.5 — 2026-09-05 · "El Workbench no se cae cuando el runtime se va"
 
 ### Corregido
+
 - **La app entera moría cuando el runtime detached se detenía**, por ejemplo
   al aceptar "Restart" para instalar una actualización. El cliente WebSocket
   que el proceso principal comparte con el frontend no registraba `onerror`
@@ -68,6 +105,7 @@ releases de upstream.
   un puerto cerrado: `frontend/app/store/ws.test.ts`.
 
 ### Nota para actualizar desde beta.4
+
 - La app beta.4 todavía corre el código viejo: al aceptar "Restart" va a
   cerrarse sola y el instalador sigue en segundo plano (`installonquit`).
   Esperar un par de minutos antes de volver a abrirla; reabrirla durante la
@@ -76,6 +114,7 @@ releases de upstream.
 ## v0.17.0-beta.2 — 2026-08-24 · "Visual Sources" (HMI)
 
 ### Agregado
+
 - **Una fuente visual es una clase de objeto del Workbench**, del mismo rango
   que una terminal o un navegador: se configura una vez, se muestra en un
   bloque que dockea/mueve/redimensiona/persiste como cualquier otro, y puede
@@ -104,8 +143,8 @@ releases de upstream.
   `visual.change` lleva metadata, nunca el frame; el cerebro decide después si
   el cambio merece una mirada cara.
 - **Las fuentes visuales viajan en el contexto del Workbench** (`visual_sources`
-  + módulo `visual` del bloque enfocado), que es lo que permite resolver "mirá
-  la pantalla del banco" o "mirá esto" contra la fuente correcta.
+  - módulo `visual` del bloque enfocado), que es lo que permite resolver "mirá
+    la pantalla del banco" o "mirá esto" contra la fuente correcta.
 - `wsh screenshot`: expone por CLI la captura de bloque que el motor ya
   implementaba. Es el único camino posible para obtener un frame mientras el
   viewer humano tiene tomado el device.
@@ -113,6 +152,7 @@ releases de upstream.
   sin abrir la app ni el cerebro.
 
 ### Seguridad
+
 - No se graba video ni se persisten frames: el snapshot va a un temporal que se
   borra siempre, y el CLI sin `-out` sólo devuelve metadata.
 - El contexto publica metadata; el contenido visual sale únicamente por una
@@ -122,6 +162,7 @@ releases de upstream.
   política de privacidad). No se agregaron API keys.
 
 ### Notas
+
 - Configuración en `settings.json` bajo `nexus:visualsources` (mismo mecanismo
   que `nexus:environments`, con schema).
 - Requiere `ffmpeg` en el host del agente para capturar sin la UI abierta.
@@ -130,6 +171,7 @@ releases de upstream.
 ## v0.17.0-beta.1 — 2026-08-15
 
 ### Arreglado
+
 - **Layout: las ventanas ya no quedan mal distribuidas por nodos fantasma.**
   Los deletes de bloques encolados con la UI cerrada (jarvisd cerrando
   workers, `wsh deleteblock` headless) se descartaban al arrancar la app
@@ -151,6 +193,7 @@ releases de upstream.
 ## v0.17.0-beta.0 — 2026-08-15 · "Detached Runtime" (ADR-0006)
 
 ### Cambiado
+
 - **La UI ya no es dueña de la ejecución.** `wavesrv --detached` corre como
   servicio persistente supervisado por la Scheduled Task `NexusRuntime`
   (logon + restart on failure). Electron ahora ATTACHEA a un runtime
@@ -173,6 +216,7 @@ releases de upstream.
   `electron`; stderr queda como fallback del modo hijo.
 
 ### Agregado
+
 - `GET /wave/runtime-health`, `ShutdownRuntimeCommand`, `wsh runtime`,
   `wsh block park|unpark`; watchdog de re-attach en Electron (runtime
   reiniciado → endpoints nuevos → rewire + relaunch de ventanas).
@@ -190,6 +234,7 @@ releases de upstream.
 ## v0.16.0-beta.2 — 2026-08-14 · "Los cinco bugs del E2E"
 
 ### Arreglado
+
 - **Contexto del overlay ya no viene vacío** (bug 2): la captura llamaba
   `GetFocusedBlockDataCommand` sin route y caía en el wshserver Go, que no
   lo implementa; ahora rutea al handler del tab (`tab:<tabId>`).
@@ -217,6 +262,7 @@ releases de upstream.
 ## v0.16.0-beta.1 — 2026-08-14 · "Restore de parking"
 
 ### Arreglado
+
 - **Retomar desde el Parking Lot ahora monta el bloque de verdad.** El
   restore devolvía el bloque a `tab.blockids` y limpiaba `nexus:parked`,
   pero el `waveobj:update` del LayoutState (con el insert pendiente) nunca
@@ -232,6 +278,7 @@ lenguaje natural, con contexto capturado automáticamente, y liberar
 superficie visual sin perder estado.
 
 ### Nuevo
+
 - **Ctrl+Space — Jarvis global**: overlay conversacional invocable desde
   cualquier módulo (también con foco dentro de ChatGPT/YouTube/terminal),
   Escape cierra, comando `jarvis.open` editable en el registry.
@@ -262,6 +309,7 @@ superficie visual sin perder estado.
   store (formulario de primera vez en el overlay).
 
 ### Arreglado
+
 - Los atajos `Ctrl+Alt+*` del fork ahora funcionan con el foco dentro de un
   webview (bug de mayúsculas en los descriptores: `Ctrl:Alt:J` implicaba
   Shift para keyutil) y dentro de xterm (el keydown del terminal salteaba
@@ -271,6 +319,7 @@ superficie visual sin perder estado.
 - El release sube `*.blockmap`: el auto-update vuelve a ser diferencial.
 
 ### Deuda conocida (ver `nexus/docs/JARVIS_UX.md`)
+
 - HEADLESS automático (auto-park del worker) — el park manual del worker ya
   funciona con la misión corriendo.
 - Intents de misión solo por HTTP `/intent` (HUD/voz TCP pendiente).

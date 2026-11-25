@@ -756,6 +756,18 @@ export class RpcApiType {
         return client.wshRpcCall("remoteinstallrcfiles", null, opts);
     }
 
+    // command "remotekubelogs" [call]
+    RemoteKubeLogsCommand(client: WshClient, data: KubeLogsRequest, opts?: RpcOpts): Promise<string> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "remotekubelogs", data, opts);
+        return client.wshRpcCall("remotekubelogs", data, opts);
+    }
+
+    // command "remotekubeoverview" [call]
+    RemoteKubeOverviewCommand(client: WshClient, data: KubeOverviewRequest, opts?: RpcOpts): Promise<KubeOverview> {
+        if (this.mockClient) return this.mockClient.mockWshRpcCall(client, "remotekubeoverview", data, opts);
+        return client.wshRpcCall("remotekubeoverview", data, opts);
+    }
+
     // command "remotelistentries" [responsestream]
 	RemoteListEntriesCommand(client: WshClient, data: CommandRemoteListEntriesData, opts?: RpcOpts): AsyncGenerator<CommandRemoteListEntriesRtnData, void, boolean> {
         if (this.mockClient) return this.mockClient.mockWshRpcStream(client, "remotelistentries", data, opts);
